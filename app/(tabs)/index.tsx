@@ -25,6 +25,7 @@ import SearchBar from "@/components/ui/SearchBar";
 import TopCategoriesBar from "@/components/ui/TopCategoriesBar";
 import ProductGrid from "@/components/ui/ProductGrid";
 import ProductCard from "@/components/ui/ProductCard";
+import HeroCarousel from "@/components/ui/HeroCarousel";
 import Icon from "@/components/ui/Icon";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { API_BASE } from "@/lib/config";
@@ -143,23 +144,8 @@ export default function HomeScreen() {
         {/* Categories bar — scrolls with content */}
         <TopCategoriesBar />
 
-        {/* Hero banner */}
-        <View style={styles.heroPad}>
-          <View style={styles.hero}>
-            <View style={styles.heroDecor} />
-            <AppText variant="heading" color={colors.white} style={styles.heroTitle}>
-              Everything!
-            </AppText>
-            <AppText variant="bodySmall" color="rgba(255,255,255,0.9)" style={styles.heroSub}>
-              Premium houseware at unbeatable prices.
-            </AppText>
-            <Pressable style={styles.heroCta}>
-              <AppText variant="button" color={colors.white}>
-                SHOP NOW
-              </AppText>
-            </Pressable>
-          </View>
-        </View>
+        {/* Hero carousel */}
+        <HeroCarousel />
 
         {/* Recommended */}
         <SectionHeader title="Recommended for You" actionLabel="VIEW ALL" />
@@ -281,42 +267,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   scrollContent: { flexGrow: 1 },
-
-  // Hero
-  heroPad: { padding: spacing[4], paddingBottom: 0 },
-  hero: {
-    backgroundColor: "#2563eb",
-    borderRadius: borderRadius["3xl"],
-    padding: spacing[6],
-    paddingTop: spacing[8],
-    overflow: "hidden",
-  },
-  heroDecor: {
-    position: "absolute",
-    right: -40,
-    top: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: "rgba(59,130,246,0.5)",
-  },
-  heroTitle: {
-    fontSize: 30,
-    fontWeight: "800",
-    fontStyle: "italic",
-    textTransform: "uppercase",
-    lineHeight: 34,
-    marginBottom: spacing[2],
-  },
-  heroSub: { maxWidth: 200, marginBottom: spacing[6] },
-  heroCta: {
-    backgroundColor: colors.brandOrange,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[8],
-    borderRadius: borderRadius.xl,
-    alignSelf: "flex-start",
-    ...shadows.lg,
-  },
 
   // Sections
   sectionHeader: {

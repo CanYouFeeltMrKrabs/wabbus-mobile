@@ -1,26 +1,31 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import AppText from "./AppText";
-import { colors, spacing, borderRadius } from "@/lib/theme";
+import Icon from "./Icon";
+import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
-type BadgeType = "discount" | "new" | "bestseller" | "info";
+type BadgeType = "sale" | "new" | "bestseller" | "info";
 
 type Props = {
   type: BadgeType;
   label: string;
+  showIcon?: boolean;
 };
 
 const bgColors: Record<BadgeType, string> = {
-  discount: colors.error,
-  new: colors.success,
-  bestseller: colors.brandOrange,
+  sale: colors.brandOrange,
+  new: "#10b981",
+  bestseller: "#f59e0b",
   info: colors.brandBlue,
 };
 
-export default function Badge({ type, label }: Props) {
+export default function Badge({ type, label, showIcon }: Props) {
   return (
-    <View style={[styles.badge, { backgroundColor: bgColors[type] }]}>
-      <AppText variant="tiny" color={colors.white} weight="bold" style={styles.text}>
+    <View style={[styles.badge, { backgroundColor: bgColors[type] }, shadows.sm]}>
+      {showIcon && (
+        <Icon name="star" size={9} color={colors.white} />
+      )}
+      <AppText variant="tiny" color={colors.white} weight="extrabold" style={styles.text}>
         {label.toUpperCase()}
       </AppText>
     </View>
@@ -35,15 +40,19 @@ export function BadgeRow({ badges }: { badges?: Array<{ type: string; label: str
       {badges.map((b, i) => {
         let type: BadgeType = "info";
         let label = b.label;
-        if (b.type === "discount" || b.type === "DISCOUNT") {
-          type = "discount";
+        let showIcon = false;
+
+        const t = b.type.toUpperCase();
+        if (t === "SALE" || t === "DISCOUNT") {
+          type = "sale";
           label = b.value ? `${b.value}% OFF` : b.label;
-        } else if (b.type === "new" || b.type === "NEW") {
+        } else if (t === "NEW") {
           type = "new";
-        } else if (b.type === "bestseller" || b.type === "BESTSELLER") {
+        } else if (t === "BESTSELLER") {
           type = "bestseller";
+          showIcon = true;
         }
-        return <Badge key={i} type={type} label={label} />;
+        return <Badge key={i} type={type} label={label} showIcon={showIcon} />;
       })}
     </View>
   );
@@ -51,10 +60,14 @@ export function BadgeRow({ badges }: { badges?: Array<{ type: string; label: str
 
 const styles = StyleSheet.create({
   badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
     paddingHorizontal: spacing[1.5],
     paddingVertical: spacing[0.5],
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.full,
+    alignSelf: "flex-start",
   },
   text: { fontSize: 9, letterSpacing: 0.5 },
-  row: { flexDirection: "column", gap: spacing[1] },
+  row: { flexDirection: "column", gap: 3 },
 });

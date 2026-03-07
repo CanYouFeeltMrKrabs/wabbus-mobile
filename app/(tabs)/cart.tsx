@@ -47,16 +47,18 @@ function CartItemRow({
           resizeMode="cover"
         />
         <View style={styles.itemInfo}>
-          <AppText variant="label" numberOfLines={2}>
-            {item.title}
-          </AppText>
-          <AppText variant="priceSmall" style={styles.itemPrice}>
-            {formatMoney(item.unitPriceCents)}
-          </AppText>
+          <View style={styles.titlePriceRow}>
+            <AppText variant="label" numberOfLines={2} style={styles.itemTitle}>
+              {item.title}
+            </AppText>
+            <AppText variant="label" weight="semibold">
+              {formatMoney(item.unitPriceCents)}
+            </AppText>
+          </View>
 
           {/* Quantity controls */}
           <View style={styles.qtyRow}>
-            <AppText variant="caption">Qty:</AppText>
+            <AppText variant="caption" color={colors.muted}>Qty:</AppText>
             <View style={styles.qtyControls}>
               <Pressable
                 style={styles.qtyBtn}
@@ -79,32 +81,31 @@ function CartItemRow({
               </Pressable>
             </View>
           </View>
-        </View>
-      </View>
 
-      {/* Actions */}
-      <View style={styles.itemActions}>
-        <Pressable
-          style={styles.actionBtn}
-          hitSlop={8}
-          onPress={() => { setSaved(true); onSaveForLater(item); }}
-          disabled={saved}
-        >
-          <Icon name={saved ? "favorite" : "favorite-border"} size={16} color={saved ? colors.brandBlueDark : colors.brandBlue} />
-          <AppText variant="caption" color={saved ? colors.brandBlueDark : colors.brandBlue}>
-            {saved ? "Saved" : "Save for later"}
-          </AppText>
-        </Pressable>
-        <Pressable
-          style={styles.actionBtn}
-          hitSlop={8}
-          onPress={() => onRemove(item.publicId)}
-        >
-          <Icon name="delete-outline" size={16} color={colors.error} />
-          <AppText variant="caption" color={colors.error}>
-            Remove
-          </AppText>
-        </Pressable>
+          {/* Actions inline */}
+          <View style={styles.itemActions}>
+            <Pressable
+              style={styles.actionBtn}
+              hitSlop={8}
+              onPress={() => { setSaved(true); onSaveForLater(item); }}
+              disabled={saved}
+            >
+              <Icon name={saved ? "favorite" : "favorite-border"} size={14} color={saved ? colors.brandBlueDark : colors.muted} />
+              <AppText variant="caption" color={saved ? colors.brandBlueDark : colors.muted}>
+                {saved ? "Saved" : "Save for later"}
+              </AppText>
+            </Pressable>
+            <Pressable
+              style={styles.actionBtn}
+              hitSlop={8}
+              onPress={() => onRemove(item.publicId)}
+            >
+              <AppText variant="caption" color={colors.error} weight="medium">
+                Remove
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -166,9 +167,7 @@ export default function CartScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <AppText variant="title">
-          Cart ({itemCount} item{itemCount !== 1 ? "s" : ""})
-        </AppText>
+        <AppText variant="heading">Your Cart</AppText>
       </View>
 
       {/* Cart items */}
@@ -187,8 +186,11 @@ export default function CartScreen() {
         showsVerticalScrollIndicator={false}
         ListFooterComponent={
           <View style={styles.footer}>
-            {/* Summary */}
-            <View style={styles.summaryCard}>
+            {/* Recommendations between items and summary */}
+            <CartRecommendations cart={items} />
+
+            {/* Summary rows */}
+            <View style={styles.summarySection}>
               <View style={styles.summaryRow}>
                 <AppText variant="body">Subtotal</AppText>
                 <AppText variant="body" weight="semibold">
@@ -196,14 +198,14 @@ export default function CartScreen() {
                 </AppText>
               </View>
               <View style={styles.summaryRow}>
-                <AppText variant="body">Shipping & tax</AppText>
+                <AppText variant="body" color={colors.muted}>Shipping & tax</AppText>
                 <AppText variant="body" color={colors.success} weight="medium">
                   Calculated at checkout
                 </AppText>
               </View>
               <View style={styles.divider} />
               <View style={styles.summaryRow}>
-                <AppText variant="subtitle">Estimated Total</AppText>
+                <AppText variant="subtitle" weight="bold">Estimated Total</AppText>
                 <AppText variant="price">{formatMoney(subtotalCents)}</AppText>
               </View>
             </View>
@@ -217,9 +219,6 @@ export default function CartScreen() {
               size="lg"
               onPress={() => isLoggedIn ? router.push("/checkout") : router.push("/(auth)/login")}
             />
-
-            {/* Cart Recommendations */}
-            <CartRecommendations cart={items} />
           </View>
         }
       />
@@ -289,7 +288,7 @@ function CartRecommendations({ cart }: { cart: CartItem[] }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
+  header: { paddingHorizontal: spacing[4], paddingTop: spacing[2], paddingBottom: spacing[3] },
   listContent: { paddingHorizontal: spacing[4], paddingBottom: spacing[4] },
   emptyScreen: {
     flex: 1,
@@ -307,21 +306,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
     borderWidth: 1,
-    borderColor: colors.brandBlueBorder,
+    borderColor: colors.border,
     padding: spacing[4],
     marginBottom: spacing[3],
     ...shadows.sm,
   },
   itemRow: { flexDirection: "row", gap: spacing[3] },
   itemImage: {
-    width: 96,
-    height: 96,
+    width: 90,
+    height: 90,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border,
   },
   itemInfo: { flex: 1 },
-  itemPrice: { marginTop: spacing[1] },
+  titlePriceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: spacing[2],
+  },
+  itemTitle: { flex: 1 },
   qtyRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -336,26 +340,21 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
   },
   qtyBtn: { padding: spacing[1.5] },
-  qtyText: { paddingHorizontal: spacing[3] },
+  qtyText: { paddingHorizontal: spacing[3], minWidth: 28, textAlign: "center" },
 
-  // Actions row
+  // Actions row (inline under qty)
   itemActions: {
     flexDirection: "row",
+    alignItems: "center",
     gap: spacing[4],
-    marginTop: spacing[3],
-    paddingTop: spacing[3],
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    marginTop: spacing[2.5],
   },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: spacing[1] },
 
   // Footer
-  footer: { paddingTop: spacing[4], gap: spacing[4] },
-  summaryCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing[4],
-    ...shadows.sm,
+  footer: { paddingTop: spacing[2], gap: spacing[4] },
+  summarySection: {
+    paddingTop: spacing[2],
   },
   summaryRow: {
     flexDirection: "row",
@@ -370,7 +369,7 @@ const styles = StyleSheet.create({
   },
 
   // Cart Recommendations
-  recsSection: { marginTop: spacing[6] },
+  recsSection: { marginTop: spacing[2] },
   recsTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing[2], marginBottom: spacing[3] },
   recsAccent: { width: 4, height: 20, borderRadius: 2, backgroundColor: colors.brandBlue },
   recsScroll: { gap: spacing[2] },
