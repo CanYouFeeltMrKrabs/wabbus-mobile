@@ -5,10 +5,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import RequireAuth from "@/components/ui/RequireAuth";
 import { useAuth } from "@/lib/auth";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 export default function AccountDetailsScreen() {
+  return <RequireAuth><AccountDetailsContent /></RequireAuth>;
+}
+
+function AccountDetailsContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();

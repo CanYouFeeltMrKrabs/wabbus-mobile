@@ -5,9 +5,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import RequireAuth from "@/components/ui/RequireAuth";
 import { colors, spacing } from "@/lib/theme";
 
 export default function OrderCompleteScreen() {
+  return <RequireAuth><OrderCompleteContent /></RequireAuth>;
+}
+
+function OrderCompleteContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 

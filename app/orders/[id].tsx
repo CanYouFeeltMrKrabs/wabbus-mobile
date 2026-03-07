@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { FALLBACK_IMAGE } from "@/lib/config";
@@ -12,6 +13,10 @@ import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { Order, OrderItem } from "@/lib/types";
 
 export default function OrderDetailScreen() {
+  return <RequireAuth><OrderDetailContent /></RequireAuth>;
+}
+
+function OrderDetailContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();

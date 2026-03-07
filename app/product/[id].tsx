@@ -30,6 +30,8 @@ import { publicFetch } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { FALLBACK_IMAGE } from "@/lib/config";
 import { formatDollars } from "@/lib/money";
+import { addToWishlist, removeFromWishlist, isInWishlist, onWishlistUpdate } from "@/lib/wishlist";
+import { addToRecentlyViewed } from "@/lib/recentlyViewed";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -63,15 +65,59 @@ export default function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [adding, setAdding] = useState(false);
+  const [inWishlist, setInWishlist] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
     publicFetch<ProductDetail>(`/products/public/${id}/view`)
-      .then(setProduct)
+      .then((p) => {
+        setProduct(p);
+        addToRecentlyViewed({
+          productId: p.productId,
+          variantId: p.defaultVariantId ?? 0,
+          title: p.title,
+          price: Math.round(p.price * 100),
+          image: p.image || "",
+          slug: p.slug,
+          categoryId: p.categoryId,
+          compareAtPrice: p.compareAtPrice ? Math.round(Number(p.compareAtPrice) * 100) : null,
+          vendorName: p.vendorName,
+          ratingAvg: p.ratingAvg,
+          reviewCount: p.reviewCount,
+          soldCount: p.soldCount,
+          badges: p.badges,
+        });
+        isInWishlist(p.productId).then(setInWishlist);
+      })
       .catch(() => setProduct(null))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!product) return;
+    const unsub = onWishlistUpdate(() => {
+      isInWishlist(product.productId).then(setInWishlist);
+    });
+    return unsub;
+  }, [product]);
+
+  const toggleWishlist = useCallback(async () => {
+    if (!product) return;
+    if (inWishlist) {
+      await removeFromWishlist(product.productId);
+    } else {
+      await addToWishlist({
+        productId: product.productId,
+        variantId: product.defaultVariantId ?? 0,
+        title: product.title,
+        price: Math.round(product.price * 100),
+        image: product.image || FALLBACK_IMAGE,
+        slug: product.slug,
+        categoryId: product.categoryId,
+      });
+    }
+  }, [inWishlist, product]);
 
   const handleAddToCart = useCallback(async () => {
     if (!product?.defaultVariantId) return;
@@ -185,8 +231,12 @@ export default function ProductDetailScreen() {
 
       {/* Sticky bottom bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing[2] }]}>
-        <Pressable style={styles.wishlistBtn} hitSlop={8}>
-          <Icon name="favorite-border" size={24} color={colors.brandBlue} />
+        <Pressable
+          style={[styles.wishlistBtn, inWishlist && styles.wishlistBtnActive]}
+          hitSlop={8}
+          onPress={toggleWishlist}
+        >
+          <Icon name={inWishlist ? "favorite" : "favorite-border"} size={24} color={inWishlist ? colors.white : colors.brandBlue} />
         </Pressable>
         <AppButton
           title={adding ? "Adding..." : "Add to Cart"}
@@ -239,6 +289,9 @@ const styles = StyleSheet.create({
   wishlistBtn: {
     borderWidth: 1.5, borderColor: colors.brandBlue, borderRadius: borderRadius.lg,
     padding: spacing[2.5],
+  },
+  wishlistBtnActive: {
+    backgroundColor: colors.brandBlueDark, borderColor: colors.brandBlueDark,
   },
   addBtn: { flex: 1 },
 });

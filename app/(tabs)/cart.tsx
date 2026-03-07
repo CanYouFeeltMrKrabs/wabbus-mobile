@@ -3,7 +3,7 @@
  * - Cart items with image, title, quantity controls, save for later, remove
  * - Scrollable checkout footer: subtotal, shipping note, estimated total, checkout button
  */
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   FlatList,
@@ -18,20 +18,26 @@ import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import { useCart } from "@/lib/cart";
+import { useAuth } from "@/lib/auth";
+import { addToWishlist, isInWishlist } from "@/lib/wishlist";
 import { formatMoney } from "@/lib/money";
-import { FALLBACK_IMAGE } from "@/lib/config";
+import { FALLBACK_IMAGE, API_BASE } from "@/lib/config";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
-import type { CartItem } from "@/lib/types";
+import type { CartItem, PublicProduct } from "@/lib/types";
 
 function CartItemRow({
   item,
   onUpdateQty,
   onRemove,
+  onSaveForLater,
 }: {
   item: CartItem;
   onUpdateQty: (publicId: string, qty: number) => void;
   onRemove: (publicId: string) => void;
+  onSaveForLater: (item: CartItem) => void;
 }) {
+  const [saved, setSaved] = useState(false);
+
   return (
     <View style={styles.itemCard}>
       <View style={styles.itemRow}>
@@ -78,10 +84,15 @@ function CartItemRow({
 
       {/* Actions */}
       <View style={styles.itemActions}>
-        <Pressable style={styles.actionBtn} hitSlop={8}>
-          <Icon name="favorite-border" size={16} color={colors.brandBlue} />
-          <AppText variant="caption" color={colors.brandBlue}>
-            Save for later
+        <Pressable
+          style={styles.actionBtn}
+          hitSlop={8}
+          onPress={() => { setSaved(true); onSaveForLater(item); }}
+          disabled={saved}
+        >
+          <Icon name={saved ? "favorite" : "favorite-border"} size={16} color={saved ? colors.brandBlueDark : colors.brandBlue} />
+          <AppText variant="caption" color={saved ? colors.brandBlueDark : colors.brandBlue}>
+            {saved ? "Saved" : "Save for later"}
           </AppText>
         </Pressable>
         <Pressable
@@ -104,6 +115,7 @@ export default function CartScreen() {
   const router = useRouter();
   const { items, itemCount, subtotalCents, updateQuantity, removeItem } =
     useCart();
+  const { isLoggedIn } = useAuth();
 
   const handleRemove = useCallback(
     (publicId: string) => {
@@ -111,6 +123,21 @@ export default function CartScreen() {
         { text: "Cancel", style: "cancel" },
         { text: "Remove", style: "destructive", onPress: () => removeItem(publicId) },
       ]);
+    },
+    [removeItem],
+  );
+
+  const handleSaveForLater = useCallback(
+    async (item: CartItem) => {
+      await addToWishlist({
+        productId: item.productId || String(item.productVariantId),
+        variantId: item.productVariantId,
+        title: item.title,
+        price: item.unitPriceCents,
+        image: item.image || FALLBACK_IMAGE,
+        slug: item.slug || "product",
+      });
+      setTimeout(() => removeItem(item.publicId), 400);
     },
     [removeItem],
   );
@@ -153,6 +180,7 @@ export default function CartScreen() {
             item={item}
             onUpdateQty={updateQuantity}
             onRemove={handleRemove}
+            onSaveForLater={handleSaveForLater}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -187,10 +215,73 @@ export default function CartScreen() {
               iconRight="arrow-forward"
               fullWidth
               size="lg"
-              onPress={() => router.push("/checkout")}
+              onPress={() => isLoggedIn ? router.push("/checkout") : router.push("/(auth)/login")}
             />
+
+            {/* Cart Recommendations */}
+            <CartRecommendations cart={items} />
           </View>
         }
+      />
+    </View>
+  );
+}
+
+function CartRecommendations({ cart }: { cart: CartItem[] }) {
+  const router = useRouter();
+  const { addToCart } = useCart();
+  const [products, setProducts] = useState<PublicProduct[]>([]);
+
+  useEffect(() => {
+    if (cart.length === 0) return;
+    const productIds = cart
+      .map((item) => item.productId)
+      .filter(Boolean) as string[];
+    if (productIds.length === 0) return;
+
+    fetch(`${API_BASE}/recommendations/cart`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ productIds }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.products?.length) setProducts(data.products);
+      })
+      .catch(() => {});
+  }, [cart]);
+
+  if (products.length === 0) return null;
+
+  return (
+    <View style={styles.recsSection}>
+      <View style={styles.recsTitleRow}>
+        <View style={styles.recsAccent} />
+        <AppText variant="subtitle">You Might Also Like</AppText>
+      </View>
+      <FlatList
+        data={products}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(p) => p.productId}
+        contentContainerStyle={styles.recsScroll}
+        renderItem={({ item: product }) => (
+          <Pressable
+            style={styles.recCard}
+            onPress={() => router.push(`/product/${product.productId}`)}
+          >
+            <Image
+              source={{ uri: product.image || FALLBACK_IMAGE }}
+              style={styles.recImage}
+              resizeMode="cover"
+            />
+            <View style={styles.recInfo}>
+              <AppText variant="caption" numberOfLines={2}>{product.title}</AppText>
+              <AppText variant="priceSmall">${(Number(product.price) || 0).toFixed(2)}</AppText>
+            </View>
+          </Pressable>
+        )}
       />
     </View>
   );
@@ -277,4 +368,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     marginVertical: spacing[2],
   },
+
+  // Cart Recommendations
+  recsSection: { marginTop: spacing[6] },
+  recsTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing[2], marginBottom: spacing[3] },
+  recsAccent: { width: 4, height: 20, borderRadius: 2, backgroundColor: colors.brandBlue },
+  recsScroll: { gap: spacing[2] },
+  recCard: {
+    width: 140, backgroundColor: colors.card, borderRadius: borderRadius.xl,
+    borderWidth: 1, borderColor: colors.gray100, overflow: "hidden", ...shadows.sm,
+  },
+  recImage: { width: 140, height: 105, backgroundColor: colors.gray50 },
+  recInfo: { padding: spacing[2], gap: spacing[1] },
 });

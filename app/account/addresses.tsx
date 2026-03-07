@@ -5,11 +5,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { Address } from "@/lib/types";
 
 export default function AddressesScreen() {
+  return <RequireAuth><AddressesContent /></RequireAuth>;
+}
+
+function AddressesContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -17,7 +22,7 @@ export default function AddressesScreen() {
 
   const load = useCallback(async () => {
     try {
-      const data = await customerFetch<Address[]>("/customer/addresses");
+      const data = await customerFetch<Address[]>("/customer-addresses");
       setAddresses(Array.isArray(data) ? data : []);
     } catch { setAddresses([]); }
     setLoading(false);

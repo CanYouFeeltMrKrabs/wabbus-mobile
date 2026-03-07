@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
@@ -18,13 +19,17 @@ type Conversation = {
 };
 
 export default function MessagesScreen() {
+  return <RequireAuth><MessagesContent /></RequireAuth>;
+}
+
+function MessagesContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    customerFetch<Conversation[]>("/messages")
+    customerFetch<Conversation[]>("/messages/conversations")
       .then((data) => setConversations(Array.isArray(data) ? data : []))
       .catch(() => setConversations([]))
       .finally(() => setLoading(false));

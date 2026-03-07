@@ -4,9 +4,14 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import Icon from "@/components/ui/Icon";
+import RequireAuth from "@/components/ui/RequireAuth";
 import { colors, spacing } from "@/lib/theme";
 
 export default function CheckoutScreen() {
+  return <RequireAuth><CheckoutContent /></RequireAuth>;
+}
+
+function CheckoutContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 

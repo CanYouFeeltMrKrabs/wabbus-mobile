@@ -3,7 +3,7 @@
  * Matches the web's card design: image, badges, wishlist, title, vendor,
  * star rating, price, and add-to-cart button.
  */
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { View, Image, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import AppText from "./AppText";
@@ -12,6 +12,7 @@ import StarRating from "./StarRating";
 import { BadgeRow } from "./Badge";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { FALLBACK_IMAGE } from "@/lib/config";
+import { addToWishlist, removeFromWishlist, isInWishlist, onWishlistUpdate } from "@/lib/wishlist";
 import type { PublicProduct } from "@/lib/types";
 
 type Props = {
@@ -24,6 +25,31 @@ export default function ProductCard({ product, onAddToCart }: Props) {
   const imageUri = product.image || FALLBACK_IMAGE;
   const hasDiscount =
     product.compareAtPrice != null && Number(product.compareAtPrice) > Number(product.price);
+  const [inWishlist, setInWishlist] = useState(false);
+
+  useEffect(() => {
+    isInWishlist(product.productId).then(setInWishlist);
+    const unsub = onWishlistUpdate(() => {
+      isInWishlist(product.productId).then(setInWishlist);
+    });
+    return unsub;
+  }, [product.productId]);
+
+  const toggleWishlist = useCallback(async () => {
+    if (inWishlist) {
+      await removeFromWishlist(product.productId);
+    } else {
+      await addToWishlist({
+        productId: product.productId,
+        variantId: product.defaultVariantId ?? 0,
+        title: product.title,
+        price: Math.round(Number(product.price) * 100),
+        image: product.image || FALLBACK_IMAGE,
+        slug: product.slug,
+        categoryId: product.categoryId,
+      });
+    }
+  }, [inWishlist, product]);
 
   return (
     <Pressable
@@ -40,8 +66,8 @@ export default function ProductCard({ product, onAddToCart }: Props) {
         </View>
 
         {/* Wishlist */}
-        <Pressable style={styles.wishlist} hitSlop={8}>
-          <Icon name="favorite-border" size={20} color={colors.gray400} />
+        <Pressable style={[styles.wishlist, inWishlist && styles.wishlistActive]} hitSlop={8} onPress={toggleWishlist}>
+          <Icon name={inWishlist ? "favorite" : "favorite-border"} size={20} color={inWishlist ? colors.white : colors.gray400} />
         </Pressable>
       </View>
 
@@ -113,10 +139,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: spacing[1],
     right: spacing[1],
-    backgroundColor: "rgba(255,255,255,0.8)",
+    backgroundColor: "rgba(255,255,255,0.9)",
     borderRadius: borderRadius.full,
     padding: spacing[1],
     ...shadows.sm,
+  },
+  wishlistActive: {
+    backgroundColor: colors.brandBlueDark,
+    borderColor: colors.brandBlueDark,
   },
   info: { padding: spacing[2], flex: 1 },
   title: { minHeight: 32, lineHeight: 16 },
