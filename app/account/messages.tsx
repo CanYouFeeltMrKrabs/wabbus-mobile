@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { View, FlatList, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,13 +27,28 @@ function MessagesContent() {
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    customerFetch<Conversation[]>("/messages/conversations")
-      .then((data) => setConversations(Array.isArray(data) ? data : []))
-      .catch(() => setConversations([]))
-      .finally(() => setLoading(false));
+  const loadConversations = useCallback(async (nextCursor?: string | null) => {
+    const isLoadMore = !!nextCursor;
+    if (isLoadMore) setLoadingMore(true); else setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "50" });
+      if (nextCursor) params.set("cursor", nextCursor);
+      const data = await customerFetch<any>(`/messages/conversations?${params}`);
+      const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+      setConversations((prev) => isLoadMore ? [...prev, ...list] : list);
+      setCursor(data?.nextCursor ?? null);
+      setHasMore(!!data?.hasMore);
+    } catch {
+      if (!isLoadMore) setConversations([]);
+    }
+    if (isLoadMore) setLoadingMore(false); else setLoading(false);
   }, []);
+
+  useEffect(() => { loadConversations(); }, [loadConversations]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -55,6 +70,9 @@ function MessagesContent() {
           data={conversations}
           keyExtractor={(c) => c.publicId}
           contentContainerStyle={styles.list}
+          onEndReached={() => { if (hasMore && !loadingMore) loadConversations(cursor); }}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={colors.brandBlue} style={{ marginVertical: spacing[4] }} /> : null}
           renderItem={({ item }) => (
             <Pressable style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}>
               <View style={styles.cardRow}>

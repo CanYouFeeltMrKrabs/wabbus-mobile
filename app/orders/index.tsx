@@ -17,16 +17,26 @@ export default function OrdersScreen() {
   const { isLoggedIn } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (nextCursor?: string | null) => {
     if (!isLoggedIn) { setLoading(false); return; }
+    const isLoadMore = !!nextCursor;
+    if (isLoadMore) setLoadingMore(true); else setLoading(true);
     try {
-      const data = await customerFetch<Order[]>("/orders");
-      setOrders(Array.isArray(data) ? data : []);
+      const params = new URLSearchParams({ limit: "50" });
+      if (nextCursor) params.set("cursor", nextCursor);
+      const data = await customerFetch<any>(`/orders?${params}`);
+      const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+      setOrders((prev) => isLoadMore ? [...prev, ...list] : list);
+      setCursor(data?.nextCursor ?? null);
+      setHasMore(!!data?.hasMore);
     } catch {
-      setOrders([]);
+      if (!isLoadMore) setOrders([]);
     }
-    setLoading(false);
+    if (isLoadMore) setLoadingMore(false); else setLoading(false);
   }, [isLoggedIn]);
 
   useEffect(() => { loadOrders(); }, [loadOrders]);
@@ -62,6 +72,9 @@ export default function OrdersScreen() {
           keyExtractor={(o) => o.publicId}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onEndReached={() => { if (hasMore && !loadingMore) loadOrders(cursor); }}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={colors.brandBlue} style={{ marginVertical: spacing[4] }} /> : null}
           renderItem={({ item: order }) => (
             <Pressable
               style={({ pressed }) => [styles.orderCard, pressed && { opacity: 0.9 }]}

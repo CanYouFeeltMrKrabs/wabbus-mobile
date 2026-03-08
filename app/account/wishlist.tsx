@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   },
   removeBtn: {
     position: "absolute", top: spacing[1.5], right: spacing[1.5], zIndex: 10,
-    backgroundColor: "rgba(255,255,255,0.9)", borderRadius: borderRadius.full,
+    backgroundColor: colors.overlayWhite90, borderRadius: borderRadius.full,
     width: 24, height: 24, alignItems: "center", justifyContent: "center",
     ...shadows.sm,
   },

@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.gray100,
-    shadowColor: "#000",
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: "row",
-    height: 56,
+    height: 42,
   },
   tab: {
     flex: 1,

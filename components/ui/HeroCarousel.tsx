@@ -32,8 +32,8 @@ interface Slide {
 const slides: Slide[] = [
   {
     key: "blue",
-    bg: "#2563eb",
-    decorColor: "rgba(59,130,246,0.5)",
+    bg: colors.heroBlue,
+    decorColor: colors.heroBlueDecor,
     badge: "BIG SUMMER SALE",
     badgeBg: colors.brandOrange,
     headlineParts: [
@@ -49,10 +49,10 @@ const slides: Slide[] = [
   },
   {
     key: "purple",
-    bg: "#7c3aed",
-    decorColor: "rgba(139,92,246,0.5)",
+    bg: colors.heroPurple,
+    decorColor: colors.heroPurpleDecor,
     badge: "NEW ARRIVALS",
-    badgeBg: "#ec4899",
+    badgeBg: colors.heroPink,
     headlineParts: [
       { text: "FRESH " },
       { text: "STYLES", highlight: true },
@@ -61,15 +61,15 @@ const slides: Slide[] = [
     sub: "Be the first to explore our latest additions — handpicked for your home.",
     ctaLabel: "EXPLORE NOW",
     ctaRoute: "/category/everyday-household",
-    ctaBg: "#ec4899",
+    ctaBg: colors.heroPink,
     icon: "local-fire-department",
   },
   {
     key: "yellow",
-    bg: "#eab308",
-    decorColor: "rgba(250,204,21,0.6)",
+    bg: colors.heroYellow,
+    decorColor: colors.heroYellowDecor,
     badge: "FLASH DEALS",
-    badgeBg: "#1e293b",
+    badgeBg: colors.heroSlate,
     headlineParts: [
       { text: "DEALS " },
       { text: "END SOON", highlight: true },
@@ -78,7 +78,7 @@ const slides: Slide[] = [
     sub: "Limited-time offers on your favourite houseware. Don't miss out!",
     ctaLabel: "GRAB DEALS",
     ctaRoute: "/category/everyday-household",
-    ctaBg: "#1e293b",
+    ctaBg: colors.heroSlate,
     icon: "bolt",
   },
 ];
@@ -156,7 +156,7 @@ export default function HeroCarousel() {
 
         {/* Decorative icon */}
         <View style={styles.decorIcon}>
-          <Icon name={slide.icon as any} size={120} color="rgba(255,255,255,0.12)" />
+          <Icon name={slide.icon as any} size={120} color={colors.overlayWhite12} />
         </View>
 
         {/* Badge */}
@@ -184,7 +184,7 @@ export default function HeroCarousel() {
         {/* Sub */}
         <AppText
           variant="bodySmall"
-          color="rgba(255,255,255,0.9)"
+          color={colors.overlayWhite90}
           style={styles.sub}
         >
           {slide.sub}
@@ -240,10 +240,10 @@ const styles = StyleSheet.create({
   },
   container: {
     borderRadius: borderRadius["3xl"],
-    padding: spacing[6],
-    paddingTop: spacing[8],
+    padding: spacing[5],
+    paddingTop: spacing[6],
     overflow: "hidden",
-    minHeight: 220,
+    height: 195,
   },
   decorCircle: {
     position: "absolute",
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,0.2)",
+    backgroundColor: colors.overlayBlack20,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -327,6 +327,6 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.25 }],
   },
   dotInactive: {
-    backgroundColor: "rgba(255,255,255,0.4)",
+    backgroundColor: colors.overlayWhite40,
   },
 });

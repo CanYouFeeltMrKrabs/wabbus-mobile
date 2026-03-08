@@ -32,7 +32,7 @@ const variantBg: Record<Variant, { bg: string; bgPressed: string; text: string; 
   accent:    { bg: colors.brandOrange, bgPressed: colors.brandOrangeHover, text: colors.white },
   outline:   { bg: colors.transparent, bgPressed: colors.gray50, text: colors.brandBlue, border: colors.brandBlue },
   ghost:     { bg: colors.transparent, bgPressed: colors.gray100, text: colors.foreground },
-  danger:    { bg: colors.error, bgPressed: "#dc2626", text: colors.white },
+  danger:    { bg: colors.error, bgPressed: colors.errorDark, text: colors.white },
 };
 
 const sizes = {

@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
   },
   pillPressed: {
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: colors.overlayWhite20,
   },
   label: {
     fontSize: 10,

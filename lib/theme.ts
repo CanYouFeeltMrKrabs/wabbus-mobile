@@ -9,14 +9,15 @@ export const colors = {
   brandBlue: "#2d4ecf",
   brandBlueDark: "#0c4eb0",
   brandBlueHover: "#2341b0",
-  brandBlueLight: "#e6eeff",
-  brandBlueBorder: "rgba(10,68,151,0.2)",
+  brandBlueLight: "#eff6ff",
+  brandBlueBorder: "#dbeafe",
 
   brandOrange: "#ff6b00",
   brandOrangeHover: "#e55f00",
 
   brandYellow: "#ffd43b",
   brandRed: "#e53e3e",
+  starGold: "#f5a623",
 
   // Surfaces
   background: "#f9fafb",
@@ -35,12 +36,30 @@ export const colors = {
   warning: "#f59e0b",
   warningLight: "#fef3c7",
   error: "#ef4444",
+  errorDark: "#dc2626",
   errorLight: "#fee2e2",
+
+  // Hero slide palette
+  heroBlue: "#2563eb",
+  heroPurple: "#7c3aed",
+  heroPurpleDecor: "rgba(139,92,246,0.5)",
+  heroBlueDecor: "rgba(59,130,246,0.5)",
+  heroYellow: "#eab308",
+  heroYellowDecor: "rgba(250,204,21,0.6)",
+  heroPink: "#ec4899",
+  heroSlate: "#1e293b",
 
   // Primitives
   white: "#ffffff",
   black: "#000000",
   transparent: "transparent",
+
+  // Overlays
+  overlayWhite90: "rgba(255,255,255,0.9)",
+  overlayWhite40: "rgba(255,255,255,0.4)",
+  overlayWhite20: "rgba(255,255,255,0.2)",
+  overlayWhite12: "rgba(255,255,255,0.12)",
+  overlayBlack20: "rgba(0,0,0,0.2)",
 
   // Slate scale
   slate50: "#f8fafc",

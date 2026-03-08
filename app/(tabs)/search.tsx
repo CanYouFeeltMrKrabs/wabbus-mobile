@@ -155,7 +155,7 @@ export default function SearchScreen() {
                 >
                   <AppText
                     variant="caption"
-                    color={sortBy === opt.value ? "#fff" : colors.muted}
+                    color={sortBy === opt.value ? colors.white : colors.muted}
                     weight={sortBy === opt.value ? "semibold" : "normal"}
                   >
                     {opt.label}

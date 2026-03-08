@@ -73,7 +73,7 @@ export default function ProductCard({ product, onAddToCart }: Props) {
 
       {/* Info */}
       <View style={styles.info}>
-        <AppText variant="label" numberOfLines={2} style={styles.title}>
+        <AppText variant="label" numberOfLines={2} weight="semibold" style={styles.title}>
           {product.title}
         </AppText>
 
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: spacing[1],
     right: spacing[1],
-    backgroundColor: "rgba(255,255,255,0.9)",
+    backgroundColor: colors.overlayWhite90,
     borderRadius: borderRadius.full,
     padding: spacing[1],
     ...shadows.sm,

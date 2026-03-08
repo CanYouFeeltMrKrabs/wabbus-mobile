@@ -20,9 +20,9 @@ export default function StarRating({ rating, count, sold, size = 12 }: Props) {
     <View style={styles.row}>
       <View style={styles.stars}>
         {Array.from({ length: fullStars }, (_, i) => (
-          <Icon key={`f${i}`} name="star" size={size} color={colors.brandOrange} />
+          <Icon key={`f${i}`} name="star" size={size} color={colors.starGold} />
         ))}
-        {hasHalf && <Icon name="star-half" size={size} color={colors.brandOrange} />}
+        {hasHalf && <Icon name="star-half" size={size} color={colors.starGold} />}
         {Array.from({ length: emptyStars }, (_, i) => (
           <Icon key={`e${i}`} name="star-border" size={size} color={colors.gray200} />
         ))}

@@ -13,9 +13,9 @@ type Props = {
 };
 
 const bgColors: Record<BadgeType, string> = {
-  sale: colors.brandOrange,
-  new: "#10b981",
-  bestseller: "#f59e0b",
+  sale: colors.brandRed,
+  new: colors.success,
+  bestseller: colors.warning,
   info: colors.brandBlue,
 };
 
