@@ -1,0 +1,172 @@
+name: Dependency Health Check
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # Daily at 7 AM UTC
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run health checks
+        id: checks
+        run: |
+          REPORT=""
+          HAS_ISSUES=false
+
+          # ─── 1. Security audit (high/critical only) ───
+          AUDIT=$(npm audit --json 2>/dev/null || true)
+          HIGH_CRIT=$(echo "$AUDIT" | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const vulns = data.vulnerabilities || {};
+            const serious = Object.entries(vulns)
+              .filter(([,v]) => ['high','critical'].includes(v.severity))
+              .map(([name,v]) => ({
+                name,
+                severity: v.severity,
+                fixAvailable: !!v.fixAvailable,
+                via: (v.via || []).filter(x => typeof x === 'string' || x.title).map(x => x.title || x).slice(0,2).join(', ')
+              }));
+            if (serious.length) {
+              console.log('### 🔴 Security Vulnerabilities\n');
+              console.log('| Package | Severity | Fix Available | Advisory |');
+              console.log('|---------|----------|---------------|----------|');
+              serious.forEach(s => console.log('| ' + s.name + ' | ' + s.severity.toUpperCase() + ' | ' + (s.fixAvailable ? '✅ Yes' : '❌ No') + ' | ' + s.via + ' |'));
+              console.log('');
+            }
+          " 2>/dev/null || true)
+
+          if [ -n "$HIGH_CRIT" ]; then
+            REPORT="${REPORT}${HIGH_CRIT}\n"
+            HAS_ISSUES=true
+          fi
+
+          # ─── 2. License check (GPL/AGPL/unlicensed) ───
+          LICENSE_ISSUES=$(npx license-checker --json --production 2>/dev/null | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const flagged = Object.entries(data)
+              .filter(([,v]) => {
+                const lic = (v.licenses || '').toString().toUpperCase();
+                return lic.includes('GPL') || lic.includes('AGPL') || lic === 'UNLICENSED' || lic === 'UNKNOWN';
+              })
+              .filter(([name]) => !name.startsWith('wabbus') && !name.startsWith('seller'))
+              .map(([name,v]) => ({ name, license: v.licenses }));
+            if (flagged.length) {
+              console.log('### ⚖️ License Concerns\n');
+              console.log('| Package | License |');
+              console.log('|---------|---------|');
+              flagged.forEach(f => console.log('| ' + f.name + ' | ' + f.license + ' |'));
+              console.log('');
+            }
+          " 2>/dev/null || true)
+
+          if [ -n "$LICENSE_ISSUES" ]; then
+            REPORT="${REPORT}${LICENSE_ISSUES}\n"
+            HAS_ISSUES=true
+          fi
+
+          # ─── 3. Outdated major versions (2+ behind) ───
+          OUTDATED=$(npm outdated --json 2>/dev/null | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const stale = Object.entries(data)
+              .filter(([,v]) => {
+                const curr = parseInt((v.current || '0').split('.')[0]);
+                const latest = parseInt((v.latest || '0').split('.')[0]);
+                return latest - curr >= 2;
+              })
+              .map(([name,v]) => ({ name, current: v.current, latest: v.latest }));
+            if (stale.length) {
+              console.log('### 📦 Stale Major Versions (2+ behind)\n');
+              console.log('| Package | Current | Latest |');
+              console.log('|---------|---------|--------|');
+              stale.forEach(s => console.log('| ' + s.name + ' | ' + s.current + ' | ' + s.latest + ' |'));
+              console.log('');
+            }
+          " 2>/dev/null || true)
+
+          if [ -n "$OUTDATED" ]; then
+            REPORT="${REPORT}${OUTDATED}\n"
+            HAS_ISSUES=true
+          fi
+
+          # ─── 4. Lock file consistency ───
+          npm ci --dry-run 2>&1 | grep -qi "err\|missing\|invalid" && {
+            REPORT="${REPORT}### 🔒 Lock File Issue\n\n\`package-lock.json\` is out of sync with \`package.json\`. Run \`npm install\` and commit the lock file.\n\n"
+            HAS_ISSUES=true
+          } || true
+
+          # ─── 5. Unused dependencies ───
+          UNUSED=$(npx depcheck --json 2>/dev/null | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const deps = data.dependencies || [];
+            const ignored = ['autoprefixer','postcss','tailwindcss','typescript','@types/node','@types/react','@types/react-dom'];
+            const real = deps.filter(d => !ignored.includes(d));
+            if (real.length) {
+              console.log('### 🧹 Potentially Unused Dependencies\n');
+              real.forEach(d => console.log('- \`' + d + '\`'));
+              console.log('\n_Review before removing — some may be used implicitly._\n');
+            }
+          " 2>/dev/null || true)
+
+          if [ -n "$UNUSED" ]; then
+            REPORT="${REPORT}${UNUSED}\n"
+            HAS_ISSUES=true
+          fi
+
+          # ─── Write outputs ───
+          echo "has_issues=$HAS_ISSUES" >> "$GITHUB_OUTPUT"
+          if [ "$HAS_ISSUES" = true ]; then
+            {
+              echo "report<<REPORT_EOF"
+              echo -e "$REPORT"
+              echo "REPORT_EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update issue
+        if: steps.checks.outputs.has_issues == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🩺 Dependency Health Check';
+            const label = 'dependency-health';
+            const body = `## Daily Dependency Health Report
+
+            _Auto-generated on ${new Date().toISOString().split('T')[0]}_
+
+            ${process.env.REPORT}
+
+            ---
+            _Close this issue once resolved. A new one will be created if issues are found again._`;
+
+            // Ensure label exists
+            try {
+              await github.rest.issues.getLabel({ ...context.repo, name: label });
+            } catch {
+              await github.rest.issues.createLabel({ ...context.repo, name: label, color: 'D93F0B', description: 'Automated dependency health alerts' });
+            }
+
+            // Close stale health issues
+            const open = await github.rest.issues.listForRepo({ ...context.repo, labels: label, state: 'open' });
+            for (const issue of open.data) {
+              await github.rest.issues.update({ ...context.repo, issue_number: issue.number, state: 'closed', state_reason: 'not_planned' });
+            }
+
+            // Open fresh issue
+            await github.rest.issues.create({ ...context.repo, title, body, labels: [label] });
+        env:
+          REPORT: ${{ steps.checks.outputs.report }}
