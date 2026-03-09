@@ -6,6 +6,9 @@ import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import SlideDrawer from "@/components/SlideDrawer";
+import CaseDetailPanel from "@/components/CaseDetailPanel";
+import FamilyDetailPanel from "@/components/FamilyDetailPanel";
 import { customerFetch } from "@/lib/api";
 import { colors, spacing, borderRadius, shadows, fontSize, fontWeight } from "@/lib/theme";
 import type { CustomerCase } from "@/lib/messages-types";
@@ -114,6 +117,11 @@ export default function MessagesScreen() {
   return <RequireAuth><MessagesContent /></RequireAuth>;
 }
 
+type DrawerState =
+  | { type: "case"; caseNumber: string; fromFamily?: FamilyGroup }
+  | { type: "family"; family: FamilyGroup }
+  | null;
+
 function MessagesContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -128,6 +136,22 @@ function MessagesContent() {
 
   const [cases, setCases] = useState<CustomerCase[]>([]);
   const [casesLoading, setCasesLoading] = useState(true);
+
+  const [drawer, setDrawer] = useState<DrawerState>(null);
+
+  const openCase = useCallback((caseNumber: string) => {
+    setDrawer({ type: "case", caseNumber });
+  }, []);
+
+  const openFamily = useCallback((family: FamilyGroup) => {
+    setDrawer({ type: "family", family });
+  }, []);
+
+  const openCaseFromFamily = useCallback((caseNumber: string, family: FamilyGroup) => {
+    setDrawer({ type: "case", caseNumber, fromFamily: family });
+  }, []);
+
+  const closeDrawer = useCallback(() => setDrawer(null), []);
 
   const loadConversations = useCallback(async (nextCursor?: string | null) => {
     const isLoadMore = !!nextCursor;
@@ -246,14 +270,36 @@ function MessagesContent() {
             contentContainerStyle={styles.list}
             renderItem={({ item }) =>
               item.type === "family" ? (
-                <FamilyRow group={item} onPress={() => router.push(`/account/messages/family/${item.familyNumber}` as any)} />
+                <FamilyRow group={item} onPress={() => openFamily(item)} />
               ) : (
-                <CaseRow caseData={item.case} onPress={() => router.push(`/account/messages/case/${item.case.caseNumber}` as any)} />
+                <CaseRow caseData={item.case} onPress={() => openCase(item.case.caseNumber)} />
               )
             }
           />
         )
       )}
+
+      <SlideDrawer visible={drawer !== null} onClose={closeDrawer}>
+        {drawer?.type === "case" && (
+          <CaseDetailPanel
+            caseNumber={drawer.caseNumber}
+            onClose={closeDrawer}
+            onBack={
+              drawer.fromFamily
+                ? () => setDrawer({ type: "family", family: drawer.fromFamily! })
+                : undefined
+            }
+          />
+        )}
+        {drawer?.type === "family" && (
+          <FamilyDetailPanel
+            familyNumber={drawer.family.familyNumber}
+            cases={drawer.family.cases}
+            onClose={closeDrawer}
+            onCasePress={(cn) => openCaseFromFamily(cn, drawer.family)}
+          />
+        )}
+      </SlideDrawer>
     </View>
   );
 }
