@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { View, TextInput, Pressable, StyleSheet, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,9 +14,29 @@ export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startCooldown = useCallback(() => {
+    setCooldown(60);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCooldown((c) => {
+        if (c <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
 
   const handleSubmit = async () => {
-    if (!email.trim()) return;
+    if (!email.trim() || cooldown > 0) return;
     setLoading(true);
     try {
       await customerFetch("/customer-auth/forgot-password", {
@@ -24,7 +44,11 @@ export default function ForgotPasswordScreen() {
         body: JSON.stringify({ email: email.trim() }),
       });
       setSent(true);
+      startCooldown();
     } catch (e: any) {
+      if (e.status === 429 || e.message?.includes("Too many") || e.message?.includes("Please wait")) {
+        startCooldown();
+      }
       Alert.alert("Error", e.message || "Something went wrong.");
     } finally {
       setLoading(false);
@@ -51,6 +75,11 @@ export default function ForgotPasswordScreen() {
             <AppText variant="body" color={colors.muted} align="center" style={styles.desc}>
               If an account exists for {email}, we&apos;ve sent password reset instructions.
             </AppText>
+            {cooldown > 0 && (
+              <AppText variant="body" color={colors.muted} align="center" style={styles.cooldownText}>
+                Please wait {cooldown}s before requesting again.
+              </AppText>
+            )}
             <AppButton title="Back to Sign In" variant="primary" fullWidth onPress={() => router.replace("/(auth)/login")} style={styles.btn} />
           </>
         ) : (
@@ -70,7 +99,16 @@ export default function ForgotPasswordScreen() {
                 autoComplete="email"
               />
             </View>
-            <AppButton title="Send Reset Link" variant="primary" fullWidth size="lg" loading={loading} onPress={handleSubmit} style={styles.btn} />
+            <AppButton
+              title={cooldown > 0 ? `Wait ${cooldown}s` : "Send Reset Link"}
+              variant="primary"
+              fullWidth
+              size="lg"
+              loading={loading}
+              disabled={cooldown > 0}
+              onPress={handleSubmit}
+              style={styles.btn}
+            />
           </>
         )}
       </View>
@@ -89,5 +127,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg,
     padding: spacing[3], fontSize: fontSize.base, color: colors.foreground, backgroundColor: colors.gray50, width: "100%",
   },
+  cooldownText: { marginBottom: spacing[4] },
   btn: { marginTop: spacing[2] },
 });
