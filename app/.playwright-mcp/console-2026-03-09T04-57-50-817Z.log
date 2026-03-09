@@ -1,4 +1,0 @@
-[    2432ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://staging-api.wabbus.com/customer-auth/me:0
-[    2674ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://staging-api.wabbus.com/customer-auth/refresh:0
-[    5860ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://staging-api.wabbus.com/customer-auth/me:0
-[    6045ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://staging-api.wabbus.com/customer-auth/refresh:0
