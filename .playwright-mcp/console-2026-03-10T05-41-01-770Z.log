@@ -1,0 +1,120 @@
+[ 1802308ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[ 3662317ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[ 6422343ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[ 9182370ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[11042400ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[11062690ms] [ERROR] ./src/app/(dashboard)/cases/_components/CaseQueueTable.tsx:139:10
+Ecmascript file had an error
+  137 | }
+  138 |
+> 139 | function AlertPill({ label, variant }: { label: string; variant: "escalated" | "flagged" }) {
+      |          ^^^^^^^^^
+  140 |   const colors = {
+  141 |     escalated: "bg-amber-100 text-amber-800",
+  142 |     flagged: "bg-red-100 text-red-800",
+
+the name `AlertPill` is defined multiple times
+
+Import traces:
+  Client Component Browser:
+    ./src/app/(dashboard)/cases/_components/CaseQueueTable.tsx [Client Component Browser]
+    ./src/app/(dashboard)/cases/page.tsx [Client Component Browser]
+    ./src/app/(dashboard)/cases/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/(dashboard)/cases/_components/CaseQueueTable.tsx [Client Component SSR]
+    ./src/app/(dashboard)/cases/page.tsx [Client Component SSR]
+    ./src/app/(dashboard)/cases/page.tsx [Server Component] @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_f3530cac._.js:3127
+[11062691ms] [ERROR] ./src/app/(dashboard)/cases/_components/CaseQueueTable.tsx:101:10
+Ecmascript file had an error
+   99 | };
+  100 |
+> 101 | function isUrgent(c: CaseListItem): boolean {
+      |          ^^^^^^^^
+  102 |   return c.escalatedToSupport || c.flaggedForReview;
+  103 | }
+  104 |
+
+the name `isUrgent` is defined multiple times
+
+Import traces:
+  Client Component Browser:
+    ./src/app/(dashboard)/cases/_components/CaseQueueTable.tsx [Client Component Browser]
+    ./src/app/(dashboard)/cases/page.tsx [Client Component Browser]
+    ./src/app/(dashboard)/cases/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/(dashboard)/cases/_components/CaseQueueTable.tsx [Client Component SSR]
+    ./src/app/(dashboard)/cases/page.tsx [Client Component SSR]
+    ./src/app/(dashboard)/cases/page.tsx [Server Component] @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_f3530cac._.js:3127
+[11069760ms] [ERROR] ./src/app/(dashboard)/cases/_components/CaseQueueTable.tsx:168:10
+Ecmascript file had an error
+  166 | }
+  167 |
+> 168 | function AlertPill({ label, variant }: { label: string; variant: "escalated" | "flagged" }) {
+      |          ^^^^^^^^^
+  169 |   const colors = {
+  170 |     escalated: "bg-amber-100 text-amber-800",
+  171 |     flagged: "bg-red-100 text-red-800",
+
+the name `AlertPill` is defined multiple times
+
+Import traces:
+  Client Component Browser:
+    ./src/app/(dashboard)/cases/_components/CaseQueueTable.tsx [Client Component Browser]
+    ./src/app/(dashboard)/cases/page.tsx [Client Component Browser]
+    ./src/app/(dashboard)/cases/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/(dashboard)/cases/_components/CaseQueueTable.tsx [Client Component SSR]
+    ./src/app/(dashboard)/cases/page.tsx [Client Component SSR]
+    ./src/app/(dashboard)/cases/page.tsx [Server Component] @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_f3530cac._.js:3127
+[11077784ms] ReferenceError: UrgencyIndicators is not defined
+    at SoloRow (http://localhost:3001/_next/static/chunks/src_02b44d4d._.js?id=%255Bproject%255D%252Fsrc%252Fapp%252F%2528dashboard%2529%252Fcases%252F_components%252FCaseQueueTable.tsx+%255Bapp-client%255D+%2528ecmascript%2529:653:230)
+    at Object.react_stack_bottom_frame (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:14826:24)
+    at renderWithHooks (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:4651:24)
+    at updateFunctionComponent (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:6112:21)
+    at beginWork (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:6708:24)
+    at runWithFiberInDEV (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:965:74)
+    at performUnitOfWork (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9562:97)
+    at workLoopSync (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9456:40)
+    at renderRootSync (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9440:13)
+    at performWorkOnRoot (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9068:186)
+    at performSyncWorkOnRoot (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:10238:9)
+    at flushSyncWorkAcrossRoots_impl (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:10154:316)
+    at processRootScheduleInMicrotask (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:10175:106)
+    at http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:10249:158
+[11085996ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2297
+[11086757ms] ReferenceError: UrgencyIndicators is not defined
+    at SoloRow (http://localhost:3001/_next/static/chunks/src_02b44d4d._.js?id=%255Bproject%255D%252Fsrc%252Fapp%252F%2528dashboard%2529%252Fcases%252F_components%252FCaseQueueTable.tsx+%255Bapp-client%255D+%2528ecmascript%2529:653:230)
+    at Object.react_stack_bottom_frame (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:14826:24)
+    at renderWithHooks (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:4651:24)
+    at updateFunctionComponent (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:6112:21)
+    at beginWork (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:6708:24)
+    at runWithFiberInDEV (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:965:74)
+    at performUnitOfWork (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9562:97)
+    at workLoopSync (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9456:40)
+    at renderRootSync (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9440:13)
+    at performWorkOnRoot (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9105:47)
+    at performWorkOnRootViaSchedulerTask (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:10230:9)
+    at MessagePort.performWorkUntilDeadline (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_a0e4c7b4._.js:2647:64)
+[11087842ms] ReferenceError: UrgencyIndicators is not defined
+    at SoloRow (http://localhost:3001/_next/static/chunks/src_02b44d4d._.js:3198:230)
+    at Object.react_stack_bottom_frame (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:14826:24)
+    at renderWithHooks (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:4651:24)
+    at updateFunctionComponent (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:6112:21)
+    at beginWork (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:6708:24)
+    at runWithFiberInDEV (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:965:74)
+    at performUnitOfWork (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9562:97)
+    at workLoopSync (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9456:40)
+    at renderRootSync (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9440:13)
+    at performWorkOnRoot (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:9105:47)
+    at performWorkOnRootViaSchedulerTask (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:10230:9)
+    at MessagePort.performWorkUntilDeadline (http://localhost:3001/_next/static/chunks/node_modules_next_dist_compiled_a0e4c7b4._.js:2647:64)
+[11089670ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_f3530cac._.js:2297
+[11630530ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[13790545ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[15650559ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[17510571ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[20270592ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0
+[23930619ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3002/employee-cases/notifications/unread-count:0

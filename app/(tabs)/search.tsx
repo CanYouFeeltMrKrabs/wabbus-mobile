@@ -120,9 +120,9 @@ export default function SearchScreen() {
   );
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={styles.screen}>
       {/* Search input */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing[2]) + spacing[2] }]}>
         <SearchBar
           value={query}
           onChangeText={setQuery}
@@ -193,7 +193,7 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: spacing[4], paddingVertical: spacing[2], backgroundColor: colors.brandBlue },
+  header: { paddingHorizontal: spacing[4], paddingBottom: spacing[3], backgroundColor: colors.brandBlue },
   loader: { marginTop: spacing[16] },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing[3] },
   emptyText: { textAlign: "center" },

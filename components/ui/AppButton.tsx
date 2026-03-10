@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   type ViewStyle,
+  type TextStyle,
   type PressableProps,
 } from "react-native";
 import AppText from "./AppText";
@@ -24,6 +25,7 @@ type Props = PressableProps & {
   iconRight?: string;
   fullWidth?: boolean;
   size?: "sm" | "md" | "lg";
+  textStyle?: object | TextStyle;
 };
 
 const variantBg: Record<Variant, { bg: string; bgPressed: string; text: string; border?: string }> = {
@@ -51,6 +53,7 @@ export default function AppButton({
   size = "md",
   disabled,
   style,
+  textStyle,
   ...rest
 }: Props) {
   const v = variantBg[variant];
@@ -82,7 +85,7 @@ export default function AppButton({
           <AppText
             variant="button"
             color={v.text}
-            style={{ fontSize: s.fontSize, fontWeight: fontWeight.bold }}
+            style={[{ fontSize: s.fontSize, fontWeight: fontWeight.bold }, textStyle as object]}
           >
             {title}
           </AppText>

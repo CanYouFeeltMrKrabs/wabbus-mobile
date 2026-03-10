@@ -3,6 +3,13 @@ import { customerFetch } from "./api";
 import { useAuth } from "./auth";
 import type { CartItem, ServerCartItem } from "./types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { showToast } from "./toast";
+
+const ADDED_SUFFIX = " added to cart";
+
+function truncateTitle(title: string): string {
+  return title.length > 30 ? title.substring(0, 30) + "…" : title;
+}
 
 type CartState = {
   items: CartItem[];
@@ -127,6 +134,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
       await saveGuestCart(cart);
     }
+    
+    showToast(`${truncateTitle(input.title)}${ADDED_SUFFIX}`, "success");
   }, [isLoggedIn, items, loadServerCart, saveGuestCart]);
 
   const updateQuantity = useCallback(async (publicId: string, quantity: number) => {

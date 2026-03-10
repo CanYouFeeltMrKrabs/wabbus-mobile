@@ -4,6 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "@/lib/auth";
 import { CartProvider } from "@/lib/cart";
 import { colors } from "@/lib/theme";
+import ToastProvider from "@/components/ui/ToastProvider";
 
 export default function RootLayout() {
   return (
@@ -20,11 +21,10 @@ export default function RootLayout() {
           >
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="(auth)" options={{ presentation: "modal" }} />
-            <Stack.Screen name="product/[id]" />
-            <Stack.Screen name="category/[slug]" />
             <Stack.Screen name="checkout" options={{ presentation: "modal" }} />
             <Stack.Screen name="order-complete" />
           </Stack>
+          <ToastProvider />
         </CartProvider>
       </AuthProvider>
     </SafeAreaProvider>

@@ -1,129 +1,29 @@
-/**
- * Cart Screen — matches web version layout:
- * - Cart items with image, title, quantity controls, save for later, remove
- * - Scrollable checkout footer: subtotal, shipping note, estimated total, checkout button
- */
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  View,
-  FlatList,
-  Image,
-  Pressable,
-  StyleSheet,
-  Alert,
-} from "react-native";
+import React, { useCallback } from "react";
+import { View, FlatList, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import CartItemCard from "@/components/ui/CartItemCard";
+import CartSummary from "@/components/ui/CartSummary";
+import CartRecommendations from "@/components/ui/CartRecommendations";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
-import { addToWishlist, isInWishlist } from "@/lib/wishlist";
-import { formatMoney } from "@/lib/money";
-import { FALLBACK_IMAGE, API_BASE } from "@/lib/config";
-import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
-import type { CartItem, PublicProduct } from "@/lib/types";
-
-function CartItemRow({
-  item,
-  onUpdateQty,
-  onRemove,
-  onSaveForLater,
-}: {
-  item: CartItem;
-  onUpdateQty: (publicId: string, qty: number) => void;
-  onRemove: (publicId: string) => void;
-  onSaveForLater: (item: CartItem) => void;
-}) {
-  const [saved, setSaved] = useState(false);
-
-  return (
-    <View style={styles.itemCard}>
-      <View style={styles.itemRow}>
-        <Image
-          source={{ uri: item.image || FALLBACK_IMAGE }}
-          style={styles.itemImage}
-          resizeMode="cover"
-        />
-        <View style={styles.itemInfo}>
-          <View style={styles.titlePriceRow}>
-            <AppText variant="label" numberOfLines={2} style={styles.itemTitle}>
-              {item.title}
-            </AppText>
-            <AppText variant="label" weight="semibold">
-              {formatMoney(item.unitPriceCents)}
-            </AppText>
-          </View>
-
-          {/* Quantity controls */}
-          <View style={styles.qtyRow}>
-            <AppText variant="caption" color={colors.muted}>Qty:</AppText>
-            <View style={styles.qtyControls}>
-              <Pressable
-                style={styles.qtyBtn}
-                onPress={() =>
-                  item.quantity > 1
-                    ? onUpdateQty(item.publicId, item.quantity - 1)
-                    : onRemove(item.publicId)
-                }
-              >
-                <Icon name="remove" size={16} color={colors.foreground} />
-              </Pressable>
-              <AppText variant="label" style={styles.qtyText}>
-                {item.quantity}
-              </AppText>
-              <Pressable
-                style={styles.qtyBtn}
-                onPress={() => onUpdateQty(item.publicId, item.quantity + 1)}
-              >
-                <Icon name="add" size={16} color={colors.foreground} />
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Actions inline */}
-          <View style={styles.itemActions}>
-            <Pressable
-              style={styles.actionBtn}
-              hitSlop={8}
-              onPress={() => { setSaved(true); onSaveForLater(item); }}
-              disabled={saved}
-            >
-              <Icon name={saved ? "favorite" : "favorite-border"} size={14} color={saved ? colors.brandBlueDark : colors.muted} />
-              <AppText variant="caption" color={saved ? colors.brandBlueDark : colors.muted}>
-                {saved ? "Saved" : "Save for later"}
-              </AppText>
-            </Pressable>
-            <Pressable
-              style={styles.actionBtn}
-              hitSlop={8}
-              onPress={() => onRemove(item.publicId)}
-            >
-              <AppText variant="caption" color={colors.error} weight="medium">
-                Remove
-              </AppText>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-}
+import { addToWishlist } from "@/lib/wishlist";
+import { FALLBACK_IMAGE } from "@/lib/config";
+import { colors, spacing } from "@/lib/theme";
+import type { CartItem } from "@/lib/types";
 
 export default function CartScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { items, itemCount, subtotalCents, updateQuantity, removeItem } =
-    useCart();
+  const { items, subtotalCents, updateQuantity, removeItem } = useCart();
   const { isLoggedIn } = useAuth();
 
   const handleRemove = useCallback(
     (publicId: string) => {
-      Alert.alert("Remove item", "Remove this item from your cart?", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Remove", style: "destructive", onPress: () => removeItem(publicId) },
-      ]);
+      removeItem(publicId);
     },
     [removeItem],
   );
@@ -142,6 +42,14 @@ export default function CartScreen() {
     },
     [removeItem],
   );
+
+  const handleCheckout = () => {
+    if (isLoggedIn) {
+      router.push("/checkout");
+    } else {
+      router.push("/(auth)/login");
+    }
+  };
 
   if (items.length === 0) {
     return (
@@ -165,17 +73,15 @@ export default function CartScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
         <AppText variant="heading">Your Cart</AppText>
       </View>
 
-      {/* Cart items */}
       <FlatList
         data={items}
         keyExtractor={(item) => item.publicId}
         renderItem={({ item }) => (
-          <CartItemRow
+          <CartItemCard
             item={item}
             onUpdateQty={updateQuantity}
             onRemove={handleRemove}
@@ -185,111 +91,36 @@ export default function CartScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListFooterComponent={
-          <View style={styles.footer}>
-            {/* Recommendations between items and summary */}
+          <View style={styles.footerInner}>
             <CartRecommendations cart={items} />
-
-            {/* Summary rows */}
-            <View style={styles.summarySection}>
-              <View style={styles.summaryRow}>
-                <AppText variant="body">Subtotal</AppText>
-                <AppText variant="body" weight="semibold">
-                  {formatMoney(subtotalCents)}
-                </AppText>
-              </View>
-              <View style={styles.summaryRow}>
-                <AppText variant="body" color={colors.muted}>Shipping & tax</AppText>
-                <AppText variant="body" color={colors.success} weight="medium">
-                  Calculated at checkout
-                </AppText>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.summaryRow}>
-                <AppText variant="subtitle" weight="bold">Estimated Total</AppText>
-                <AppText variant="price">{formatMoney(subtotalCents)}</AppText>
-              </View>
-            </View>
-
-            {/* Checkout button */}
-            <AppButton
-              title="Proceed to Checkout"
-              variant="primary"
-              iconRight="arrow-forward"
-              fullWidth
-              size="lg"
-              onPress={() => isLoggedIn ? router.push("/checkout") : router.push("/(auth)/login")}
-            />
           </View>
         }
       />
-    </View>
-  );
-}
 
-function CartRecommendations({ cart }: { cart: CartItem[] }) {
-  const router = useRouter();
-  const { addToCart } = useCart();
-  const [products, setProducts] = useState<PublicProduct[]>([]);
-
-  useEffect(() => {
-    if (cart.length === 0) return;
-    const productIds = cart
-      .map((item) => item.productId)
-      .filter(Boolean) as string[];
-    if (productIds.length === 0) return;
-
-    fetch(`${API_BASE}/recommendations/cart`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ productIds }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.products?.length) setProducts(data.products);
-      })
-      .catch(() => {});
-  }, [cart]);
-
-  if (products.length === 0) return null;
-
-  return (
-    <View style={styles.recsSection}>
-      <View style={styles.recsTitleRow}>
-        <View style={styles.recsAccent} />
-        <AppText variant="subtitle">You Might Also Like</AppText>
+      <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
+        <CartSummary
+          subtotalCents={subtotalCents}
+          onCheckout={handleCheckout}
+        />
       </View>
-      <FlatList
-        data={products}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(p) => p.productId}
-        contentContainerStyle={styles.recsScroll}
-        renderItem={({ item: product }) => (
-          <Pressable
-            style={styles.recCard}
-            onPress={() => router.push(`/product/${product.productId}`)}
-          >
-            <Image
-              source={{ uri: product.image || FALLBACK_IMAGE }}
-              style={styles.recImage}
-              resizeMode="cover"
-            />
-            <View style={styles.recInfo}>
-              <AppText variant="caption" numberOfLines={2}>{product.title}</AppText>
-              <AppText variant="priceSmall">${(Number(product.price) || 0).toFixed(2)}</AppText>
-            </View>
-          </Pressable>
-        )}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: spacing[4], paddingTop: spacing[2], paddingBottom: spacing[3] },
-  listContent: { paddingHorizontal: spacing[4], paddingBottom: spacing[4] },
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
+  },
+  listContent: {
+    paddingHorizontal: spacing[4],
+    paddingBottom: 220, // Enough padding to scroll past the newly sticky footer
+  },
   emptyScreen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -298,85 +129,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[8],
     gap: spacing[3],
   },
-  emptyTitle: { marginTop: spacing[2] },
-  emptyBtn: { marginTop: spacing[4] },
-
-  // Cart item card
-  itemCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing[4],
-    marginBottom: spacing[3],
-    ...shadows.sm,
-  },
-  itemRow: { flexDirection: "row", gap: spacing[3] },
-  itemImage: {
-    width: 90,
-    height: 90,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  itemInfo: { flex: 1 },
-  titlePriceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: spacing[2],
-  },
-  itemTitle: { flex: 1 },
-  qtyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[2],
+  emptyTitle: {
     marginTop: spacing[2],
   },
-  qtyControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
+  emptyBtn: {
+    marginTop: spacing[4],
   },
-  qtyBtn: { padding: spacing[1.5] },
-  qtyText: { paddingHorizontal: spacing[3], minWidth: 28, textAlign: "center" },
-
-  // Actions row (inline under qty)
-  itemActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[4],
-    marginTop: spacing[2.5],
-  },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: spacing[1] },
-
-  // Footer
-  footer: { paddingTop: spacing[2], gap: spacing[4] },
-  summarySection: {
+  footerInner: {
     paddingTop: spacing[2],
+    paddingBottom: spacing[8],
   },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: spacing[1.5],
+  stickyFooter: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: colors.slate200,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 10,
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing[2],
-  },
-
-  // Cart Recommendations
-  recsSection: { marginTop: spacing[2] },
-  recsTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing[2], marginBottom: spacing[3] },
-  recsAccent: { width: 4, height: 20, borderRadius: 2, backgroundColor: colors.brandBlue },
-  recsScroll: { gap: spacing[2] },
-  recCard: {
-    width: 140, backgroundColor: colors.card, borderRadius: borderRadius.xl,
-    borderWidth: 1, borderColor: colors.gray100, overflow: "hidden", ...shadows.sm,
-  },
-  recImage: { width: 140, height: 105, backgroundColor: colors.gray50 },
-  recInfo: { padding: spacing[2], gap: spacing[1] },
 });

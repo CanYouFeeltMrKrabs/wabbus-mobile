@@ -13,6 +13,7 @@ import { BadgeRow } from "./Badge";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { FALLBACK_IMAGE } from "@/lib/config";
 import { addToWishlist, removeFromWishlist, isInWishlist, onWishlistUpdate } from "@/lib/wishlist";
+import { showToast } from "@/lib/toast";
 import type { PublicProduct } from "@/lib/types";
 
 type Props = {
@@ -38,6 +39,7 @@ export default function ProductCard({ product, onAddToCart }: Props) {
   const toggleWishlist = useCallback(async () => {
     if (inWishlist) {
       await removeFromWishlist(product.productId);
+      showToast("Removed from wishlist", "info");
     } else {
       await addToWishlist({
         productId: product.productId,
@@ -48,6 +50,7 @@ export default function ProductCard({ product, onAddToCart }: Props) {
         slug: product.slug,
         categoryId: product.categoryId,
       });
+      showToast("Added to wishlist", "success");
     }
   }, [inWishlist, product]);
 
@@ -66,8 +69,19 @@ export default function ProductCard({ product, onAddToCart }: Props) {
         </View>
 
         {/* Wishlist */}
-        <Pressable style={[styles.wishlist, inWishlist && styles.wishlistActive]} hitSlop={8} onPress={toggleWishlist}>
-          <Icon name={inWishlist ? "favorite" : "favorite-border"} size={20} color={inWishlist ? colors.white : colors.gray400} />
+        <Pressable 
+          style={[
+            styles.wishlist, 
+            inWishlist ? styles.wishlistActive : styles.wishlistInactive
+          ]} 
+          hitSlop={8} 
+          onPress={toggleWishlist}
+        >
+          <Icon 
+            name={inWishlist ? "favorite" : "favorite-border"} 
+            size={16} 
+            color={inWishlist ? colors.white : colors.slate400} 
+          />
         </Pressable>
       </View>
 
@@ -80,7 +94,7 @@ export default function ProductCard({ product, onAddToCart }: Props) {
         {product.vendorName && (
           <AppText variant="caption" numberOfLines={1} style={styles.vendor}>
             Sold by{" "}
-            <AppText variant="caption" color={colors.slate500} weight="medium">
+            <AppText style={styles.vendorNameHighlight}>
               {product.vendorName}
             </AppText>
           </AppText>
@@ -95,11 +109,11 @@ export default function ProductCard({ product, onAddToCart }: Props) {
         {/* Price row */}
         <View style={styles.priceRow}>
           <View>
-            <AppText variant="price">
+            <AppText variant="price" style={styles.priceCurrent}>
               ${(Number(product.price) || 0).toFixed(2)}
             </AppText>
             {hasDiscount && (
-              <AppText variant="priceStrike">
+              <AppText variant="priceStrike" style={styles.priceStrike}>
                 ${(Number(product.compareAtPrice) || 0).toFixed(2)}
               </AppText>
             )}
@@ -137,12 +151,16 @@ const styles = StyleSheet.create({
   badges: { position: "absolute", top: spacing[1], left: spacing[1], zIndex: 10 },
   wishlist: {
     position: "absolute",
-    top: spacing[1],
-    right: spacing[1],
-    backgroundColor: colors.overlayWhite90,
+    top: spacing[1.5],
+    right: spacing[1.5],
     borderRadius: borderRadius.full,
-    padding: spacing[1],
+    padding: spacing[1.5],
+    borderWidth: 1,
     ...shadows.sm,
+  },
+  wishlistInactive: {
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderColor: colors.slate200,
   },
   wishlistActive: {
     backgroundColor: colors.brandBlueDark,
@@ -150,13 +168,16 @@ const styles = StyleSheet.create({
   },
   info: { padding: spacing[2], flex: 1 },
   title: { minHeight: 32, lineHeight: 16 },
-  vendor: { marginTop: spacing[0.5] },
+  vendor: { marginTop: spacing[0.5], fontSize: 10, color: colors.slate400 },
+  vendorNameHighlight: { fontSize: 10, color: colors.slate500, fontWeight: "500" },
   priceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
     marginTop: spacing[2],
   },
+  priceCurrent: { fontSize: 14, fontWeight: "900", color: colors.brandOrange, lineHeight: 16 },
+  priceStrike: { fontSize: 11, color: colors.slate400, textDecorationLine: "line-through" },
   cartBtn: {
     backgroundColor: colors.brandBlue,
     borderRadius: borderRadius.lg,
