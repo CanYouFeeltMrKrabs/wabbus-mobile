@@ -7,7 +7,7 @@
  * - Add to Cart / Buy Now buttons
  * - Description
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -17,6 +17,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -72,6 +73,35 @@ export default function ProductDetailScreen() {
   const [qty, setQty] = useState(1);
   const [adding, setAdding] = useState(false);
   const [inWishlist, setInWishlist] = useState(false);
+  const [bodyY, setBodyY] = useState(0);
+  const [btnY, setBtnY] = useState(0);
+  const isStickyVisible = useRef(false);
+  const lastScrollY = useRef(0);
+
+  const handleScroll = useCallback((event: any) => {
+    if (!product) return;
+    const currentScrollY = event.nativeEvent.contentOffset.y;
+    const isScrollingUp = currentScrollY < lastScrollY.current;
+    lastScrollY.current = currentScrollY;
+
+    const threshold = bodyY + btnY + 50; // offset for the button's own height
+    
+    let visible = false;
+    if (bodyY > 0 && btnY > 0 && currentScrollY > threshold) {
+      visible = !isScrollingUp;
+    }
+    
+    if (visible !== isStickyVisible.current) {
+      isStickyVisible.current = visible;
+      DeviceEventEmitter.emit("toggleStickyCart", { product, visible });
+    }
+  }, [bodyY, btnY, product]);
+
+  useEffect(() => {
+    return () => {
+      DeviceEventEmitter.emit("toggleStickyCart", { product: null, visible: false });
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -178,7 +208,12 @@ export default function ProductDetailScreen() {
         <Icon name="arrow-back" size={24} color={colors.foreground} />
       </Pressable>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        onScroll={handleScroll}
+        scrollEventThrottle={4}
+      >
 
         {/* Global Component: Image Gallery Card */}
         <ProductImageGallery
@@ -187,7 +222,7 @@ export default function ProductDetailScreen() {
           onToggleWishlist={toggleWishlist}
         />
 
-        <View style={styles.body}>
+        <View style={styles.body} onLayout={(e) => setBodyY(e.nativeEvent.layout.y)}>
           {/* Title */}
           <AppText style={styles.productTitle}>{product.title}</AppText>
 
@@ -241,13 +276,15 @@ export default function ProductDetailScreen() {
             />
           </View>
           
-          <AppButton
-            title="Add to Cart"
-            variant="primary"
-            onPress={handleAddToCart}
-            loading={adding}
-            style={{ marginTop: spacing[6] }}
-          />
+          <View onLayout={(e) => setBtnY(e.nativeEvent.layout.y)}>
+            <AppButton
+              title="Add to Cart"
+              variant="accent"
+              onPress={handleAddToCart}
+              loading={adding}
+              style={{ marginTop: spacing[6] }}
+            />
+          </View>
 
           {/* Key Features */}
           {product.keyFeatures && product.keyFeatures.length > 0 && (

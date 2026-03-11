@@ -1,0 +1,12 @@
+[    6177ms] [ERROR] Access to fetch at 'http://localhost:3001/customer-auth/me' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[    6178ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:3001/customer-auth/me:0
+[    6477ms] [ERROR] Access to fetch at 'http://localhost:3001/recommendations?context=home&take=36' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[    6477ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:3001/recommendations?context=home&take=36:0
+[    6482ms] [ERROR] Access to fetch at 'http://localhost:3001/products/categories' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[    6482ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:3001/products/categories:0
+[    7716ms] [ERROR] Access to fetch at 'http://localhost:3001/recommendations?context=home&take=36' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[    7716ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:3001/recommendations?context=home&take=36:0
+[    9491ms] [ERROR] Access to fetch at 'http://localhost:3001/customer-auth/me' from origin 'http://localhost:3000' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/:0
+[    9491ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:3001/customer-auth/me:0
+[   52440ms] [ERROR] Access to fetch at 'http://localhost:3001/customer-auth/login' from origin 'http://localhost:3000' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:3000/login?redirect=%2Faccount%2Forders:0
+[   52442ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://localhost:3001/customer-auth/login:0
