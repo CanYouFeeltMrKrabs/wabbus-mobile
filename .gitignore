@@ -30,6 +30,9 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Playwright MCP
+.playwright-mcp/
+
 # local env files
 .env*.local
 

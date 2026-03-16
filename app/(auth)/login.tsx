@@ -15,6 +15,7 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import { useAuth } from "@/lib/auth";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
+import { MAX_PASSWORD_LENGTH } from "@/lib/constants";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -96,6 +97,7 @@ export default function LoginScreen() {
               placeholderTextColor={colors.mutedLight}
               secureTextEntry={!showPassword}
               autoComplete="password"
+              maxLength={MAX_PASSWORD_LENGTH}
             />
             <Pressable
               style={styles.eyeBtn}

@@ -16,6 +16,7 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import { useAuth } from "@/lib/auth";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
+import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "@/lib/constants";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -31,6 +32,14 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
       Alert.alert("Missing Fields", "Please fill in all fields.");
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      Alert.alert("Password Too Short", `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+    if (password.length > MAX_PASSWORD_LENGTH) {
+      Alert.alert("Password Too Long", `Password must be at most ${MAX_PASSWORD_LENGTH} characters.`);
       return;
     }
     setLoading(true);
@@ -96,7 +105,7 @@ export default function RegisterScreen() {
 
         <View style={styles.field}>
           <AppText variant="label" style={styles.fieldLabel}>Password</AppText>
-          <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="At least 8 characters" placeholderTextColor={colors.mutedLight} secureTextEntry autoComplete="new-password" />
+          <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`} placeholderTextColor={colors.mutedLight} secureTextEntry autoComplete="new-password" maxLength={MAX_PASSWORD_LENGTH} />
         </View>
 
         <AppButton
