@@ -151,6 +151,10 @@ export async function customerFetch<T = unknown>(
     } catch {
       /* keep default message */
     }
+    if (res.status === 429) {
+      throw new FetchError(429, "Please try again later.", body);
+    }
+
     throw new FetchError(res.status, message, body);
   }
 

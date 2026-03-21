@@ -46,7 +46,7 @@ export default function ForgotPasswordScreen() {
       setSent(true);
       startCooldown();
     } catch (e: any) {
-      if (e.status === 429 || e.message?.includes("Too many") || e.message?.includes("Please wait")) {
+      if (e.status === 429) {
         startCooldown();
       }
       Alert.alert("Error", e.message || "Something went wrong.");
