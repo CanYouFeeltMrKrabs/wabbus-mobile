@@ -6,7 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type RecentlyViewedItem = {
   productId: string;
-  variantId: number;
+  variantPublicId: string;
   title: string;
   price: number;
   image: string;

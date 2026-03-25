@@ -43,7 +43,7 @@ export default function ProductCard({ product, onAddToCart }: Props) {
     } else {
       await addToWishlist({
         productId: product.productId,
-        variantId: product.defaultVariantId ?? 0,
+        variantPublicId: product.defaultVariantPublicId ?? "",
         title: product.title,
         price: Math.round(Number(product.price) * 100),
         image: product.image || FALLBACK_IMAGE,

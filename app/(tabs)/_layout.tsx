@@ -52,9 +52,9 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const opacityCart = animVal.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
 
   const handleAdd = async () => {
-    if (!stickyProduct) return;
+    if (!stickyProduct?.defaultVariantPublicId) return;
     await addToCart({
-      productVariantId: stickyProduct.defaultVariantId,
+      variantPublicId: stickyProduct.defaultVariantPublicId,
       price: stickyProduct.price,
       title: stickyProduct.title,
       image: stickyProduct.image || "",

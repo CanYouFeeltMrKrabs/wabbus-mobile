@@ -24,7 +24,6 @@ export default function RecentlyViewedSlider({ onAddToCart }: RecentlyViewedSlid
   const recentProducts = useMemo<PublicProduct[]>(
     () =>
       recentlyViewed.slice(0, 10).map((item) => ({
-        id: 0,
         productId: item.productId,
         slug: item.slug,
         title: item.title,
@@ -36,7 +35,7 @@ export default function RecentlyViewedSlider({ onAddToCart }: RecentlyViewedSlid
         reviewCount: item.reviewCount ?? 0,
         vendorName: item.vendorName ?? null,
         soldCount: item.soldCount ?? 0,
-        defaultVariantId: item.variantId,
+        defaultVariantPublicId: item.variantPublicId,
         categoryId: item.categoryId ?? null,
         badges: item.badges ?? undefined,
       })),

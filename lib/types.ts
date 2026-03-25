@@ -1,7 +1,6 @@
 /** Shared types used across the mobile app */
 
 export type PublicProduct = {
-  id: number;
   productId: string;
   slug: string;
   title: string;
@@ -9,7 +8,7 @@ export type PublicProduct = {
   image: string | null;
   price: number;
   compareAtPrice?: number | null;
-  defaultVariantId: number | null;
+  defaultVariantPublicId?: string | null;
   ratingAvg: number;
   reviewCount: number;
   soldCount?: number;
@@ -20,7 +19,7 @@ export type PublicProduct = {
 
 export type CartItem = {
   publicId: string;
-  productVariantId: number;
+  variantPublicId: string;
   quantity: number;
   unitPriceCents: number;
   title: string;
@@ -34,7 +33,7 @@ export type ServerCartItem = {
   quantity: number;
   unitPriceCents: number;
   productVariant: {
-    id: number;
+    publicId: string;
     product: {
       productId: string;
       title: string;
@@ -79,7 +78,6 @@ export type OrderItem = {
 };
 
 export type Customer = {
-  id: number;
   email: string;
   firstName: string;
   lastName: string;
@@ -103,7 +101,7 @@ export type TypesenseHit = {
     reviewCount: number;
     soldCount: number;
     vendorName: string;
-    defaultVariantId: number;
+    defaultVariantPublicId: string;
     keyFeatures: string[];
     createdAt: number;
   };

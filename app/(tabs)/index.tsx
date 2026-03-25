@@ -89,9 +89,9 @@ export default function HomeScreen() {
 
   const handleAddToCart = useCallback(
     (product: PublicProduct) => {
-      if (!product.defaultVariantId) return;
+      if (!product.defaultVariantPublicId) return;
       addToCart({
-        productVariantId: product.defaultVariantId,
+        variantPublicId: product.defaultVariantPublicId,
         price: product.price,
         title: product.title,
         image: product.image || "",

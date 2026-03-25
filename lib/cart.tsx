@@ -24,7 +24,7 @@ type CartState = {
 };
 
 type AddToCartInput = {
-  productVariantId: number;
+  variantPublicId: string;
   price: number;
   title: string;
   image: string;
@@ -54,7 +54,7 @@ const GUEST_CART_KEY = "guest_cart";
 function serverToCartItem(s: ServerCartItem): CartItem {
   return {
     publicId: s.publicId,
-    productVariantId: s.productVariant.id,
+    variantPublicId: s.productVariant.publicId,
     quantity: s.quantity,
     unitPriceCents: s.unitPriceCents,
     title: s.productVariant.product.title,
@@ -112,18 +112,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (isLoggedIn) {
       await customerFetch("/cart/add", {
         method: "POST",
-        body: JSON.stringify({ productVariantId: input.productVariantId, quantity: qty }),
+        body: JSON.stringify({ variantPublicId: input.variantPublicId, quantity: qty }),
       });
       await loadServerCart();
     } else {
       const cart = [...items];
-      const existing = cart.find((c) => c.productVariantId === input.productVariantId);
+      const existing = cart.find((c) => c.variantPublicId === input.variantPublicId);
       if (existing) {
         existing.quantity += qty;
       } else {
         cart.push({
           publicId: `guest_${Date.now()}`,
-          productVariantId: input.productVariantId,
+          variantPublicId: input.variantPublicId,
           quantity: qty,
           unitPriceCents: Math.round(input.price * 100),
           title: input.title,

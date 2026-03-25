@@ -5,7 +5,7 @@ import Icon from "@/components/ui/Icon";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { publicFetch } from "@/lib/api";
 
-type ReviewUser = { id: number; name: string | null };
+type ReviewUser = { name: string | null };
 type ReviewImage = { id: string; key: string };
 type PublicReview = {
   id: number;

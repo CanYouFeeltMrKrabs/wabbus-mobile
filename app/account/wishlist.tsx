@@ -36,7 +36,7 @@ export default function WishlistScreen() {
 
   const handleAddToCart = useCallback(async (item: WishlistItem) => {
     await addToCart({
-      productVariantId: item.variantId,
+      variantPublicId: item.variantPublicId,
       price: item.price / 100,
       title: item.title,
       image: item.image,
@@ -50,7 +50,7 @@ export default function WishlistScreen() {
     for (const item of items) {
       try {
         await addToCart({
-          productVariantId: item.variantId,
+          variantPublicId: item.variantPublicId,
           price: item.price / 100,
           title: item.title,
           image: item.image,

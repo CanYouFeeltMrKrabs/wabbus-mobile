@@ -36,8 +36,8 @@ export default function VendorScreen() {
 
   const handleAddToCart = useCallback(
     (product: PublicProduct) => {
-      if (!product.defaultVariantId) return;
-      addToCart({ productVariantId: product.defaultVariantId, price: product.price, title: product.title, image: product.image || "", productId: product.productId, slug: product.slug });
+      if (!product.defaultVariantPublicId) return;
+      addToCart({ variantPublicId: product.defaultVariantPublicId, price: product.price, title: product.title, image: product.image || "", productId: product.productId, slug: product.slug });
     },
     [addToCart],
   );

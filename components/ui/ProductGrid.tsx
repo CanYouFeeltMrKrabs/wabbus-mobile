@@ -24,7 +24,7 @@ export default function ProductGrid({ products, onAddToCart }: Props) {
       {rows.map((row, ri) => (
         <View key={ri} style={styles.row}>
           {row.map((product) => (
-            <View key={product.productId || product.id} style={styles.cell}>
+            <View key={product.productId} style={styles.cell}>
               <ProductCard product={product} onAddToCart={onAddToCart} />
             </View>
           ))}

@@ -30,7 +30,6 @@ const SORT_OPTIONS = [
 function hitToProduct(hit: TypesenseHit): PublicProduct {
   const d = hit.document;
   return {
-    id: Number(d.id),
     productId: d.id,
     slug: d.slug,
     title: d.title,
@@ -38,7 +37,7 @@ function hitToProduct(hit: TypesenseHit): PublicProduct {
     image: d.image,
     price: d.price,
     compareAtPrice: d.compareAtPrice,
-    defaultVariantId: d.defaultVariantId,
+    defaultVariantPublicId: d.defaultVariantPublicId,
     ratingAvg: d.ratingAvg,
     reviewCount: d.reviewCount,
     soldCount: d.soldCount,
@@ -106,9 +105,9 @@ export default function SearchScreen() {
 
   const handleAddToCart = useCallback(
     (product: PublicProduct) => {
-      if (!product.defaultVariantId) return;
+      if (!product.defaultVariantPublicId) return;
       addToCart({
-        productVariantId: product.defaultVariantId,
+        variantPublicId: product.defaultVariantPublicId,
         price: product.price,
         title: product.title,
         image: product.image || "",

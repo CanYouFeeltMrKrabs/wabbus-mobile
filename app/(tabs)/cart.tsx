@@ -31,8 +31,8 @@ export default function CartScreen() {
   const handleSaveForLater = useCallback(
     async (item: CartItem) => {
       await addToWishlist({
-        productId: item.productId || String(item.productVariantId),
-        variantId: item.productVariantId,
+        productId: item.productId || item.variantPublicId,
+        variantPublicId: item.variantPublicId,
         title: item.title,
         price: item.unitPriceCents,
         image: item.image || FALLBACK_IMAGE,

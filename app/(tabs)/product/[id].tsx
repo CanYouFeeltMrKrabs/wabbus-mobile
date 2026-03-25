@@ -42,7 +42,6 @@ import { addToRecentlyViewed } from "@/lib/recentlyViewed";
 const { width: SCREEN_W } = Dimensions.get("window");
 
 type ProductDetail = {
-  id: number;
   productId: string;
   slug: string;
   title: string;
@@ -51,7 +50,7 @@ type ProductDetail = {
   images?: string[];
   price: number;
   compareAtPrice?: number | null;
-  defaultVariantId: number | null;
+  defaultVariantPublicId?: string | null;
   ratingAvg: number;
   reviewCount: number;
   soldCount?: number;
@@ -111,7 +110,7 @@ export default function ProductDetailScreen() {
         setProduct(p);
         addToRecentlyViewed({
           productId: p.productId,
-          variantId: p.defaultVariantId ?? 0,
+          variantPublicId: p.defaultVariantPublicId ?? "",
           title: p.title,
           price: Math.round(p.price * 100),
           image: p.image || "",
@@ -145,7 +144,7 @@ export default function ProductDetailScreen() {
     } else {
       await addToWishlist({
         productId: product.productId,
-        variantId: product.defaultVariantId ?? 0,
+        variantPublicId: product.defaultVariantPublicId ?? "",
         title: product.title,
         price: Math.round(product.price * 100),
         image: product.image || FALLBACK_IMAGE,
@@ -156,11 +155,11 @@ export default function ProductDetailScreen() {
   }, [inWishlist, product]);
 
   const handleAddToCart = useCallback(async () => {
-    if (!product?.defaultVariantId) return;
+    if (!product?.defaultVariantPublicId) return;
     setAdding(true);
     try {
       await addToCart({
-        productVariantId: product.defaultVariantId,
+        variantPublicId: product.defaultVariantPublicId,
         price: product.price,
         title: product.title,
         image: product.image || "",
