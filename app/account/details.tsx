@@ -34,8 +34,8 @@ function AccountDetailsContent() {
           <DetailRow label="Member Since" value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "—"} />
         </View>
 
-        <AppButton title="Change Password" variant="outline" fullWidth icon="lock" onPress={() => {}} style={styles.actionBtn} />
-        <AppButton title="Change Email" variant="outline" fullWidth icon="email" onPress={() => {}} />
+        <AppButton title="Change Password" variant="outline" fullWidth icon="lock" onPress={() => router.push("/account/change-password")} style={styles.actionBtn} />
+        <AppButton title="Change Email" variant="outline" fullWidth icon="email" onPress={() => router.push("/account/change-email")} />
       </ScrollView>
     </View>
   );

@@ -9,7 +9,6 @@ import CartItemCard from "@/components/ui/CartItemCard";
 import CartSummary from "@/components/ui/CartSummary";
 import CartRecommendations from "@/components/ui/CartRecommendations";
 import { useCart } from "@/lib/cart";
-import { useAuth } from "@/lib/auth";
 import { addToWishlist } from "@/lib/wishlist";
 import { FALLBACK_IMAGE } from "@/lib/config";
 import { colors, spacing } from "@/lib/theme";
@@ -19,7 +18,6 @@ export default function CartScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { items, subtotalCents, updateQuantity, removeItem } = useCart();
-  const { isLoggedIn } = useAuth();
 
   const handleRemove = useCallback(
     (publicId: string) => {
@@ -44,11 +42,7 @@ export default function CartScreen() {
   );
 
   const handleCheckout = () => {
-    if (isLoggedIn) {
-      router.push("/checkout");
-    } else {
-      router.push("/(auth)/login");
-    }
+    router.push("/checkout");
   };
 
   if (items.length === 0) {

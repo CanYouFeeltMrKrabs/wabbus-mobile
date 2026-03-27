@@ -1,10 +1,12 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   ScrollView,
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Alert,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,8 +16,18 @@ import Icon from "@/components/ui/Icon";
 import TicketThread from "@/components/TicketThread";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
-import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
+import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
+import { pickDocument, uploadFileAuth, type PickedFile } from "@/lib/fileUpload";
 import type { CustomerCaseDetail } from "@/lib/messages-types";
+
+type CaseMessage = {
+  publicId?: string;
+  body: string;
+  senderType: string;
+  createdAt: string;
+  attachmentKey?: string;
+  attachmentFileName?: string;
+};
 
 const STATUS_CONFIG: Record<
   string,
@@ -66,6 +78,13 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [caseMessages, setCaseMessages] = useState<CaseMessage[]>([]);
+  const [followUpText, setFollowUpText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<PickedFile | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
   const fetchCase = useCallback(() => {
     if (!caseNumber) return;
     setLoading(true);
@@ -79,9 +98,70 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
       .finally(() => setLoading(false));
   }, [caseNumber]);
 
+  const fetchMessages = useCallback(() => {
+    if (!caseNumber) return;
+    customerFetch<{ messages?: CaseMessage[] }>(`/cases/${caseNumber}/messages`)
+      .then((data) => {
+        const msgs = Array.isArray(data?.messages) ? data.messages : Array.isArray(data) ? (data as CaseMessage[]) : [];
+        setCaseMessages(msgs);
+      })
+      .catch(() => {});
+  }, [caseNumber]);
+
   useEffect(() => {
     fetchCase();
-  }, [fetchCase]);
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchCase, fetchMessages]);
+
+  const handlePickAttachment = useCallback(async () => {
+    const file = await pickDocument();
+    if (file) setPendingAttachment(file);
+  }, []);
+
+  const handleFollowUp = useCallback(async () => {
+    if ((!followUpText.trim() && !pendingAttachment) || !caseNumber) return;
+    setSending(true);
+    try {
+      let attachmentFields: Record<string, string | number> = {};
+
+      if (pendingAttachment) {
+        setUploading(true);
+        try {
+          const result = await uploadFileAuth({
+            presignUrl: "/uploads/support-ticket",
+            confirmUrl: "/uploads/support-ticket/confirm",
+            file: pendingAttachment,
+          });
+          attachmentFields = {
+            attachmentKey: result.key,
+            attachmentFileName: pendingAttachment.name,
+            attachmentMimeType: pendingAttachment.mimeType,
+            attachmentSize: pendingAttachment.size,
+          };
+        } finally {
+          setUploading(false);
+        }
+      }
+
+      await customerFetch(`/cases/${caseNumber}/follow-up`, {
+        method: "POST",
+        body: JSON.stringify({
+          note: followUpText.trim() || (pendingAttachment ? "(attachment)" : ""),
+          ...attachmentFields,
+        }),
+      });
+      setFollowUpText("");
+      setPendingAttachment(null);
+      fetchMessages();
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to send follow-up.");
+    } finally {
+      setSending(false);
+    }
+  }, [followUpText, pendingAttachment, caseNumber, fetchMessages]);
 
   const headerContent = (
     <View style={[styles.header, { paddingTop: insets.top + spacing[2] }]}>
@@ -168,6 +248,7 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
 
       {/* ── Scrollable body ── */}
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={[styles.scrollInner, { paddingBottom: insets.bottom + spacing[6] }]}
         showsVerticalScrollIndicator={false}
@@ -270,8 +351,8 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
           </View>
         )}
 
-        {/* Support thread */}
-        {detail.linkedTicketPublicId ? (
+        {/* Support thread (linked ticket) */}
+        {detail.linkedTicketPublicId && (
           <View style={styles.section}>
             <AppText variant="label" style={styles.sectionLabel}>
               Support Thread
@@ -280,23 +361,82 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
               <TicketThread ticketPublicId={detail.linkedTicketPublicId} />
             </View>
           </View>
-        ) : (
-          <View style={styles.contactCard}>
-            <Icon name="chat-bubble-outline" size={20} color={colors.muted} />
-            <AppText
-              variant="caption"
-              color={colors.muted}
-              style={{ marginTop: spacing[1], textAlign: "center" }}
-            >
-              Need help with this case?
+        )}
+
+        {/* Case messages */}
+        {caseMessages.length > 0 && (
+          <View style={styles.section}>
+            <AppText variant="label" style={styles.sectionLabel}>
+              Messages ({caseMessages.length})
             </AppText>
-            <AppButton
-              title="Contact Support"
-              variant="primary"
-              size="sm"
-              style={{ marginTop: spacing[2] }}
-              onPress={() => {}}
-            />
+            {caseMessages.map((m, idx) => {
+              const isCustomer = m.senderType === "CUSTOMER";
+              return (
+                <View key={m.publicId ?? `cm-${idx}`} style={[styles.msgBubbleRow, isCustomer ? styles.msgRight : styles.msgLeft]}>
+                  <View style={[styles.msgBubble, isCustomer ? styles.msgBubbleCustomer : styles.msgBubbleAgent]}>
+                    <AppText variant="caption" weight="semibold" color={isCustomer ? colors.white : colors.foreground} style={{ fontSize: 9, textTransform: "uppercase", marginBottom: spacing[0.5] }}>
+                      {isCustomer ? "You" : "Support"}
+                    </AppText>
+                    <AppText variant="bodySmall" color={isCustomer ? colors.white : colors.foreground}>
+                      {m.body}
+                    </AppText>
+                    {m.attachmentFileName && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[1], marginTop: spacing[1] }}>
+                        <Icon name="attach-file" size={12} color={isCustomer ? "rgba(255,255,255,0.7)" : colors.muted} />
+                        <AppText variant="tiny" color={isCustomer ? "rgba(255,255,255,0.7)" : colors.muted}>{m.attachmentFileName}</AppText>
+                      </View>
+                    )}
+                    <AppText variant="tiny" color={isCustomer ? "rgba(255,255,255,0.7)" : colors.mutedLight} style={{ marginTop: spacing[1], textAlign: "right" }}>
+                      {new Date(m.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                    </AppText>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Follow-up composer */}
+        {!["CLOSED", "RESOLVED"].includes(detail.status.toUpperCase()) && (
+          <View style={styles.composerSection}>
+            <AppText variant="label" style={styles.sectionLabel}>
+              {caseMessages.length > 0 ? "Reply" : "Send a Follow-up"}
+            </AppText>
+            {pendingAttachment && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[2], marginBottom: spacing[2], backgroundColor: colors.gray100, borderRadius: borderRadius.lg, padding: spacing[2] }}>
+                <Icon name="attach-file" size={16} color={colors.brandBlue} />
+                <AppText variant="caption" style={{ flex: 1 }} numberOfLines={1}>{pendingAttachment.name}</AppText>
+                <Pressable onPress={() => setPendingAttachment(null)} hitSlop={8}>
+                  <Icon name="close" size={16} color={colors.muted} />
+                </Pressable>
+              </View>
+            )}
+            <View style={styles.composerRow}>
+              <Pressable onPress={handlePickAttachment} disabled={uploading} style={{ padding: spacing[1] }} hitSlop={8}>
+                <Icon name="attach-file" size={20} color={colors.muted} />
+              </Pressable>
+              <TextInput
+                style={styles.composerInput}
+                value={followUpText}
+                onChangeText={setFollowUpText}
+                placeholder="Type a message..."
+                placeholderTextColor={colors.mutedLight}
+                multiline
+                maxLength={2000}
+              />
+              <Pressable
+                onPress={handleFollowUp}
+                disabled={(!followUpText.trim() && !pendingAttachment) || sending || uploading}
+                style={[styles.sendBtn, ((!followUpText.trim() && !pendingAttachment) || sending || uploading) && { opacity: 0.4 }]}
+                hitSlop={8}
+              >
+                {uploading ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Icon name="send" size={20} color={colors.white} />
+                )}
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -438,14 +578,41 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
 
-  /* ── Contact ── */
-  contactCard: {
-    backgroundColor: colors.card,
+  /* ── Case messages ── */
+  msgBubbleRow: { marginBottom: spacing[2], maxWidth: "80%" },
+  msgRight: { alignSelf: "flex-end" },
+  msgLeft: { alignSelf: "flex-start" },
+  msgBubble: { padding: spacing[3], borderRadius: borderRadius.xl },
+  msgBubbleCustomer: { backgroundColor: colors.brandBlue, borderBottomRightRadius: borderRadius.sm },
+  msgBubbleAgent: { backgroundColor: colors.gray100, borderBottomLeftRadius: borderRadius.sm },
+
+  /* ── Composer ── */
+  composerSection: { marginTop: spacing[4] },
+  composerRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing[2],
+  },
+  composerInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: borderRadius.xl,
-    padding: spacing[5],
-    marginTop: spacing[4],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    fontSize: fontSize.base,
+    color: colors.foreground,
+    maxHeight: 100,
+    backgroundColor: colors.white,
+  },
+  sendBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.brandBlue,
     alignItems: "center",
-    ...shadows.sm,
+    justifyContent: "center",
+    marginBottom: spacing[0.5],
   },
 
   /* ── Full details link ── */

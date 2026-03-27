@@ -85,6 +85,58 @@ function OrderDetailContent() {
             <AppText variant="price">{formatMoney(order.totalCents)}</AppText>
           </View>
         </View>
+
+        {/* Actions */}
+        <View style={styles.actionsSection}>
+          {order.status === "PAID" && (
+            <AppButton
+              title="Cancel Items"
+              variant="danger"
+              fullWidth
+              icon="close-circle"
+              onPress={() => router.push(`/orders/${id}/cancel`)}
+              style={styles.actionBtn}
+            />
+          )}
+          {order.status === "DELIVERED" && (
+            <>
+              <AppButton
+                title="Return Items"
+                variant="outline"
+                fullWidth
+                icon="package-variant"
+                onPress={() => router.push(`/orders/${id}/return`)}
+                style={styles.actionBtn}
+              />
+              <AppButton
+                title="Write a Review"
+                variant="outline"
+                fullWidth
+                icon="star"
+                onPress={() => router.push(`/orders/${id}/review`)}
+                style={styles.actionBtn}
+              />
+            </>
+          )}
+          {["PAID", "SHIPPED", "DELIVERED"].includes(order.status) && (
+            <AppButton
+              title="Report Missing Package"
+              variant="ghost"
+              fullWidth
+              icon="package-variant-closed-remove"
+              onPress={() => router.push(`/orders/${id}/missing`)}
+              style={styles.actionBtn}
+            />
+          )}
+          <AppButton
+            title="Message Seller"
+            variant="ghost"
+            fullWidth
+            icon="message-text"
+            onPress={() => router.push(`/support/message-seller/${id}`)}
+            style={styles.actionBtn}
+          />
+        </View>
       </ScrollView>
     </View>
   );
@@ -106,4 +158,6 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1, gap: spacing[0.5] },
   totalCard: { backgroundColor: colors.card, borderRadius: borderRadius.xl, padding: spacing[4], marginTop: spacing[3], ...shadows.sm },
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  actionsSection: { marginTop: spacing[6], gap: spacing[2] },
+  actionBtn: {},
 });

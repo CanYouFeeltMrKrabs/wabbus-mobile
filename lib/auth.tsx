@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { customerFetch, onAuthLogout, NetworkError, AuthError } from "./api";
+import { runPostAuthActions } from "./postAuthActions";
 import { API_BASE } from "./config";
 import type { Customer } from "./types";
 
@@ -86,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     await fetchMe();
+    runPostAuthActions().catch(() => {});
   }, [fetchMe]);
 
   const register = useCallback(async (data: RegisterData) => {
@@ -103,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     await fetchMe();
+    runPostAuthActions().catch(() => {});
   }, [fetchMe]);
 
   const logout = useCallback(async () => {

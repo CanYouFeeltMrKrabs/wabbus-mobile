@@ -84,6 +84,104 @@ export type Customer = {
   createdAt: string;
 };
 
+export type CheckoutAddress = {
+  publicId: string;
+  label?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  fullName?: string | null;
+  line1: string;
+  line2?: string | null;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  phone?: string | null;
+  isDefault?: boolean;
+};
+
+export type ServerCartResponse = {
+  items: ServerCartItem[];
+  subtotalCents: number;
+  shippingCents: number;
+  taxCents: number;
+  totalCents: number;
+};
+
+export type CheckoutResponse = {
+  orderId?: number;
+  orderPublicId?: string;
+  orderNumber?: string;
+  clientSecret?: string;
+  paymentClientSecret?: string;
+  paymentIntentClientSecret?: string;
+  stripeClientSecret?: string;
+  stripeAmountCents?: number;
+  creditAppliedCents?: number;
+  payment?: {
+    status?: string;
+    clientSecret?: string;
+  };
+};
+
+export type PaymentMethod = {
+  stripePaymentMethodId: string;
+  type?: string | null;
+  brand?: string | null;
+  last4?: string | null;
+  expMonth?: number | null;
+  expYear?: number | null;
+  isDefault?: boolean | null;
+  createdAt?: string;
+};
+
+export type GuestCheckoutData = {
+  email: string;
+  shippingAddress: {
+    firstName: string;
+    lastName: string;
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+    phone?: string;
+  };
+  billingAddress?: GuestCheckoutData["shippingAddress"];
+  items: { variantPublicId: string; quantity: number }[];
+};
+
+export type CancelReasonCode =
+  | "CHANGED_MIND"
+  | "FOUND_CHEAPER"
+  | "ORDERED_WRONG"
+  | "NO_LONGER_NEEDED"
+  | "OTHER";
+
+export type ReturnReasonCode =
+  | "DAMAGED"
+  | "DEFECTIVE"
+  | "WRONG_ITEM"
+  | "NOT_AS_DESCRIBED"
+  | "DOESNT_FIT"
+  | "CHANGED_MIND"
+  | "OTHER";
+
+export type ReturnResolution = "REFUND" | "STORE_CREDIT" | "REPLACEMENT";
+
+export type MissingIssueReason =
+  | "NEVER_SHIPPED"
+  | "TRACKING_STOPPED"
+  | "LOST_IN_TRANSIT"
+  | "DELIVERED_NOT_RECEIVED"
+  | "OTHER";
+
+export type ReviewImageUpload = {
+  reviewImageId: string;
+  uploadUrl: string;
+};
+
 export type TypesenseHit = {
   document: {
     id: string;

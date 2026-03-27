@@ -87,6 +87,16 @@ export const CATEGORY_SHORT_NAMES: Record<string, string> = {
   "garden-and-outdoor": "Garden",
 };
 
+export type CategoryNode = {
+  id: number;
+  name: string;
+  slug: string;
+  level: number;
+  parentId: number | null;
+  icon?: string | null;
+  children?: CategoryNode[];
+};
+
 export async function fetchCategoriesClient(): Promise<CategoryLink[]> {
   try {
     const res = await fetch(`${API_BASE}/products/categories`);
@@ -95,6 +105,49 @@ export async function fetchCategoriesClient(): Promise<CategoryLink[]> {
     return data
       .filter((c) => c.id && c.name?.trim() && c.slug?.trim())
       .sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchRootCategories(): Promise<CategoryLink[]> {
+  try {
+    const res = await fetch(`${API_BASE}/products/categories/roots`);
+    if (!res.ok) return fetchCategoriesClient();
+    const data: CategoryLink[] = await res.json();
+    return data
+      .filter((c) => c.id && c.name?.trim() && c.slug?.trim())
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchCategoryChildren(parentId: number): Promise<CategoryLink[]> {
+  try {
+    const res = await fetch(`${API_BASE}/products/categories/${parentId}/children`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchCategoryById(id: number): Promise<CategoryNode | null> {
+  try {
+    const res = await fetch(`${API_BASE}/products/categories/${id}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchCategoryTree(): Promise<CategoryNode[]> {
+  try {
+    const res = await fetch(`${API_BASE}/products/categories`);
+    if (!res.ok) return [];
+    return await res.json();
   } catch {
     return [];
   }

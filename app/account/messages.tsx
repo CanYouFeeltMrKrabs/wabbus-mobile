@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { View, FlatList, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { View, FlatList, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
@@ -10,7 +10,7 @@ import SlideDrawer from "@/components/SlideDrawer";
 import CaseDetailPanel from "@/components/CaseDetailPanel";
 import FamilyDetailPanel from "@/components/FamilyDetailPanel";
 import { customerFetch } from "@/lib/api";
-import { colors, spacing, borderRadius, shadows, fontSize, fontWeight } from "@/lib/theme";
+import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import type { CustomerCase } from "@/lib/messages-types";
 
 type Conversation = {
@@ -20,6 +20,14 @@ type Conversation = {
   status: string;
   lastMessageAt: string;
   unreadCount: number;
+};
+
+type SupportTicket = {
+  publicId: string;
+  subject?: string;
+  category?: string;
+  status: string;
+  createdAt: string;
 };
 
 type Tab = "conversations" | "cases";
@@ -137,6 +145,12 @@ function MessagesContent() {
   const [cases, setCases] = useState<CustomerCase[]>([]);
   const [casesLoading, setCasesLoading] = useState(true);
 
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
+  const [ticketsCursor, setTicketsCursor] = useState<string | null>(null);
+  const [ticketsHasMore, setTicketsHasMore] = useState(false);
+  const [ticketsLoadingMore, setTicketsLoadingMore] = useState(false);
+
   const [drawer, setDrawer] = useState<DrawerState>(null);
 
   const openCase = useCallback((caseNumber: string) => {
@@ -182,8 +196,26 @@ function MessagesContent() {
     setCasesLoading(false);
   }, []);
 
+  const loadTickets = useCallback(async (nextCursor?: string | null) => {
+    const isLoadMore = !!nextCursor;
+    if (isLoadMore) setTicketsLoadingMore(true); else setTicketsLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "50" });
+      if (nextCursor) params.set("cursor", nextCursor);
+      const data = await customerFetch<any>(`/support/tickets?${params}`);
+      const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+      setTickets((prev) => isLoadMore ? [...prev, ...list] : list);
+      setTicketsCursor(data?.nextCursor ?? null);
+      setTicketsHasMore(!!data?.hasMore);
+    } catch {
+      if (!isLoadMore) setTickets([]);
+    }
+    if (isLoadMore) setTicketsLoadingMore(false); else setTicketsLoading(false);
+  }, []);
+
   useEffect(() => { loadConversations(); }, [loadConversations]);
   useEffect(() => { loadCases(); }, [loadCases]);
+  useEffect(() => { loadTickets(); }, [loadTickets]);
 
   const caseListItems = useMemo(() => buildCaseList(cases), [cases]);
 
@@ -239,7 +271,10 @@ function MessagesContent() {
             onEndReachedThreshold={0.3}
             ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={colors.brandBlue} style={{ marginVertical: spacing[4] }} /> : null}
             renderItem={({ item }) => (
-              <Pressable style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}>
+              <Pressable
+                style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
+                onPress={() => router.push(`/account/messages/conversation/${item.publicId}`)}
+              >
                 <View style={styles.cardRow}>
                   <AppText variant="label" numberOfLines={1} style={{ flex: 1 }}>{item.subject}</AppText>
                   {item.unreadCount > 0 && (
@@ -254,28 +289,50 @@ function MessagesContent() {
           />
         )
       ) : (
-        casesLoading ? (
+        (casesLoading && ticketsLoading) ? (
           <ActivityIndicator size="large" color={colors.brandBlue} style={styles.loader} />
-        ) : caseListItems.length === 0 ? (
+        ) : (caseListItems.length === 0 && tickets.length === 0) ? (
           <View style={styles.empty}>
             <Icon name="folder-open" size={48} color={colors.gray300} />
-            <AppText variant="subtitle" color={colors.muted}>No cases</AppText>
+            <AppText variant="subtitle" color={colors.muted}>No cases or tickets</AppText>
           </View>
         ) : (
-          <FlatList
-            data={caseListItems}
-            keyExtractor={(item, idx) =>
-              item.type === "family" ? `fam-${item.familyNumber}` : `case-${item.case.caseNumber}-${idx}`
-            }
-            contentContainerStyle={styles.list}
-            renderItem={({ item }) =>
+          <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+            {tickets.length > 0 && (
+              <>
+                <AppText variant="subtitle" weight="semibold" style={{ marginBottom: spacing[2] }}>
+                  Support Tickets
+                </AppText>
+                {tickets.map((t) => (
+                  <TicketRow key={t.publicId} ticket={t} onPress={() => router.push(`/support/ticket-detail/${t.publicId}` as any)} />
+                ))}
+                {ticketsHasMore && (
+                  <Pressable
+                    onPress={() => { if (!ticketsLoadingMore) loadTickets(ticketsCursor); }}
+                    style={styles.loadMoreBtn}
+                  >
+                    {ticketsLoadingMore ? (
+                      <ActivityIndicator size="small" color={colors.brandBlue} />
+                    ) : (
+                      <AppText variant="caption" color={colors.brandBlue} weight="semibold">Load more tickets</AppText>
+                    )}
+                  </Pressable>
+                )}
+                {caseListItems.length > 0 && (
+                  <AppText variant="subtitle" weight="semibold" style={{ marginTop: spacing[4], marginBottom: spacing[2] }}>
+                    Cases
+                  </AppText>
+                )}
+              </>
+            )}
+            {caseListItems.map((item, idx) =>
               item.type === "family" ? (
-                <FamilyRow group={item} onPress={() => openFamily(item)} />
+                <FamilyRow key={`fam-${item.familyNumber}`} group={item} onPress={() => openFamily(item)} />
               ) : (
-                <CaseRow caseData={item.case} onPress={() => openCase(item.case.caseNumber)} />
+                <CaseRow key={`case-${item.case.caseNumber}-${idx}`} caseData={item.case} onPress={() => openCase(item.case.caseNumber)} />
               )
-            }
-          />
+            )}
+          </ScrollView>
         )
       )}
 
@@ -328,6 +385,23 @@ function FamilyRow({ group, onPress }: { group: FamilyGroup; onPress: () => void
         </View>
         <StatusBadge status={group.aggregateStatus} />
       </View>
+    </Pressable>
+  );
+}
+
+function TicketRow({ ticket, onPress }: { ticket: SupportTicket; onPress: () => void }) {
+  return (
+    <Pressable style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]} onPress={onPress}>
+      <View style={styles.cardRow}>
+        <Icon name="confirmation-number" size={18} color={colors.brandBlue} style={{ marginRight: spacing[2] }} />
+        <AppText variant="label" numberOfLines={1} style={{ flex: 1 }}>
+          {ticket.subject || ticket.category || "Support Ticket"}
+        </AppText>
+        <StatusBadge status={ticket.status} />
+      </View>
+      <AppText variant="caption" style={{ marginTop: spacing[0.5] }}>
+        {new Date(ticket.createdAt).toLocaleDateString()}
+      </AppText>
     </Pressable>
   );
 }
@@ -403,5 +477,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  loadMoreBtn: {
+    alignItems: "center",
+    paddingVertical: spacing[3],
+    marginBottom: spacing[2],
   },
 });

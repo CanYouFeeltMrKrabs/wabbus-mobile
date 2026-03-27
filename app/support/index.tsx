@@ -8,11 +8,10 @@ import Icon from "@/components/ui/Icon";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 const SUPPORT_OPTIONS = [
-  { icon: "chat", title: "Live Chat", desc: "Chat with our support team", action: "chat" },
-  { icon: "email", title: "Submit a Ticket", desc: "We'll get back to you within 24h", action: "ticket" },
-  { icon: "help-outline", title: "FAQ", desc: "Browse common questions", action: "faq" },
-  { icon: "local-shipping", title: "Track Order", desc: "Check your delivery status", action: "track" },
-  { icon: "assignment-return", title: "Returns & Refunds", desc: "Start a return or check status", action: "returns" },
+  { icon: "chat", title: "Live Chat", desc: "Chat with our support team", route: "/support/live-chat" },
+  { icon: "email", title: "Submit a Ticket", desc: "We'll get back to you within 24h", route: "/support/ticket" },
+  { icon: "message-text", title: "My Messages", desc: "View conversations & cases", route: "/account/messages" },
+  { icon: "shopping-outline", title: "My Orders", desc: "Track, return, or cancel orders", route: "/orders" },
 ];
 
 export default function SupportScreen() {
@@ -37,7 +36,11 @@ export default function SupportScreen() {
         </View>
 
         {SUPPORT_OPTIONS.map((opt) => (
-          <Pressable key={opt.action} style={({ pressed }) => [styles.optionCard, pressed && { opacity: 0.9 }]}>
+          <Pressable
+            key={opt.route}
+            style={({ pressed }) => [styles.optionCard, pressed && { opacity: 0.9 }]}
+            onPress={() => router.push(opt.route as any)}
+          >
             <View style={styles.optionIcon}>
               <Icon name={opt.icon} size={24} color={colors.brandBlue} />
             </View>
