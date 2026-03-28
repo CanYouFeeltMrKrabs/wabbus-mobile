@@ -9,6 +9,7 @@
  */
 
 import { API_BASE } from "./config";
+import { getLocale } from "./locale";
 
 export class AuthError extends Error {
   status: number;
@@ -89,6 +90,10 @@ export async function customerFetch<T = unknown>(
     ...((options.headers as Record<string, string>) || {}),
   };
 
+  if (!headers["Accept-Language"]) {
+    headers["Accept-Language"] = getLocale();
+  }
+
   if (options.body !== undefined && !(options.body instanceof FormData) && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
@@ -167,7 +172,9 @@ export async function customerFetch<T = unknown>(
 export async function publicFetch<T = unknown>(path: string): Promise<T> {
   const url = `${API_BASE}${path}`;
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: { "Accept-Language": getLocale() },
+    });
     if (!res.ok) throw new FetchError(res.status, `Public fetch failed: ${res.status}`);
     if (res.status === 204) return undefined as unknown as T;
     return (await res.json()) as T;

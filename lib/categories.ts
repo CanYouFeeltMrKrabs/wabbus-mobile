@@ -1,4 +1,5 @@
 import { API_BASE } from "./config";
+import { getLocale } from "./locale";
 
 export type CategoryLink = { id: number; name: string; slug: string };
 
@@ -59,6 +60,8 @@ export function getCategoryIcon(slug: string): string {
 
 /**
  * Short display names for categories — used in the scrollable categories bar.
+ * NOTE: Once the backend returns localized names, the API name should take
+ * precedence. This map remains as a compact English fallback for pill labels.
  */
 export const CATEGORY_SHORT_NAMES: Record<string, string> = {
   "clothing-and-underwear": "Clothing",
@@ -99,7 +102,9 @@ export type CategoryNode = {
 
 export async function fetchCategoriesClient(): Promise<CategoryLink[]> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories`);
+    const res = await fetch(`${API_BASE}/products/categories`, {
+      headers: { "Accept-Language": getLocale() },
+    });
     if (!res.ok) return [];
     const data: CategoryLink[] = await res.json();
     return data
@@ -112,7 +117,9 @@ export async function fetchCategoriesClient(): Promise<CategoryLink[]> {
 
 export async function fetchRootCategories(): Promise<CategoryLink[]> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories/roots`);
+    const res = await fetch(`${API_BASE}/products/categories/roots`, {
+      headers: { "Accept-Language": getLocale() },
+    });
     if (!res.ok) return fetchCategoriesClient();
     const data: CategoryLink[] = await res.json();
     return data
@@ -125,7 +132,9 @@ export async function fetchRootCategories(): Promise<CategoryLink[]> {
 
 export async function fetchCategoryChildren(parentId: number): Promise<CategoryLink[]> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories/${parentId}/children`);
+    const res = await fetch(`${API_BASE}/products/categories/${parentId}/children`, {
+      headers: { "Accept-Language": getLocale() },
+    });
     if (!res.ok) return [];
     return await res.json();
   } catch {
@@ -135,7 +144,9 @@ export async function fetchCategoryChildren(parentId: number): Promise<CategoryL
 
 export async function fetchCategoryById(id: number): Promise<CategoryNode | null> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories/${id}`);
+    const res = await fetch(`${API_BASE}/products/categories/${id}`, {
+      headers: { "Accept-Language": getLocale() },
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -145,7 +156,9 @@ export async function fetchCategoryById(id: number): Promise<CategoryNode | null
 
 export async function fetchCategoryTree(): Promise<CategoryNode[]> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories`);
+    const res = await fetch(`${API_BASE}/products/categories`, {
+      headers: { "Accept-Language": getLocale() },
+    });
     if (!res.ok) return [];
     return await res.json();
   } catch {

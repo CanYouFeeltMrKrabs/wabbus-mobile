@@ -192,6 +192,8 @@ export type TypesenseHit = {
     categoryId: number;
     categoryName: string;
     categorySlug: string;
+    categoryName_es?: string;
+    categoryName_id?: string;
     price: number;
     compareAtPrice: number;
     image: string;
@@ -204,3 +206,12 @@ export type TypesenseHit = {
     createdAt: number;
   };
 };
+
+export function getLocalizedCategoryName(
+  doc: TypesenseHit["document"],
+  locale?: string,
+): string {
+  if (locale === "es" && doc.categoryName_es) return doc.categoryName_es;
+  if (locale === "id" && doc.categoryName_id) return doc.categoryName_id;
+  return doc.categoryName;
+}
