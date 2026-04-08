@@ -8,6 +8,8 @@ import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import TicketThread from "@/components/TicketThread";
 import { customerFetch } from "@/lib/api";
+import { formatDate } from "@/lib/orderHelpers";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { CustomerCase } from "@/lib/messages-types";
 
@@ -179,7 +181,7 @@ function FamilyDetailContent() {
                 inactive && styles.caseCardInactive,
                 pressed && { opacity: inactive ? 0.4 : 0.85 },
               ]}
-              onPress={() => router.push(`/account/messages/case/${c.caseNumber}`)}
+              onPress={() => router.push(ROUTES.accountCase(c.caseNumber))}
             >
               <View style={styles.caseCardHeader}>
                 <View style={styles.caseCardTitleRow}>
@@ -197,7 +199,7 @@ function FamilyDetailContent() {
                 {itemsSummary ? ` · ${itemsSummary}` : ""}
               </AppText>
               <AppText variant="tiny" style={{ marginTop: spacing[1] }}>
-                {new Date(c.createdAt).toLocaleDateString()}
+                {formatDate(c.createdAt)}
               </AppText>
             </Pressable>
           );

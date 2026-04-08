@@ -7,7 +7,6 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,42 +16,39 @@ import Icon from "@/components/ui/Icon";
 import { useAuth } from "@/lib/auth";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
 import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "@/lib/constants";
+import { ROUTES } from "@/lib/routes";
 
 export default function RegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { register } = useAuth();
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleRegister = async () => {
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
-      Alert.alert("Missing Fields", "Please fill in all fields.");
+    setError(null);
+    if (!email.trim() || !password) {
+      setError("Please fill in all fields.");
       return;
     }
     if (password.length < MIN_PASSWORD_LENGTH) {
-      Alert.alert("Password Too Short", `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
     if (password.length > MAX_PASSWORD_LENGTH) {
-      Alert.alert("Password Too Long", `Password must be at most ${MAX_PASSWORD_LENGTH} characters.`);
+      setError(`Password must be at most ${MAX_PASSWORD_LENGTH} characters.`);
       return;
     }
     setLoading(true);
     try {
-      await register({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim(),
-        password,
-      });
+      await register({ email: email.trim(), password });
       router.back();
     } catch (e: any) {
-      Alert.alert("Registration Failed", e.message || "Could not create account.");
+      setError(e.message || "Could not create account.");
     } finally {
       setLoading(false);
     }
@@ -87,16 +83,12 @@ export default function RegisterScreen() {
           Join Wabbus to start shopping
         </AppText>
 
-        <View style={styles.row}>
-          <View style={[styles.field, styles.flex]}>
-            <AppText variant="label" style={styles.fieldLabel}>First Name</AppText>
-            <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="John" placeholderTextColor={colors.mutedLight} autoCapitalize="words" />
+        {error && (
+          <View style={styles.errorBanner}>
+            <Icon name="error-outline" size={18} color={colors.error} />
+            <AppText variant="caption" color={colors.error} style={{ flex: 1 }}>{error}</AppText>
           </View>
-          <View style={[styles.field, styles.flex]}>
-            <AppText variant="label" style={styles.fieldLabel}>Last Name</AppText>
-            <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Doe" placeholderTextColor={colors.mutedLight} autoCapitalize="words" />
-          </View>
-        </View>
+        )}
 
         <View style={styles.field}>
           <AppText variant="label" style={styles.fieldLabel}>Email</AppText>
@@ -105,7 +97,12 @@ export default function RegisterScreen() {
 
         <View style={styles.field}>
           <AppText variant="label" style={styles.fieldLabel}>Password</AppText>
-          <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`} placeholderTextColor={colors.mutedLight} secureTextEntry autoComplete="new-password" maxLength={MAX_PASSWORD_LENGTH} />
+          <View style={styles.passwordRow}>
+            <TextInput style={[styles.input, styles.passwordInput]} value={password} onChangeText={setPassword} placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`} placeholderTextColor={colors.mutedLight} secureTextEntry={!showPassword} autoComplete="new-password" maxLength={MAX_PASSWORD_LENGTH} />
+            <Pressable style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
+              <Icon name={showPassword ? "visibility-off" : "visibility"} size={20} color={colors.muted} />
+            </Pressable>
+          </View>
         </View>
 
         <AppButton
@@ -120,7 +117,7 @@ export default function RegisterScreen() {
 
         <View style={styles.loginRow}>
           <AppText variant="body" color={colors.muted}>Already have an account? </AppText>
-          <Pressable onPress={() => router.replace("/(auth)/login")}>
+          <Pressable onPress={() => router.replace(ROUTES.login)}>
             <AppText variant="body" color={colors.brandOrange} weight="bold">Sign in</AppText>
           </Pressable>
         </View>
@@ -136,14 +133,20 @@ const styles = StyleSheet.create({
   logoWrap: { alignItems: "center", marginBottom: spacing[6] },
   logo: { width: 64, height: 64, borderRadius: 20, backgroundColor: colors.brandOrange, alignItems: "center", justifyContent: "center" },
   sub: { marginTop: spacing[1], marginBottom: spacing[6] },
-  row: { flexDirection: "row", gap: spacing[3] },
-  flex: { flex: 1 },
+  errorBanner: {
+    flexDirection: "row", alignItems: "center", gap: spacing[2],
+    backgroundColor: "#fee2e2", borderRadius: borderRadius.lg,
+    padding: spacing[3], marginBottom: spacing[4],
+  },
   field: { marginBottom: spacing[4] },
   fieldLabel: { marginBottom: spacing[1.5] },
   input: {
     borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg,
     padding: spacing[3], fontSize: fontSize.base, color: colors.foreground, backgroundColor: colors.gray50,
   },
+  passwordRow: { position: "relative" },
+  passwordInput: { paddingRight: spacing[12] },
+  eyeBtn: { position: "absolute", right: spacing[3], top: spacing[3] },
   submitBtn: { marginTop: spacing[2] },
   loginRow: { flexDirection: "row", justifyContent: "center", marginTop: spacing[6] },
 });

@@ -4,6 +4,7 @@ import AppText from "@/components/ui/AppText";
 import { customerFetch } from "@/lib/api";
 import { colors, spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 import type { SupportTicket, SupportTicketMessage } from "@/lib/messages-types";
+import { formatDateLabel } from "@/lib/orderHelpers";
 
 type Props = {
   ticketPublicId: string;
@@ -12,18 +13,6 @@ type Props = {
 function toDateKey(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-}
-
-function formatDateLabel(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const diff = today.getTime() - msgDay.getTime();
-  if (diff === 0) return "Today";
-  if (diff === 86400000) return "Yesterday";
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
 function formatTime(iso: string): string {

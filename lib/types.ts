@@ -23,6 +23,8 @@ export type CartItem = {
   quantity: number;
   unitPriceCents: number;
   title: string;
+  variantLabel?: string;
+  vendorName?: string;
   image: string;
   productId?: string;
   slug?: string;
@@ -34,11 +36,17 @@ export type ServerCartItem = {
   unitPriceCents: number;
   productVariant: {
     publicId: string;
+    title?: string | null;
+    price?: number | string | null;
     product: {
       productId: string;
       title: string;
       slug: string;
       image: string | null;
+      vendor?: {
+        name?: string;
+        storeDisplayName?: string;
+      } | null;
     };
   };
 };
@@ -60,11 +68,33 @@ export type Address = {
 export type Order = {
   id: number;
   publicId: string;
+  orderNumber?: string | null;
   status: string;
   totalCents: number;
+  totalAmount?: string | number | null;
   itemCount: number;
   createdAt: string;
   items: OrderItem[];
+};
+
+export type ReturnRequest = {
+  id: number;
+  publicId?: string;
+  status: string;
+  createdAt: string;
+  reason?: string | null;
+  resolution?: string | null;
+  returnLabelUrl?: string | null;
+  returnCarrier?: string | null;
+  returnTrackingNumber?: string | null;
+  shipBy?: string | null;
+  orderItem?: {
+    title?: string | null;
+    image?: string | null;
+    quantity?: number | null;
+    unitPriceCents?: number | null;
+    order?: { publicId?: string; orderNumber?: string | null };
+  } | null;
 };
 
 export type OrderItem = {

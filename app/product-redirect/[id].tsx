@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import { publicFetch } from "@/lib/api";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing } from "@/lib/theme";
 
 export default function ProductRedirectScreen() {
@@ -28,14 +29,14 @@ export default function ProductRedirectScreen() {
       )
         .then(({ productId }) => {
           if (productId) {
-            router.replace(`/(tabs)/product/${productId}` as any);
+            router.replace(ROUTES.product(productId) as any);
           } else {
             setError(true);
           }
         })
         .catch(() => setError(true));
     } else {
-      router.replace(`/(tabs)/product/${id}` as any);
+      router.replace(ROUTES.product(id) as any);
     }
   }, [id]);
 
@@ -43,7 +44,7 @@ export default function ProductRedirectScreen() {
     return (
       <View style={styles.center}>
         <AppText variant="subtitle" color={colors.muted}>Product not found</AppText>
-        <AppButton title="Go Home" variant="outline" onPress={() => router.replace("/")} style={{ marginTop: spacing[4] }} />
+        <AppButton title="Go Home" variant="outline" onPress={() => router.replace(ROUTES.homeFeed)} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }

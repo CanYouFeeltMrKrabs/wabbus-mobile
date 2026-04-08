@@ -2,7 +2,9 @@ import React, { useEffect, useState } from "react";
 import { View, FlatList, Image, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import AppText from "@/components/ui/AppText";
-import { API_BASE, FALLBACK_IMAGE } from "@/lib/config";
+import { API_BASE } from "@/lib/config";
+import { productImageUrl } from "@/lib/image";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { CartItem, PublicProduct } from "@/lib/types";
 
@@ -51,10 +53,10 @@ export default function CartRecommendations({ cart }: CartRecommendationsProps) 
         renderItem={({ item: product }) => (
           <Pressable
             style={styles.card}
-            onPress={() => router.push(`/product/${product.productId}`)}
+            onPress={() => router.push(ROUTES.product(product.productId))}
           >
             <Image
-              source={{ uri: product.image || FALLBACK_IMAGE }}
+              source={{ uri: productImageUrl(product.image, "thumb") }}
               style={styles.image}
               resizeMode="cover"
             />

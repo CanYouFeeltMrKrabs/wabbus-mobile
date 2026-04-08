@@ -18,6 +18,7 @@ import Icon from "@/components/ui/Icon";
 import { customerFetch, FetchError } from "@/lib/api";
 import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "@/lib/constants";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
+import { ROUTES } from "@/lib/routes";
 
 type Step = "email" | "code" | "password";
 const STEPS: Step[] = ["email", "code", "password"];
@@ -175,7 +176,7 @@ export default function ForgotPasswordScreen() {
         body: JSON.stringify({ resetSessionToken, newPassword }),
       });
       setSuccess(true);
-      setTimeout(() => router.replace("/(auth)/login"), 2000);
+      setTimeout(() => router.replace(ROUTES.login), 2000);
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to reset password. Please start over.");
     } finally {
@@ -420,7 +421,7 @@ export default function ForgotPasswordScreen() {
         )}
 
         {/* Back to sign in */}
-        <Pressable onPress={() => router.replace("/(auth)/login")} style={styles.backBtn}>
+        <Pressable onPress={() => router.replace(ROUTES.login)} style={styles.backBtn}>
           <Icon name="arrow-left" size={16} color={colors.muted} />
           <AppText variant="body" color={colors.muted}>
             Back to sign in

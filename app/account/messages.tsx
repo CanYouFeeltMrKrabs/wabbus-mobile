@@ -10,6 +10,9 @@ import SlideDrawer from "@/components/SlideDrawer";
 import CaseDetailPanel from "@/components/CaseDetailPanel";
 import FamilyDetailPanel from "@/components/FamilyDetailPanel";
 import { customerFetch } from "@/lib/api";
+import { formatDate } from "@/lib/orderHelpers";
+import { getCaseStatusStyle } from "@/lib/orderStatus";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import type { CustomerCase } from "@/lib/messages-types";
 
@@ -45,19 +48,6 @@ type SingleCaseRow = {
 };
 
 type CaseListItem = FamilyGroup | SingleCaseRow;
-
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  OPEN:              { bg: "#dbeafe", text: "#1d4ed8" },
-  AWAITING:          { bg: "#dbeafe", text: "#1d4ed8" },
-  RESOLVED:          { bg: "#d1fae5", text: "#047857" },
-  CLOSED:            { bg: "#f3f4f6", text: "#6b7280" },
-  AWAITING_CUSTOMER: { bg: "#ede9fe", text: "#6d28d9" },
-};
-
-function getStatusStyle(status: string) {
-  const normalized = status.toUpperCase().replace(/ /g, "_");
-  return STATUS_COLORS[normalized] ?? STATUS_COLORS.OPEN;
-}
 
 function aggregateFamilyStatus(cases: CustomerCase[]): string {
   if (cases.some((c) => c.status.toUpperCase() === "OPEN")) return "OPEN";
@@ -273,7 +263,7 @@ function MessagesContent() {
             renderItem={({ item }) => (
               <Pressable
                 style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
-                onPress={() => router.push(`/account/messages/conversation/${item.publicId}`)}
+                onPress={() => router.push(ROUTES.accountConversation(item.publicId))}
               >
                 <View style={styles.cardRow}>
                   <AppText variant="label" numberOfLines={1} style={{ flex: 1 }}>{item.subject}</AppText>
@@ -283,7 +273,7 @@ function MessagesContent() {
                     </View>
                   )}
                 </View>
-                <AppText variant="caption">{new Date(item.lastMessageAt).toLocaleDateString()}</AppText>
+                <AppText variant="caption">{formatDate(item.lastMessageAt)}</AppText>
               </Pressable>
             )}
           />
@@ -304,7 +294,7 @@ function MessagesContent() {
                   Support Tickets
                 </AppText>
                 {tickets.map((t) => (
-                  <TicketRow key={t.publicId} ticket={t} onPress={() => router.push(`/support/ticket-detail/${t.publicId}` as any)} />
+                  <TicketRow key={t.publicId} ticket={t} onPress={() => router.push(ROUTES.supportTicketDetail(t.publicId) as any)} />
                 ))}
                 {ticketsHasMore && (
                   <Pressable
@@ -362,10 +352,10 @@ function MessagesContent() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const { bg, text } = getStatusStyle(status);
+  const { bg, fg } = getCaseStatusStyle(status);
   return (
     <View style={[styles.badge, { backgroundColor: bg }]}>
-      <AppText variant="tiny" color={text} weight="bold" style={{ fontSize: 10 }}>
+      <AppText variant="tiny" color={fg} weight="bold" style={{ fontSize: 10 }}>
         {status.replace(/_/g, " ")}
       </AppText>
     </View>
@@ -400,7 +390,7 @@ function TicketRow({ ticket, onPress }: { ticket: SupportTicket; onPress: () => 
         <StatusBadge status={ticket.status} />
       </View>
       <AppText variant="caption" style={{ marginTop: spacing[0.5] }}>
-        {new Date(ticket.createdAt).toLocaleDateString()}
+        {formatDate(ticket.createdAt)}
       </AppText>
     </Pressable>
   );
@@ -421,7 +411,7 @@ function CaseRow({ caseData, onPress }: { caseData: CustomerCase; onPress: () =>
           {caseData.resolutionIntent.replace(/_/g, " ")}
         </AppText>
         <AppText variant="caption">
-          {new Date(caseData.createdAt).toLocaleDateString()}
+          {formatDate(caseData.createdAt)}
         </AppText>
       </View>
       {summary ? (

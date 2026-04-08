@@ -7,6 +7,7 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import { API_BASE } from "@/lib/config";
 import { useAuth } from "@/lib/auth";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing } from "@/lib/theme";
 
 export default function ImpersonateScreen() {
@@ -46,7 +47,7 @@ export default function ImpersonateScreen() {
         if (cancelled) return;
 
         await refresh();
-        router.replace("/(tabs)");
+        router.replace(ROUTES.home);
       } catch (err: unknown) {
         if (cancelled) return;
         setError(
@@ -81,7 +82,7 @@ export default function ImpersonateScreen() {
           <AppButton
             title="Go Home"
             variant="primary"
-            onPress={() => router.replace("/(tabs)")}
+            onPress={() => router.replace(ROUTES.home)}
           />
         </View>
       ) : (

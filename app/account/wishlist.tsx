@@ -7,8 +7,9 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import { useCart } from "@/lib/cart";
 import { loadWishlist, removeFromWishlist, onWishlistUpdate, type WishlistItem } from "@/lib/wishlist";
-import { FALLBACK_IMAGE } from "@/lib/config";
+import { productImageUrl } from "@/lib/image";
 import { formatMoney } from "@/lib/money";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 export default function WishlistScreen() {
@@ -79,7 +80,7 @@ export default function WishlistScreen() {
           <AppText variant="body" color={colors.mutedLight} align="center">
             Save items you love by tapping the heart icon on products
           </AppText>
-          <AppButton title="Start Shopping" variant="primary" onPress={() => router.replace("/")} style={styles.shopBtn} />
+          <AppButton title="Start Shopping" variant="primary" onPress={() => router.replace(ROUTES.homeFeed)} style={styles.shopBtn} />
         </View>
       ) : (
         <>
@@ -101,8 +102,8 @@ export default function WishlistScreen() {
                   <Pressable style={styles.removeBtn} onPress={() => handleRemove(item.productId)}>
                     <Icon name="close" size={14} color={colors.muted} />
                   </Pressable>
-                  <Pressable onPress={() => router.push(`/product/${item.productId}`)}>
-                    <Image source={{ uri: item.image || FALLBACK_IMAGE }} style={styles.cardImage} resizeMode="cover" />
+                  <Pressable onPress={() => router.push(ROUTES.product(item.productId))}>
+                    <Image source={{ uri: productImageUrl(item.image, "card") }} style={styles.cardImage} resizeMode="cover" />
                     <View style={styles.cardInfo}>
                       <AppText variant="label" numberOfLines={2} style={styles.cardTitle}>{item.title}</AppText>
                       <AppText variant="price">{formatMoney(item.price)}</AppText>

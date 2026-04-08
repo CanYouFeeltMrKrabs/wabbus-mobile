@@ -16,6 +16,7 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 
 type OrderInfo = {
@@ -136,7 +137,7 @@ function MessageSellerContent() {
         <AppButton
           title="View Messages"
           variant="primary"
-          onPress={() => router.replace("/account/messages")}
+          onPress={() => router.replace(ROUTES.accountMessages)}
           style={{ marginTop: spacing[6] }}
         />
       </View>

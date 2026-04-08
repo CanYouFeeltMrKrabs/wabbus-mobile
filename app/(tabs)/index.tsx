@@ -1,21 +1,24 @@
 /**
- * Home Screen — matches the web homepage layout:
+ * Home Screen — matches the web homepage section order:
  * - Sticky search bar (blue background)
  * - Categories bar (orange, scrolls with content)
  * - Hero banner
- * - Recommended products grid
- * - Bestsellers section
- * - Top Rated section
+ * - Suggestions carousel (web sidebar → mobile: horizontal slider after hero)
+ * - Bestsellers grid
+ * - Recommended for You grid (personalization swap on mount)
+ * - Trending Now carousel
+ * - New Arrivals carousel
+ * - Trending Categories grid
+ * - Today's Deals carousel
+ * - Recently Viewed slider
+ * - Top Rated grid
  */
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   ScrollView,
   Pressable,
-  Image,
-  FlatList,
   StyleSheet,
-  ActivityIndicator,
   Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -24,17 +27,22 @@ import AppText from "@/components/ui/AppText";
 import SearchBar from "@/components/ui/SearchBar";
 import TopCategoriesBar from "@/components/ui/TopCategoriesBar";
 import ProductGrid from "@/components/ui/ProductGrid";
-import ProductCard from "@/components/ui/ProductCard";
 import HeroCarousel from "@/components/ui/HeroCarousel";
 import Icon from "@/components/ui/Icon";
-import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
+import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
+import { SkeletonGrid, SkeletonSlider } from "@/components/ui/Skeleton";
+import RecentlyViewedSlider from "@/components/ui/RecentlyViewedSlider";
+import { colors, spacing, borderRadius } from "@/lib/theme";
 import { API_BASE } from "@/lib/config";
+import { customerFetch } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { getCategoryIcon, CATEGORY_SHORT_NAMES } from "@/lib/categories";
-import RecentlyViewedSlider from "@/components/ui/RecentlyViewedSlider";
+import { ROUTES } from "@/lib/routes";
 import type { PublicProduct } from "@/lib/types";
+import { PAGE_SIZE } from "@/lib/constants";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const PRODUCTS_HOME = PAGE_SIZE.PRODUCTS_HOME;
 
 function normalizeProducts(data: unknown): PublicProduct[] {
   if (Array.isArray(data)) return data;
@@ -60,26 +68,42 @@ export default function HomeScreen() {
   const { addToCart } = useCart();
 
   const [recommended, setRecommended] = useState<PublicProduct[]>([]);
+  const [recoLabel, setRecoLabel] = useState("Recommended for You");
   const [bestsellers, setBestsellers] = useState<PublicProduct[]>([]);
   const [topRated, setTopRated] = useState<PublicProduct[]>([]);
   const [trendingCats, setTrendingCats] = useState<Array<{ name: string; slug: string }>>([]);
-  const [kitchenware, setKitchenware] = useState<PublicProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [recData, bestData, topData, trendData, kitData] = await Promise.all([
-      fetchJSON(`${API_BASE}/products/public?take=20&skip=0`),
+
+    const [bestData, topData, trendData] = await Promise.all([
       fetchJSON(`${API_BASE}/products/public?take=12&sortBy=bestselling`),
       fetchJSON(`${API_BASE}/products/public?take=12&sortBy=rating`),
       fetchJSON(`${API_BASE}/recommendations/trending-categories?limit=8&days=14`),
-      fetchJSON(`${API_BASE}/products/public?take=10&categorySlug=kitchenware`),
     ]);
-    setRecommended(normalizeProducts(recData));
+
     setBestsellers(normalizeProducts(bestData));
     setTopRated(normalizeProducts(topData));
-    if (Array.isArray(trendData)) setTrendingCats(trendData);
-    setKitchenware(normalizeProducts(kitData));
+    if (trendData?.categories && Array.isArray(trendData.categories)) {
+      setTrendingCats(trendData.categories);
+    } else if (Array.isArray(trendData)) {
+      setTrendingCats(trendData);
+    }
+
+    try {
+      const recoData = await customerFetch<{ products?: PublicProduct[]; personalized?: boolean }>(
+        `/recommendations?context=home&take=${PRODUCTS_HOME}`,
+      );
+      const products = recoData?.products ?? [];
+      setRecommended(products);
+      setRecoLabel(recoData?.personalized ? "Picked for You" : "Recommended for You");
+    } catch {
+      const fallback = await fetchJSON(`${API_BASE}/products/public?take=${PRODUCTS_HOME}&skip=0`);
+      setRecommended(normalizeProducts(fallback));
+      setRecoLabel("Recommended for You");
+    }
+
     setLoading(false);
   }, []);
 
@@ -106,66 +130,96 @@ export default function HomeScreen() {
     <View style={styles.screen}>
       {/* Sticky search header */}
       <View style={[styles.searchHeader, { paddingTop: insets.top + spacing[2] }]}>
-        <SearchBar editable={false} onPress={() => router.push("/search")} />
+        <SearchBar editable={false} onPress={() => router.push(ROUTES.search)} />
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Categories bar — scrolls with content */}
         <TopCategoriesBar />
-
-        {/* Hero carousel */}
         <HeroCarousel />
 
-        {/* Kitchen Essentials */}
-        {kitchenware.length > 0 && (
-          <View style={{ marginTop: spacing[4] }}>
-            <SectionHeader 
-              title="Kitchen Essentials" 
-              actionLabel="SEE ALL" 
-              onActionPress={() => router.push("/category/kitchenware")}
+        {/* Suggestions — newest products (web: sidebar next to hero, mobile: slider after hero) */}
+        <ProductRecommendationSlider
+          title="Suggestions for you"
+          apiUrl="/products/public?take=10&sortBy=newest"
+          accentColor={colors.brandBlue}
+          onAddToCart={handleAddToCart}
+        />
+
+        {/* Bestsellers */}
+        {bestsellers.length > 0 && (
+          <>
+            <SectionHeader
+              title="Bestsellers"
+              accentColor={colors.warning}
+              actionLabel="VIEW ALL"
+              onActionPress={() => router.push(ROUTES.searchWithSort("bestselling"))}
             />
             <View style={styles.gridPad}>
-              <ProductGrid products={kitchenware.slice(0, 2)} onAddToCart={handleAddToCart} />
+              <ProductGrid products={bestsellers} onAddToCart={handleAddToCart} />
             </View>
-          </View>
+          </>
         )}
 
-        {/* Recommended */}
-        <SectionHeader title="Recommended for You" actionLabel="VIEW ALL" />
+        {/* Recommended for You / Picked for You (personalization swap) */}
+        <SectionHeader
+          title={recoLabel}
+          accentColor={colors.brandBlue}
+          actionLabel="BROWSE MORE"
+          onActionPress={() => router.push(ROUTES.searchWithSort("recommended"))}
+        />
         {loading ? (
-          <ActivityIndicator
-            size="large"
-            color={colors.brandBlue}
-            style={styles.loader}
-          />
+          <View>
+            <SkeletonSlider count={4} />
+            <View style={styles.gridPad}>
+              <SkeletonGrid count={6} />
+            </View>
+          </View>
         ) : (
           <View style={styles.gridPad}>
             <ProductGrid products={recommended} onAddToCart={handleAddToCart} />
           </View>
         )}
 
-        {/* Recently Viewed */}
-        <RecentlyViewedSlider onAddToCart={handleAddToCart} />
+        {/* Trending Now — 48h velocity */}
+        <ProductRecommendationSlider
+          title="Trending Now"
+          apiUrl="/recommendations?context=home&strategy=trending&take=10"
+          accentColor={colors.rose500}
+          onAddToCart={handleAddToCart}
+        />
+
+        {/* New Arrivals — 14-day window */}
+        <ProductRecommendationSlider
+          title="New Arrivals"
+          apiUrl="/recommendations?context=home&strategy=new_arrivals&take=10"
+          accentColor={colors.violet500}
+          onAddToCart={handleAddToCart}
+        />
 
         {/* Trending Categories */}
         {trendingCats.length > 0 && (
           <>
-            <SectionHeader title="Trending Categories" accentColor={colors.brandOrange} />
+            <SectionHeader
+              title="Trending Categories"
+              accentColor={colors.brandOrange}
+              actionLabel="ALL"
+              onActionPress={() => router.push(ROUTES.categories)}
+            />
             <View style={styles.catGrid}>
               {trendingCats.map((cat) => (
                 <Pressable
                   key={cat.slug}
                   style={styles.catCard}
-                  onPress={() => router.push(`/category/${cat.slug}`)}
+                  onPress={() => router.push(ROUTES.category(cat.slug))}
                 >
                   <View style={styles.catIconWrap}>
                     <Icon name={getCategoryIcon(cat.slug)} size={24} color={colors.slate600} />
                   </View>
-                  <AppText 
-                    align="center" 
+                  <AppText
+                    align="center"
                     numberOfLines={2}
                     style={styles.catLabel}
                   >
@@ -174,23 +228,39 @@ export default function HomeScreen() {
                 </Pressable>
               ))}
             </View>
-          </>
-        )}
-
-        {/* Bestsellers */}
-        {bestsellers.length > 0 && (
-          <>
-            <SectionHeader title="Bestsellers" accentColor={colors.warning} />
-            <View style={styles.gridPad}>
-              <ProductGrid products={bestsellers} onAddToCart={handleAddToCart} />
+            <View style={styles.browseAllWrap}>
+              <Pressable
+                style={styles.browseAllBtn}
+                onPress={() => router.push(ROUTES.categories)}
+              >
+                <Icon name="grid-view" size={18} color={colors.brandBlue} />
+                <AppText style={styles.browseAllText}>Browse All Categories</AppText>
+                <Icon name="chevron-right" size={16} color={colors.brandBlue} />
+              </Pressable>
             </View>
           </>
         )}
 
+        {/* Today's Deals — discount-sorted */}
+        <ProductRecommendationSlider
+          title="Today's Deals"
+          apiUrl="/recommendations?context=home&strategy=deals&take=10"
+          accentColor={colors.warning}
+          onAddToCart={handleAddToCart}
+        />
+
+        {/* Recently Viewed — returning users only */}
+        <RecentlyViewedSlider onAddToCart={handleAddToCart} />
+
         {/* Top Rated */}
         {topRated.length > 0 && (
           <>
-            <SectionHeader title="Top Rated" accentColor={colors.success} />
+            <SectionHeader
+              title="Top Rated"
+              accentColor={colors.success}
+              actionLabel="VIEW ALL"
+              onActionPress={() => router.push(ROUTES.searchWithSort("rating"))}
+            />
             <View style={styles.gridPad}>
               <ProductGrid products={topRated} onAddToCart={handleAddToCart} />
             </View>
@@ -222,7 +292,7 @@ function SectionHeader({
         )}
         <AppText variant="title">{title}</AppText>
       </View>
-      {actionLabel && (
+      {actionLabel && onActionPress && (
         <Pressable style={styles.sectionAction} onPress={onActionPress}>
           <AppText variant="label" color={colors.brandOrange} weight="bold" style={{ fontSize: 10 }}>
             {actionLabel}
@@ -244,7 +314,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: { flexGrow: 1 },
 
-  // Sections
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -258,13 +327,7 @@ const styles = StyleSheet.create({
   sectionAction: { flexDirection: "row", alignItems: "center" },
 
   gridPad: { paddingHorizontal: spacing[4] },
-  loader: { marginTop: spacing[10] },
 
-  // Horizontal product list (recently viewed)
-  horizontalList: { paddingHorizontal: spacing[4], gap: spacing[3] },
-  horizontalCard: { width: 160 },
-
-  // Trending categories grid
   catGrid: {
     flexDirection: "row", flexWrap: "wrap",
     paddingHorizontal: spacing[4], gap: spacing[3],
@@ -282,5 +345,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-  }
+  },
+  browseAllWrap: { paddingHorizontal: spacing[4], marginTop: spacing[3] },
+  browseAllBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: spacing[2], paddingVertical: spacing[3],
+    borderRadius: borderRadius.xl, borderWidth: 1.5,
+    borderColor: colors.brandBlueBorder, backgroundColor: colors.brandBlueLight,
+  },
+  browseAllText: { fontSize: 14, fontWeight: "700", color: colors.brandBlue },
 });

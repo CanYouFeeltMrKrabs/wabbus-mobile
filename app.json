@@ -15,7 +15,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.wabbus.mobile"
+      "bundleIdentifier": "com.wabbus.mobile",
+      "associatedDomains": [
+        "applinks:wabbus.com",
+        "applinks:www.wabbus.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +28,28 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.wabbus.mobile"
+      "package": "com.wabbus.mobile",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/product" },
+            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/orders" },
+            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/category" },
+            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/vendors" },
+            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/support" },
+            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/account" },
+            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/product" },
+            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/orders" },
+            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/category" },
+            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/vendors" },
+            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/support" },
+            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/account" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -34,6 +59,13 @@
       "expo-router",
       "expo-secure-store",
       "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#2d4ecf"
+        }
+      ],
       [
         "@stripe/stripe-react-native",
         {

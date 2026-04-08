@@ -47,7 +47,13 @@ export const colors = {
   heroYellow: "#eab308",
   heroYellowDecor: "rgba(250,204,21,0.6)",
   heroPink: "#ec4899",
+  heroPurple400: "#c084fc",
   heroSlate: "#1e293b",
+
+  // Carousel section accents (matching web Tailwind palette)
+  rose500: "#f43f5e",
+  violet500: "#8b5cf6",
+  yellow600: "#ca8a04",
 
   // Primitives
   white: "#ffffff",

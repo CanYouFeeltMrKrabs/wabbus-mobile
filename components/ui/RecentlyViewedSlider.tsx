@@ -23,7 +23,7 @@ export default function RecentlyViewedSlider({ onAddToCart }: RecentlyViewedSlid
 
   const recentProducts = useMemo<PublicProduct[]>(
     () =>
-      recentlyViewed.slice(0, 10).map((item) => ({
+      recentlyViewed.slice(0, 6).map((item) => ({
         productId: item.productId,
         slug: item.slug,
         title: item.title,
@@ -59,7 +59,7 @@ export default function RecentlyViewedSlider({ onAddToCart }: RecentlyViewedSlid
         contentContainerStyle={styles.scrollContent}
         renderItem={({ item }) => (
           <View style={styles.cardContainer}>
-            <ProductCard product={item} onAddToCart={onAddToCart} />
+            <ProductCard product={item} onAddToCart={onAddToCart} imageSize="thumb" />
           </View>
         )}
       />

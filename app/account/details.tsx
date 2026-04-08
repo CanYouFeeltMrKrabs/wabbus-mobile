@@ -7,6 +7,8 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { useAuth } from "@/lib/auth";
+import { formatDate } from "@/lib/orderHelpers";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 export default function AccountDetailsScreen() {
@@ -31,11 +33,11 @@ function AccountDetailsContent() {
           <DetailRow label="First Name" value={user?.firstName || "—"} />
           <DetailRow label="Last Name" value={user?.lastName || "—"} />
           <DetailRow label="Email" value={user?.email || "—"} />
-          <DetailRow label="Member Since" value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "—"} />
+          <DetailRow label="Member Since" value={formatDate(user?.createdAt)} />
         </View>
 
-        <AppButton title="Change Password" variant="outline" fullWidth icon="lock" onPress={() => router.push("/account/change-password")} style={styles.actionBtn} />
-        <AppButton title="Change Email" variant="outline" fullWidth icon="email" onPress={() => router.push("/account/change-email")} />
+        <AppButton title="Change Password" variant="outline" fullWidth icon="lock" onPress={() => router.push(ROUTES.accountChangePassword)} style={styles.actionBtn} />
+        <AppButton title="Change Email" variant="outline" fullWidth icon="email" onPress={() => router.push(ROUTES.accountChangeEmail)} />
       </ScrollView>
     </View>
   );

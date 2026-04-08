@@ -52,12 +52,22 @@ export function useCart() {
 const GUEST_CART_KEY = "guest_cart";
 
 function serverToCartItem(s: ServerCartItem): CartItem {
+  const variantTitle = s.productVariant?.title;
+  const variantLabel =
+    variantTitle && variantTitle !== "Default" ? variantTitle : undefined;
+
+  const vendor = s.productVariant?.product?.vendor;
+  const vendorName =
+    vendor?.storeDisplayName?.trim() || vendor?.name?.trim() || undefined;
+
   return {
     publicId: s.publicId,
     variantPublicId: s.productVariant.publicId,
     quantity: s.quantity,
     unitPriceCents: s.unitPriceCents,
     title: s.productVariant.product.title,
+    variantLabel,
+    vendorName,
     image: s.productVariant.product.image || "",
     productId: s.productVariant.product.productId,
     slug: s.productVariant.product.slug,

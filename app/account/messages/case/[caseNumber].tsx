@@ -9,6 +9,7 @@ import RequireAuth from "@/components/ui/RequireAuth";
 import TicketThread from "@/components/TicketThread";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
+import { formatDate } from "@/lib/orderHelpers";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { CustomerCaseDetail } from "@/lib/messages-types";
 
@@ -105,7 +106,7 @@ function CaseDetailContent() {
             <AppText variant="subtitle" color={status.fg}>{status.label}</AppText>
           </View>
           <AppText variant="caption" style={{ marginTop: spacing[2] }}>
-            Opened {new Date(caseDetail.createdAt).toLocaleDateString()}
+            Opened {formatDate(caseDetail.createdAt)}
           </AppText>
         </View>
 
@@ -158,7 +159,7 @@ function CaseDetailContent() {
               </View>
             </View>
             <AppText variant="caption" style={{ marginTop: spacing[1] }}>
-              Initiated {new Date(caseDetail.refund.createdAt).toLocaleDateString()}
+              Initiated {formatDate(caseDetail.refund.createdAt)}
             </AppText>
           </View>
         )}

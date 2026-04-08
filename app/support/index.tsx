@@ -5,13 +5,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 const SUPPORT_OPTIONS = [
-  { icon: "chat", title: "Live Chat", desc: "Chat with our support team", route: "/support/live-chat" },
-  { icon: "email", title: "Submit a Ticket", desc: "We'll get back to you within 24h", route: "/support/ticket" },
-  { icon: "message-text", title: "My Messages", desc: "View conversations & cases", route: "/account/messages" },
-  { icon: "shopping-outline", title: "My Orders", desc: "Track, return, or cancel orders", route: "/orders" },
+  { icon: "chat", title: "Live Chat", desc: "Chat with our support team", route: ROUTES.supportLiveChat },
+  { icon: "email", title: "Submit a Ticket", desc: "We'll get back to you within 24h", route: ROUTES.supportTicket },
+  { icon: "message-text", title: "My Messages", desc: "View conversations & cases", route: ROUTES.accountMessages },
+  { icon: "shopping-outline", title: "My Orders", desc: "Track, return, or cancel orders", route: ROUTES.orders },
 ];
 
 export default function SupportScreen() {

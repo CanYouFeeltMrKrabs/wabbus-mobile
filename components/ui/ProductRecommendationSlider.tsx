@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, FlatList, StyleSheet } from "react-native";
 import AppText from "@/components/ui/AppText";
 import ProductCard from "@/components/ui/ProductCard";
+import { SkeletonSlider } from "@/components/ui/Skeleton";
 import { colors, spacing, borderRadius } from "@/lib/theme";
 import { publicFetch } from "@/lib/api";
 import type { PublicProduct } from "@/lib/types";
@@ -44,13 +45,21 @@ export default function ProductRecommendationSlider({
 
   if (!loading && products.length === 0) return null;
 
+  if (loading && products.length === 0) {
+    return (
+      <View style={styles.container}>
+        <SkeletonSlider count={4} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={[styles.accent, { backgroundColor: accentColor }]} />
         <AppText variant="subtitle" weight="bold">{title}</AppText>
       </View>
-      
+
       <FlatList
         data={products}
         horizontal

@@ -6,6 +6,7 @@ import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import { useAuth } from "@/lib/auth";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 type MenuItem = {
@@ -16,13 +17,13 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { icon: "receipt-long", label: "Orders", route: "/orders" },
-  { icon: "location-on", label: "Addresses", route: "/account/addresses" },
-  { icon: "credit-card", label: "Payment Methods", route: "/account/payment-methods" },
-  { icon: "favorite", label: "Wishlist", route: "/account/wishlist" },
-  { icon: "chat", label: "Messages", route: "/account/messages" },
-  { icon: "help-outline", label: "Support", route: "/support" },
-  { icon: "person", label: "Account Details", route: "/account/details" },
+  { icon: "receipt-long", label: "Orders", route: ROUTES.orders },
+  { icon: "location-on", label: "Addresses", route: ROUTES.accountAddresses },
+  { icon: "credit-card", label: "Payment Methods", route: ROUTES.accountPaymentMethods },
+  { icon: "person", label: "Account Details", route: ROUTES.accountDetails },
+  { icon: "favorite", label: "Wishlist", route: ROUTES.accountWishlist },
+  { icon: "chat", label: "Messages", route: ROUTES.accountMessages },
+  { icon: "help-outline", label: "Support", route: ROUTES.support },
 ];
 
 function MenuRow({ item, onPress }: { item: MenuItem; onPress: () => void }) {
@@ -76,13 +77,13 @@ export default function AccountScreen() {
             title="Sign In"
             variant="primary"
             fullWidth
-            onPress={() => router.push("/(auth)/login")}
+            onPress={() => router.push(ROUTES.login)}
           />
           <AppButton
             title="Create Account"
             variant="outline"
             fullWidth
-            onPress={() => router.push("/(auth)/register")}
+            onPress={() => router.push(ROUTES.register)}
           />
         </View>
       )}

@@ -1,6 +1,7 @@
 import React from "react";
 import { View, ScrollView, Image, Pressable, StyleSheet, Dimensions } from "react-native";
 import Icon from "@/components/ui/Icon";
+import { productImageUrl } from "@/lib/image";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -16,7 +17,7 @@ export default function ProductImageGallery({ images, inWishlist, onToggleWishli
     <View style={styles.imageCard}>
       <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.gallery}>
         {images.map((uri, i) => (
-          <Image key={i} source={{ uri }} style={styles.galleryImage} resizeMode="cover" />
+          <Image key={i} source={{ uri: productImageUrl(uri, "full") }} style={styles.galleryImage} resizeMode="cover" />
         ))}
       </ScrollView>
 

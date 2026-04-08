@@ -8,7 +8,9 @@ import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
-import { FALLBACK_IMAGE } from "@/lib/config";
+import { productImageUrl } from "@/lib/image";
+import { formatDate } from "@/lib/orderHelpers";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { Order, OrderItem } from "@/lib/types";
 
@@ -62,14 +64,14 @@ function OrderDetailContent() {
         <View style={styles.statusCard}>
           <AppText variant="label">Status</AppText>
           <AppText variant="subtitle" color={colors.brandBlue}>{order.status.replace(/_/g, " ")}</AppText>
-          <AppText variant="caption" style={styles.date}>Placed {new Date(order.createdAt).toLocaleDateString()}</AppText>
+          <AppText variant="caption" style={styles.date}>Placed {formatDate(order.createdAt)}</AppText>
         </View>
 
         {/* Items */}
         <AppText variant="subtitle" style={styles.sectionTitle}>Items</AppText>
         {order.items?.map((item: OrderItem) => (
           <View key={item.publicId} style={styles.itemCard}>
-            <Image source={{ uri: item.image || FALLBACK_IMAGE }} style={styles.itemImg} resizeMode="cover" />
+            <Image source={{ uri: productImageUrl(item.image, "thumb") }} style={styles.itemImg} resizeMode="cover" />
             <View style={styles.itemInfo}>
               <AppText variant="label" numberOfLines={2}>{item.title}</AppText>
               <AppText variant="caption">Qty: {item.quantity}</AppText>
@@ -88,13 +90,23 @@ function OrderDetailContent() {
 
         {/* Actions */}
         <View style={styles.actionsSection}>
+          {["PAID", "SHIPPED", "DELIVERED"].includes(order.status) && (
+            <AppButton
+              title="Track Order"
+              variant="primary"
+              fullWidth
+              icon="local-shipping"
+              onPress={() => router.push(ROUTES.orderTracking(id))}
+              style={styles.actionBtn}
+            />
+          )}
           {order.status === "PAID" && (
             <AppButton
               title="Cancel Items"
               variant="danger"
               fullWidth
               icon="close-circle"
-              onPress={() => router.push(`/orders/${id}/cancel`)}
+              onPress={() => router.push(ROUTES.orderCancel(id))}
               style={styles.actionBtn}
             />
           )}
@@ -105,7 +117,7 @@ function OrderDetailContent() {
                 variant="outline"
                 fullWidth
                 icon="package-variant"
-                onPress={() => router.push(`/orders/${id}/return`)}
+                onPress={() => router.push(ROUTES.orderReturn(id))}
                 style={styles.actionBtn}
               />
               <AppButton
@@ -113,7 +125,7 @@ function OrderDetailContent() {
                 variant="outline"
                 fullWidth
                 icon="star"
-                onPress={() => router.push(`/orders/${id}/review`)}
+                onPress={() => router.push(ROUTES.orderReview(id))}
                 style={styles.actionBtn}
               />
             </>
@@ -124,7 +136,7 @@ function OrderDetailContent() {
               variant="ghost"
               fullWidth
               icon="package-variant-closed-remove"
-              onPress={() => router.push(`/orders/${id}/missing`)}
+              onPress={() => router.push(ROUTES.orderMissing(id))}
               style={styles.actionBtn}
             />
           )}
@@ -133,7 +145,7 @@ function OrderDetailContent() {
             variant="ghost"
             fullWidth
             icon="message-text"
-            onPress={() => router.push(`/support/message-seller/${id}`)}
+            onPress={() => router.push(ROUTES.supportMessageSeller(id))}
             style={styles.actionBtn}
           />
         </View>

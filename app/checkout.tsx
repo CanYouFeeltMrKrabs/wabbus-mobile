@@ -1,8 +1,8 @@
 import React, { useCallback } from "react";
 import {
   View, ScrollView, Pressable, TextInput, Switch,
-  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
-  Image,
+  StyleSheet, ActivityIndicator, KeyboardAvoidingView,
+  Platform, Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,7 +11,7 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import { useCheckout, type CheckoutStep } from "@/lib/useCheckout";
 import { formatMoney } from "@/lib/money";
-import { FALLBACK_IMAGE } from "@/lib/config";
+import { productImageUrl } from "@/lib/image";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import type { CheckoutAddress } from "@/lib/types";
 
@@ -359,6 +359,33 @@ export default function CheckoutScreen() {
                 </>
               )}
             </View>
+
+            {/* Billing address */}
+            <View style={s.section}>
+              <AppText variant="subtitle" style={s.sectionTitle}>Billing Address</AppText>
+              <View style={s.toggleRow}>
+                <AppText variant="body" style={{ flex: 1 }}>Same as shipping</AppText>
+                <Switch
+                  value={c.billingSameAsShipping}
+                  onValueChange={c.setBillingSameAsShipping}
+                  trackColor={{ true: colors.brandBlue, false: colors.gray200 }}
+                  thumbColor={colors.white}
+                />
+              </View>
+
+              {!c.billingSameAsShipping && !c.isGuest && c.addresses.length > 0 && (
+                <View style={{ marginTop: spacing[3] }}>
+                  {c.addresses.map((addr) => (
+                    <AddressCard
+                      key={addr.publicId}
+                      addr={addr}
+                      selected={c.billingAddressId === addr.publicId}
+                      onSelect={() => c.setBillingAddressId(addr.publicId)}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
           </ScrollView>
 
           <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
@@ -415,15 +442,52 @@ export default function CheckoutScreen() {
                   </AppText>
                 </View>
               ) : (
-                <View style={s.stripeCard}>
-                  <Icon name="credit-card" size={24} color={colors.brandBlue} />
-                  <View style={{ marginLeft: spacing[3], flex: 1 }}>
-                    <AppText variant="label">Card Payment</AppText>
-                    <AppText variant="caption" color={colors.muted}>
-                      You'll enter card details securely on the next step via Stripe
-                    </AppText>
+                <>
+                  {c.savedMethods.length > 0 && (
+                    <View style={{ marginBottom: spacing[3] }}>
+                      <AppText variant="caption" weight="semibold" style={{ marginBottom: spacing[2] }}>Saved Cards</AppText>
+                      {c.savedMethods.map((m) => (
+                        <Pressable
+                          key={m.stripePaymentMethodId}
+                          style={[s.savedCardRow, c.selectedPaymentMethodId === m.stripePaymentMethodId && s.savedCardSelected]}
+                          onPress={() => c.setSelectedPaymentMethodId(m.stripePaymentMethodId)}
+                        >
+                          <View style={s.radioOuter}>
+                            {c.selectedPaymentMethodId === m.stripePaymentMethodId && <View style={s.radioInner} />}
+                          </View>
+                          <Icon name="credit-card" size={20} color={colors.brandBlue} />
+                          <View style={{ flex: 1, marginLeft: spacing[2] }}>
+                            <AppText variant="label">
+                              {(m.brand || "Card").charAt(0).toUpperCase() + (m.brand || "Card").slice(1)} ····{m.last4 || "????"}
+                            </AppText>
+                            {m.expMonth && m.expYear && (
+                              <AppText variant="tiny" color={colors.muted}>
+                                Expires {String(m.expMonth).padStart(2, "0")}/{m.expYear}
+                              </AppText>
+                            )}
+                          </View>
+                          {m.isDefault && (
+                            <View style={s.defaultBadge}>
+                              <AppText variant="tiny" color={colors.brandBlue} weight="bold">DEFAULT</AppText>
+                            </View>
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+
+                  <View style={s.stripeCard}>
+                    <Icon name="credit-card" size={24} color={colors.brandBlue} />
+                    <View style={{ marginLeft: spacing[3], flex: 1 }}>
+                      <AppText variant="label">
+                        {c.savedMethods.length > 0 ? "New Card" : "Card Payment"}
+                      </AppText>
+                      <AppText variant="caption" color={colors.muted}>
+                        Enter card details securely via Stripe
+                      </AppText>
+                    </View>
                   </View>
-                </View>
+                </>
               )}
             </View>
           </ScrollView>
@@ -486,7 +550,7 @@ export default function CheckoutScreen() {
               {c.cartItems.map((item) => (
                 <View key={item.publicId} style={s.itemRow}>
                   <Image
-                    source={{ uri: item.image || FALLBACK_IMAGE }}
+                    source={{ uri: productImageUrl(item.image, "thumb") }}
                     style={s.itemImg}
                     resizeMode="cover"
                   />
@@ -623,5 +687,33 @@ const s = StyleSheet.create({
   totalRowFinal: {
     borderTopWidth: 1, borderTopColor: colors.border,
     marginTop: spacing[2], paddingTop: spacing[3],
+  },
+  toggleRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: colors.card, borderRadius: borderRadius.xl,
+    padding: spacing[4], ...shadows.sm,
+  },
+  savedCardRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: colors.card, borderRadius: borderRadius.xl,
+    padding: spacing[4], marginBottom: spacing[2],
+    borderWidth: 2, borderColor: colors.transparent,
+    ...shadows.sm,
+  },
+  savedCardSelected: { borderColor: colors.brandBlue },
+  radioOuter: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: colors.gray300,
+    alignItems: "center", justifyContent: "center",
+    marginRight: spacing[3],
+  },
+  radioInner: {
+    width: 12, height: 12, borderRadius: 6,
+    backgroundColor: colors.brandBlue,
+  },
+  defaultBadge: {
+    backgroundColor: colors.brandBlueLight,
+    paddingHorizontal: spacing[2], paddingVertical: spacing[0.5],
+    borderRadius: borderRadius.sm,
   },
 });

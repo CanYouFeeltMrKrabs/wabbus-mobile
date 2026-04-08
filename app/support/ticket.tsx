@@ -4,7 +4,6 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
-  Alert,
   Pressable,
   KeyboardAvoidingView,
   Platform,
@@ -16,14 +15,13 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 
 const CATEGORIES = [
-  { code: "ORDER_ISSUE", label: "Order Issue", icon: "shopping-bag" },
-  { code: "PAYMENT", label: "Payment Problem", icon: "credit-card" },
-  { code: "SHIPPING", label: "Shipping", icon: "truck-delivery" },
-  { code: "RETURNS", label: "Returns & Refunds", icon: "package-variant" },
-  { code: "ACCOUNT", label: "Account Help", icon: "account-circle" },
+  { code: "TECHNICAL", label: "Technical Issue", icon: "build" },
+  { code: "BILLING", label: "Billing", icon: "credit-card" },
+  { code: "ACCOUNT", label: "Account", icon: "account-circle" },
   { code: "OTHER", label: "Other", icon: "help-circle" },
 ];
 
@@ -41,47 +39,28 @@ function TicketContent() {
   const [category, setCategory] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!category || !body.trim()) {
-      Alert.alert("Required", "Please select a category and describe your issue.");
+      setError("Please select a category and describe your issue.");
       return;
     }
 
+    setError(null);
     setSubmitting(true);
     try {
-      const data = await customerFetch<{ ticket: { publicId: string } }>("/support/tickets", {
+      await customerFetch("/support/tickets", {
         method: "POST",
         body: JSON.stringify({ body: body.trim(), category }),
       });
-      setDone(true);
+      router.replace(ROUTES.accountMessages);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to submit ticket.");
+      setError(e.message || "Unable to submit ticket.");
     } finally {
       setSubmitting(false);
     }
   };
-
-  if (done) {
-    return (
-      <View style={[styles.center, { paddingTop: insets.top }]}>
-        <Icon name="check-circle" size={48} color={colors.success} />
-        <AppText variant="heading" style={{ marginTop: spacing[4] }}>
-          Ticket Submitted
-        </AppText>
-        <AppText variant="body" color={colors.muted} align="center" style={{ marginTop: spacing[2], maxWidth: 280 }}>
-          We'll get back to you within 24 hours. Check your messages for updates.
-        </AppText>
-        <AppButton
-          title="View Messages"
-          variant="primary"
-          onPress={() => router.replace("/account/messages")}
-          style={{ marginTop: spacing[6] }}
-        />
-      </View>
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -142,6 +121,15 @@ function TicketContent() {
         <AppText variant="caption" color={colors.muted} align="right">
           {body.length}/2000
         </AppText>
+
+        {error && (
+          <View style={styles.errorBanner}>
+            <Icon name="error-outline" size={18} color={colors.danger} />
+            <AppText variant="caption" color={colors.danger} style={{ flex: 1 }}>
+              {error}
+            </AppText>
+          </View>
+        )}
 
         <AppButton
           title={submitting ? "Submitting..." : "Submit Ticket"}
@@ -204,5 +192,14 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     backgroundColor: colors.white,
     minHeight: 150,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    backgroundColor: "#FEF2F2",
+    borderRadius: borderRadius.lg,
+    padding: spacing[3],
+    marginTop: spacing[3],
   },
 });

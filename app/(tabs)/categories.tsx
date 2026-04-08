@@ -17,6 +17,7 @@ import {
   getCategoryIcon,
   type CategoryLink,
 } from "@/lib/categories";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 type BreadcrumbItem = { id: number; name: string };
@@ -47,7 +48,7 @@ export default function CategoriesScreen() {
       setCategories(children);
       setBreadcrumbs((prev) => [...prev, { id: cat.id, name: cat.name }]);
     } else {
-      router.push(`/category/${cat.slug}`);
+      router.push(ROUTES.category(cat.slug));
     }
     setLoading(false);
   };

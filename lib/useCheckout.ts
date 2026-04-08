@@ -7,6 +7,7 @@ import { API_BASE } from "./config";
 import { useAuth } from "./auth";
 import { useCart } from "./cart";
 import { mergeGuestCart } from "./mergeGuestCart";
+import { ROUTES } from "@/lib/routes";
 import type {
   CheckoutAddress,
   ServerCartResponse,
@@ -17,6 +18,20 @@ import type {
 
 const IDEMPOTENCY_KEY = "wabbus_checkout_idempotency";
 const PENDING_ORDER_KEY = "wabbus_checkout_pending";
+
+const TIMEOUT_CHECKOUT_MS = 30_000;
+const TIMEOUT_CONFIRM_MS = 120_000;
+
+function raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out — please try again.`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 type PendingOrder = {
   orderId: string | number;
@@ -92,6 +107,17 @@ export function useCheckout() {
   const [creditBalanceCents, setCreditBalanceCents] = useState(0);
   const [useStoreCredit, setUseStoreCredit] = useState(false);
 
+  // ── Saved payment methods ──
+  const [savedMethods, setSavedMethods] = useState<Array<{
+    stripePaymentMethodId: string;
+    brand?: string | null;
+    last4?: string | null;
+    expMonth?: number | null;
+    expYear?: number | null;
+    isDefault?: boolean | null;
+  }>>([]);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
+
   // ── Payment state ──
   const [placingOrder, setPlacingOrder] = useState(false);
   const payingRef = useRef(false);
@@ -164,10 +190,11 @@ export function useCheckout() {
       if (isLoggedIn) {
         try { await mergeGuestCart(); } catch { /* best effort */ }
 
-        const [cartData, addrData, creditData] = await Promise.all([
+        const [cartData, addrData, creditData, methodsData] = await Promise.all([
           customerFetch<ServerCartResponse>("/cart").catch(() => null),
           customerFetch<unknown>("/customer-addresses").catch(() => null),
           customerFetch<{ balanceCents?: number }>("/payments/credit-balance").catch(() => null),
+          customerFetch<any>("/payments/methods").catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -183,6 +210,13 @@ export function useCheckout() {
         }
 
         if (creditData?.balanceCents) setCreditBalanceCents(creditData.balanceCents);
+
+        const methods = Array.isArray(methodsData) ? methodsData : methodsData?.paymentMethods ?? [];
+        setSavedMethods(methods);
+        const defaultMethod = methods.find((m: any) => m.isDefault) ?? methods[0];
+        if (defaultMethod?.stripePaymentMethodId) {
+          setSelectedPaymentMethodId(defaultMethod.stripePaymentMethodId);
+        }
       }
 
       if (cancelled) return;
@@ -301,42 +335,50 @@ export function useCheckout() {
         let data: CheckoutResponse;
 
         if (isGuest && guestData) {
-          const res = await fetch(`${API_BASE}/checkout/guest`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Idempotency-Key": idempotencyKeyRef.current,
-            },
-            credentials: "include",
-            body: JSON.stringify({
-              email: guestData.email,
-              shippingAddress: guestData.shippingAddress,
-              billingAddress: guestData.billingAddress,
-              items: guestData.items,
-              useStoreCredit: useStoreCredit || undefined,
-            }),
-          });
+          const guestPromise = (async () => {
+            const res = await fetch(`${API_BASE}/checkout/guest`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Idempotency-Key": idempotencyKeyRef.current,
+              },
+              credentials: "include",
+              body: JSON.stringify({
+                email: guestData.email,
+                shippingAddress: guestData.shippingAddress,
+                billingAddress: guestData.billingAddress,
+                items: guestData.items,
+                useStoreCredit: useStoreCredit || undefined,
+              }),
+            });
 
-          if (!res.ok) {
-            const body = await res.json().catch(() => null);
-            const msg = body?.message ||
-              (res.status === 409
-                ? "Account already exists for that email. Please sign in instead."
-                : "Checkout failed. Please try again.");
-            throw new Error(msg);
-          }
+            if (!res.ok) {
+              const body = await res.json().catch(() => null);
+              const msg = body?.message ||
+                (res.status === 409
+                  ? "Account already exists for that email. Please sign in instead."
+                  : "Checkout failed. Please try again.");
+              throw new Error(msg);
+            }
 
-          data = await res.json();
+            return res.json() as Promise<CheckoutResponse>;
+          })();
+
+          data = await raceTimeout(guestPromise, TIMEOUT_CHECKOUT_MS, "Checkout");
         } else {
-          data = await customerFetch<CheckoutResponse>("/checkout", {
-            method: "POST",
-            headers: { "Idempotency-Key": idempotencyKeyRef.current },
-            body: JSON.stringify({
-              shippingAddressPublicId: shippingAddressId,
-              billingAddressPublicId: billingPublicId || undefined,
-              useStoreCredit: useStoreCredit || undefined,
+          data = await raceTimeout(
+            customerFetch<CheckoutResponse>("/checkout", {
+              method: "POST",
+              headers: { "Idempotency-Key": idempotencyKeyRef.current },
+              body: JSON.stringify({
+                shippingAddressPublicId: shippingAddressId,
+                billingAddressPublicId: billingPublicId || undefined,
+                useStoreCredit: useStoreCredit || undefined,
+              }),
             }),
-          });
+            TIMEOUT_CHECKOUT_MS,
+            "Checkout",
+          );
         }
 
         orderIdentifier = data?.orderPublicId ?? data?.orderId;
@@ -364,7 +406,7 @@ export function useCheckout() {
         // Store credit fully covered — skip Stripe
         if (data?.payment?.status === "PAID") {
           await cleanupAfterOrder();
-          router.replace(`/order-complete?orderId=${orderIdentifier ?? ""}`);
+          router.replace(ROUTES.orderComplete(orderIdentifier ?? ""));
           return;
         }
       }
@@ -372,10 +414,14 @@ export function useCheckout() {
       // Need Stripe payment
       if (requirePaymentMethod && orderIdentifier) {
         if (!clientSecret) {
-          const intentData = await customerFetch<{ clientSecret?: string }>("/payments/create-intent", {
-            method: "POST",
-            body: JSON.stringify({ orderPublicId: orderIdentifier }),
-          });
+          const intentData = await raceTimeout(
+            customerFetch<{ clientSecret?: string }>("/payments/create-intent", {
+              method: "POST",
+              body: JSON.stringify({ orderPublicId: orderIdentifier }),
+            }),
+            TIMEOUT_CHECKOUT_MS,
+            "Payment setup",
+          );
           clientSecret = intentData?.clientSecret ?? null;
         }
 
@@ -404,20 +450,23 @@ export function useCheckout() {
           throw new Error(presentError.message || "Payment failed. Please try again.");
         }
 
-        // Confirm to backend
         try {
-          await customerFetch("/payments/confirm-order", {
-            method: "POST",
-            body: JSON.stringify({ orderPublicId: orderIdentifier }),
-          });
+          await raceTimeout(
+            customerFetch("/payments/confirm-order", {
+              method: "POST",
+              body: JSON.stringify({ orderPublicId: orderIdentifier }),
+            }),
+            TIMEOUT_CONFIRM_MS,
+            "Order confirmation",
+          );
         } catch { /* webhook will handle it */ }
       }
 
       await cleanupAfterOrder();
-      router.replace(`/order-complete?orderId=${orderIdentifier ?? ""}`);
+      router.replace(ROUTES.orderComplete(orderIdentifier ?? ""));
     } catch (e) {
       if (!isGuest && e instanceof AuthError) {
-        router.replace("/(auth)/login");
+        router.replace(ROUTES.login);
         return;
       }
       if (mountedRef.current) {
@@ -493,5 +542,8 @@ export function useCheckout() {
     placingOrder, handlePay,
     canProceedToPayment, canPlaceOrder,
     addressComplete,
+
+    // Saved payment methods
+    savedMethods, selectedPaymentMethodId, setSelectedPaymentMethodId,
   };
 }

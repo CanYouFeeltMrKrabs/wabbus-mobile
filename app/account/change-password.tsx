@@ -21,6 +21,7 @@ import { customerFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "@/lib/constants";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
+import { ROUTES } from "@/lib/routes";
 
 type Step = "request" | "verify" | "change";
 const CODE_LENGTH = 6;
@@ -169,7 +170,7 @@ function ChangePasswordContent() {
       });
       setSuccess(true);
       await logout();
-      setTimeout(() => router.replace("/(auth)/login"), 2000);
+      setTimeout(() => router.replace(ROUTES.login), 2000);
     } catch (e: any) {
       Alert.alert("Error", e.message || "Unable to change password.");
     } finally {

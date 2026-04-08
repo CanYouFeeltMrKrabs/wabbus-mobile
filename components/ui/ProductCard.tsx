@@ -12,6 +12,8 @@ import StarRating from "./StarRating";
 import { BadgeRow } from "./Badge";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { FALLBACK_IMAGE } from "@/lib/config";
+import { productImageUrl, type ImageSize } from "@/lib/image";
+import { ROUTES } from "@/lib/routes";
 import { addToWishlist, removeFromWishlist, isInWishlist, onWishlistUpdate } from "@/lib/wishlist";
 import { showToast } from "@/lib/toast";
 import type { PublicProduct } from "@/lib/types";
@@ -19,11 +21,13 @@ import type { PublicProduct } from "@/lib/types";
 type Props = {
   product: PublicProduct;
   onAddToCart?: (product: PublicProduct) => void;
+  /** Display size for R2 derivatives; wishlist/small sliders may use "thumb". */
+  imageSize?: ImageSize;
 };
 
-export default function ProductCard({ product, onAddToCart }: Props) {
+export default function ProductCard({ product, onAddToCart, imageSize = "card" }: Props) {
   const router = useRouter();
-  const imageUri = product.image || FALLBACK_IMAGE;
+  const imageUri = productImageUrl(product.image, imageSize);
   const hasDiscount =
     product.compareAtPrice != null && Number(product.compareAtPrice) > Number(product.price);
   const [inWishlist, setInWishlist] = useState(false);
@@ -57,7 +61,7 @@ export default function ProductCard({ product, onAddToCart }: Props) {
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-      onPress={() => router.push(`/product/${product.productId}`)}
+      onPress={() => router.push(ROUTES.product(product.productId))}
     >
       {/* Image */}
       <View style={styles.imageWrap}>

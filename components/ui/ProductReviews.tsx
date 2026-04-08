@@ -4,6 +4,7 @@ import AppText from "@/components/ui/AppText";
 import Icon from "@/components/ui/Icon";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { publicFetch } from "@/lib/api";
+import { formatDate } from "@/lib/orderHelpers";
 
 type ReviewUser = { name: string | null };
 type ReviewImage = { id: string; key: string };
@@ -24,11 +25,6 @@ type ReviewSummary = {
   reviewCount: number;
   distribution?: Record<number, number>;
 };
-
-function formatDate(dateString: string) {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
 
 function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
   const r = Math.max(0, Math.min(5, Number(rating || 0)));
@@ -55,7 +51,9 @@ function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
   );
 }
 
-const PAGE_SIZE = 10;
+import { PAGE_SIZE as PAGE_SIZES } from "@/lib/constants";
+
+const PAGE_SIZE = PAGE_SIZES.REVIEWS;
 
 export default function ProductReviews({ productId }: { productId: string }) {
   const [reviews, setReviews] = useState<PublicReview[]>([]);

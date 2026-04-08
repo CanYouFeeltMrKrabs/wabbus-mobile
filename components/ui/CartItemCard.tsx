@@ -1,11 +1,15 @@
 import React, { useState } from "react";
 import { View, Image, Pressable, StyleSheet } from "react-native";
+import { useRouter } from "expo-router";
 import AppText from "@/components/ui/AppText";
 import Icon from "@/components/ui/Icon";
 import { formatMoney } from "@/lib/money";
-import { FALLBACK_IMAGE } from "@/lib/config";
+import { productImageUrl } from "@/lib/image";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { CartItem } from "@/lib/types";
+
+const MAX_CART_QTY = 99;
 
 interface CartItemCardProps {
   item: CartItem;
@@ -16,42 +20,67 @@ interface CartItemCardProps {
 
 export default function CartItemCard({ item, onUpdateQty, onRemove, onSaveForLater }: CartItemCardProps) {
   const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const lineTotal = item.unitPriceCents * item.quantity;
+  const atMax = item.quantity >= MAX_CART_QTY;
+
+  const navigateToProduct = () => {
+    if (item.productId) router.push(ROUTES.product(item.productId));
+  };
 
   return (
     <View style={styles.card}>
       <View style={styles.row}>
-        <Image
-          source={{ uri: item.image || FALLBACK_IMAGE }}
-          style={styles.image}
-          resizeMode="cover"
-        />
+        <Pressable onPress={navigateToProduct}>
+          <Image
+            source={{ uri: productImageUrl(item.image, "thumb") }}
+            style={styles.image}
+            resizeMode="cover"
+          />
+        </Pressable>
         <View style={styles.content}>
           <View style={styles.headerRow}>
-            <AppText variant="label" numberOfLines={2} style={styles.title}>
-              {item.title}
-            </AppText>
+            <Pressable onPress={navigateToProduct} style={{ flex: 1 }}>
+              <AppText variant="label" numberOfLines={2} style={styles.title}>
+                {item.title}
+              </AppText>
+            </Pressable>
             <AppText variant="label" weight="semibold" style={styles.price}>
-              {formatMoney(item.unitPriceCents)}
+              {formatMoney(lineTotal)}
             </AppText>
           </View>
+
+          {item.variantLabel && (
+            <AppText variant="caption" color={colors.slate500} style={{ marginTop: spacing[0.5] }}>
+              {item.variantLabel}
+            </AppText>
+          )}
+
+          {item.vendorName && (
+            <AppText variant="caption" color={colors.slate400} style={{ marginTop: spacing[0.5] }} numberOfLines={1}>
+              Sold by <AppText variant="caption" color={colors.slate500} weight="medium">{item.vendorName}</AppText>
+            </AppText>
+          )}
 
           <View style={styles.qtyRow}>
             <AppText variant="caption" color={colors.muted}>Qty:</AppText>
             <View style={styles.qtyBox}>
               <Pressable
-                style={styles.qtyBtn}
-                onPress={() => item.quantity > 1 ? onUpdateQty(item.publicId, item.quantity - 1) : onRemove(item.publicId)}
+                style={[styles.qtyBtn, item.quantity <= 1 && styles.qtyBtnDisabled]}
+                onPress={() => item.quantity > 1 ? onUpdateQty(item.publicId, item.quantity - 1) : undefined}
+                disabled={item.quantity <= 1}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Icon name="remove" size={16} color={colors.foreground} />
+                <Icon name="remove" size={16} color={item.quantity <= 1 ? colors.slate300 : colors.foreground} />
               </Pressable>
               <AppText variant="label" style={styles.qtyValue}>{item.quantity}</AppText>
               <Pressable
-                style={styles.qtyBtn}
-                onPress={() => onUpdateQty(item.publicId, item.quantity + 1)}
+                style={[styles.qtyBtn, atMax && styles.qtyBtnDisabled]}
+                onPress={() => !atMax ? onUpdateQty(item.publicId, item.quantity + 1) : undefined}
+                disabled={atMax}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Icon name="add" size={16} color={colors.foreground} />
+                <Icon name="add" size={16} color={atMax ? colors.slate300 : colors.foreground} />
               </Pressable>
             </View>
           </View>
@@ -82,7 +111,7 @@ export default function CartItemCard({ item, onUpdateQty, onRemove, onSaveForLat
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.card,
-    borderRadius: 12, // Web matches exactly 12px
+    borderRadius: 12,
     padding: spacing[4],
     borderWidth: 1,
     borderColor: "rgba(10, 68, 151, 0.2)",
@@ -143,6 +172,9 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: "center",
     justifyContent: "center",
+  },
+  qtyBtnDisabled: {
+    opacity: 0.4,
   },
   qtyValue: {
     width: 40,

@@ -14,6 +14,7 @@ import {
   CATEGORY_SHORT_NAMES,
   type CategoryLink,
 } from "@/lib/categories";
+import { ROUTES } from "@/lib/routes";
 
 export default function TopCategoriesBar() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function TopCategoriesBar() {
           <Pressable
             key={c.slug}
             style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
-            onPress={() => router.push(`/category/${c.slug}`)}
+            onPress={() => router.push(ROUTES.category(c.slug))}
           >
             <Icon
               name={getCategoryIcon(c.slug)}

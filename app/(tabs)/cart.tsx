@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import { View, FlatList, StyleSheet } from "react-native";
+import { View, FlatList, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
@@ -8,9 +8,11 @@ import Icon from "@/components/ui/Icon";
 import CartItemCard from "@/components/ui/CartItemCard";
 import CartSummary from "@/components/ui/CartSummary";
 import CartRecommendations from "@/components/ui/CartRecommendations";
+import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
 import { useCart } from "@/lib/cart";
 import { addToWishlist } from "@/lib/wishlist";
 import { FALLBACK_IMAGE } from "@/lib/config";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing } from "@/lib/theme";
 import type { CartItem } from "@/lib/types";
 
@@ -42,26 +44,37 @@ export default function CartScreen() {
   );
 
   const handleCheckout = () => {
-    router.push("/checkout");
+    router.push(ROUTES.checkout);
   };
 
   if (items.length === 0) {
     return (
-      <View style={[styles.emptyScreen, { paddingTop: insets.top }]}>
-        <Icon name="shopping-cart" size={64} color={colors.gray300} />
-        <AppText variant="title" color={colors.muted} style={styles.emptyTitle}>
-          Your cart is empty
-        </AppText>
-        <AppText variant="body" color={colors.mutedLight} align="center">
-          Browse products and add items to get started.
-        </AppText>
-        <AppButton
-          title="Start Shopping"
-          variant="accent"
-          onPress={() => router.replace("/")}
-          style={styles.emptyBtn}
+      <ScrollView
+        style={[styles.emptyScrollRoot, { paddingTop: insets.top }]}
+        contentContainerStyle={styles.emptyScrollContent}
+      >
+        <View style={styles.emptyHero}>
+          <Icon name="shopping-cart" size={64} color={colors.gray300} />
+          <AppText variant="title" color={colors.muted} style={styles.emptyTitle}>
+            Your cart is empty
+          </AppText>
+          <AppText variant="body" color={colors.mutedLight} align="center">
+            Browse our products and add items to your cart.
+          </AppText>
+          <AppButton
+            title="Continue Shopping"
+            variant="accent"
+            onPress={() => router.push(ROUTES.homeFeed)}
+            icon="arrow-forward"
+            style={styles.emptyBtn}
+          />
+        </View>
+        <ProductRecommendationSlider
+          title="Trending Now"
+          apiUrl="/recommendations?context=home&strategy=trending&take=10"
+          accentColor={colors.rose500}
         />
-      </View>
+      </ScrollView>
     );
   }
 
@@ -115,12 +128,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     paddingBottom: 220, // Enough padding to scroll past the newly sticky footer
   },
-  emptyScreen: {
+  emptyScrollRoot: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  emptyScrollContent: {
+    paddingBottom: spacing[10],
+  },
+  emptyHero: {
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing[8],
+    paddingTop: spacing[16],
+    paddingBottom: spacing[8],
     gap: spacing[3],
   },
   emptyTitle: {

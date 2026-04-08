@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { customerFetch, onAuthLogout, NetworkError, AuthError } from "./api";
 import { runPostAuthActions } from "./postAuthActions";
+import { sendTokenToBackend, deregisterToken } from "./notifications";
 import { API_BASE } from "./config";
 import type { Customer } from "./types";
 
@@ -19,8 +20,6 @@ type AuthState = {
 type RegisterData = {
   email: string;
   password: string;
-  firstName: string;
-  lastName: string;
 };
 
 const AuthContext = createContext<AuthState>({
@@ -82,12 +81,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      const msg = data?.message || (res.status === 401 ? "Invalid email or password." : "Login failed.");
+
+      if (data?.code === "EMAIL_NOT_VERIFIED") {
+        throw new Error("Please verify your email address before signing in. Check your inbox for a verification link.");
+      }
+      if (res.status === 429) {
+        const serverMsg = typeof data?.message === "string" && data.message.trim() ? data.message : null;
+        throw new Error(serverMsg || "Too many login attempts. Please wait a moment and try again.");
+      }
+      if (res.status === 423) {
+        throw new Error("Your account has been temporarily locked. Please try again later or contact support.");
+      }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("Invalid email or password.");
+      }
+      if (res.status >= 500) {
+        throw new Error("Our servers are temporarily unavailable. Please try again shortly.");
+      }
+
+      const msg = typeof data?.message === "string" && data.message.trim() ? data.message : "Login failed. Please try again.";
       throw new Error(msg);
     }
 
     await fetchMe();
     runPostAuthActions().catch(() => {});
+    sendTokenToBackend().catch(() => {});
   }, [fetchMe]);
 
   const register = useCallback(async (data: RegisterData) => {
@@ -95,20 +113,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ email: data.email, password: data.password }),
     });
 
     if (!res.ok) {
       const body = await res.json().catch(() => null);
-      const msg = body?.message || "Registration failed.";
+      const serverMsg = typeof body?.message === "string" && body.message.trim() ? body.message : null;
+      let msg = "Registration failed. Please try again.";
+      if (res.status === 409) {
+        msg = "An account with this email already exists.";
+      } else if (res.status === 422) {
+        msg = serverMsg || "Please check your email and password.";
+      } else if (serverMsg) {
+        msg = serverMsg;
+      }
       throw new Error(msg);
     }
 
     await fetchMe();
     runPostAuthActions().catch(() => {});
+    sendTokenToBackend().catch(() => {});
   }, [fetchMe]);
 
   const logout = useCallback(async () => {
+    deregisterToken().catch(() => {});
     try {
       await customerFetch("/customer-auth/logout", { method: "POST" });
     } catch {

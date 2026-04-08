@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import Icon from "@/components/ui/Icon";
 import TicketThread from "@/components/TicketThread";
+import { formatDate } from "@/lib/orderHelpers";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { CustomerCase } from "@/lib/messages-types";
 
@@ -175,10 +176,7 @@ export default function FamilyDetailPanel({
                   {summary ? ` · ${summary}` : ""}
                 </AppText>
                 <AppText variant="caption">
-                  {new Date(c.createdAt).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                  })}
+                  {formatDate(c.createdAt)}
                 </AppText>
               </View>
             </Pressable>

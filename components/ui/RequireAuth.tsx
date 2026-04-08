@@ -9,6 +9,7 @@ import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth, type AuthStatus } from "@/lib/auth";
 import { colors } from "@/lib/theme";
+import { ROUTES } from "@/lib/routes";
 
 type Props = {
   children: React.ReactNode;
@@ -21,7 +22,7 @@ export default function RequireAuth({ children, fallback }: Props) {
 
   React.useEffect(() => {
     if (authStatus === "unauthenticated") {
-      router.replace("/(auth)/login");
+      router.replace(ROUTES.login);
     }
   }, [authStatus, router]);
 

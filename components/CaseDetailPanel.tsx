@@ -16,6 +16,8 @@ import Icon from "@/components/ui/Icon";
 import TicketThread from "@/components/TicketThread";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
+import { formatDate } from "@/lib/orderHelpers";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import { pickDocument, uploadFileAuth, type PickedFile } from "@/lib/fileUpload";
 import type { CustomerCaseDetail } from "@/lib/messages-types";
@@ -238,10 +240,7 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
         <View style={[styles.chip, { backgroundColor: colors.gray100 }]}>
           <Icon name="calendar-today" size={10} color={colors.gray500} />
           <AppText variant="caption" color={colors.gray500}>
-            {new Date(detail.createdAt).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-            })}
+            {formatDate(detail.createdAt)}
           </AppText>
         </View>
       </View>
@@ -345,7 +344,7 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
               </View>
               <AppText variant="caption" style={{ marginTop: spacing[1] }}>
                 Initiated{" "}
-                {new Date(detail.refund.createdAt).toLocaleDateString()}
+                {formatDate(detail.refund.createdAt)}
               </AppText>
             </View>
           </View>
@@ -446,7 +445,7 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
           onPress={() => {
             onClose();
             setTimeout(() => {
-              router.push(`/account/messages/case/${caseNumber}` as any);
+              router.push(ROUTES.accountCase(caseNumber) as any);
             }, 300);
           }}
         >

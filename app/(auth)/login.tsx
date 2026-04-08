@@ -6,7 +6,6 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,6 +15,7 @@ import Icon from "@/components/ui/Icon";
 import { useAuth } from "@/lib/auth";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
 import { MAX_PASSWORD_LENGTH } from "@/lib/constants";
+import { ROUTES } from "@/lib/routes";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -25,15 +25,17 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) return;
+    setError(null);
     setLoading(true);
     try {
       await login(email.trim(), password);
       router.back();
     } catch (e: any) {
-      Alert.alert("Login Failed", e.message || "Invalid email or password.");
+      setError(e.message || "Invalid email or password.");
     } finally {
       setLoading(false);
     }
@@ -64,6 +66,13 @@ export default function LoginScreen() {
         <AppText variant="body" color={colors.muted} align="center" style={styles.sub}>
           Sign in to your Wabbus account
         </AppText>
+
+        {error && (
+          <View style={styles.errorBanner}>
+            <Icon name="error-outline" size={18} color={colors.error} />
+            <AppText variant="caption" color={colors.error} style={{ flex: 1 }}>{error}</AppText>
+          </View>
+        )}
 
         {/* Email */}
         <View style={styles.field}>
@@ -113,7 +122,7 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <Pressable onPress={() => router.push("/(auth)/forgot-password")} style={styles.forgotWrap}>
+        <Pressable onPress={() => router.push(ROUTES.forgotPassword)} style={styles.forgotWrap}>
           <AppText variant="label" color={colors.brandBlue}>
             Forgot password?
           </AppText>
@@ -133,7 +142,7 @@ export default function LoginScreen() {
           <AppText variant="body" color={colors.muted}>
             Don&apos;t have an account?{" "}
           </AppText>
-          <Pressable onPress={() => router.replace("/(auth)/register")}>
+          <Pressable onPress={() => router.replace(ROUTES.register)}>
             <AppText variant="body" color={colors.brandOrange} weight="bold">
               Create one
             </AppText>
@@ -160,7 +169,11 @@ const styles = StyleSheet.create({
   },
 
   sub: { marginTop: spacing[1], marginBottom: spacing[6] },
-
+  errorBanner: {
+    flexDirection: "row", alignItems: "center", gap: spacing[2],
+    backgroundColor: "#fee2e2", borderRadius: borderRadius.lg,
+    padding: spacing[3], marginBottom: spacing[4],
+  },
   field: { marginBottom: spacing[4] },
   fieldLabel: { marginBottom: spacing[1.5] },
   input: {
