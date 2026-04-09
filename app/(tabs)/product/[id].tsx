@@ -9,6 +9,7 @@
  * - Vendor products, FBT, Also Viewed, Similar, Suggestions, Recently Viewed
  */
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   View,
   ScrollView,
@@ -207,12 +208,12 @@ export default function ProductDetailScreen() {
   const specRows = useMemo(() => product ? buildSpecRows(product) : [], [product]);
   const visibleSpecs = specsExpanded ? specRows : specRows.slice(0, INITIAL_SPECS_SHOWN);
 
-  const VEL_SMOOTH = 0.9;
-  const SHOW_VEL = -0.11;
-  const HIDE_VEL = 0.14;
-  const MIN_BAR_MS = 520;
-  const TOGGLE_COOLDOWN_MS = 400;
-  const PASS_MARGIN = 12;
+  const VEL_SMOOTH = 0.92;
+  const SHOW_VEL = -0.14;
+  const HIDE_VEL = 0.18;
+  const MIN_BAR_MS = 900;
+  const TOGGLE_COOLDOWN_MS = 600;
+  const PASS_MARGIN = 24;
   const REVEAL_BELOW_NAV = 80;
 
   const stickyPayload = useMemo(() => {
@@ -300,11 +301,15 @@ export default function ProductDetailScreen() {
     }
   }, [product, stickyPayload]);
 
-  useEffect(() => {
-    return () => {
-      DeviceEventEmitter.emit("toggleStickyCart", { payload: null, visible: false });
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        isStickyVisible.current = false;
+        hasSeenBuyBox.current = false;
+        DeviceEventEmitter.emit("toggleStickyCart", { payload: null, visible: false });
+      };
+    }, []),
+  );
 
   const dwellMountRef = useRef(0);
   useEffect(() => {
@@ -379,7 +384,6 @@ export default function ProductDetailScreen() {
         productId: product?.productId ?? "",
         slug: product?.slug ?? "",
       });
-      Alert.alert(t("product.addedToCart"), t("product.addedToCartBody", { title: product?.title, qty }));
     } catch {
       Alert.alert(t("common.error"), t("product.errorAddToCart"));
     } finally {
@@ -520,21 +524,6 @@ export default function ProductDetailScreen() {
             </AppText>
           </View>
 
-          {/* Returns */}
-          <View style={styles.infoRow}>
-            <Icon name="replay" size={16} color={colors.slate600} />
-            <View>
-              <AppText variant="body" weight="bold" color={colors.foreground}>{t("product.thirtyDayReturns")}</AppText>
-              <AppText variant="caption" color={colors.slate600}>{t("product.easyReturns")}</AppText>
-            </View>
-          </View>
-
-          {/* Secure transaction */}
-          <View style={styles.infoRow}>
-            <Icon name="lock" size={16} color={colors.success} />
-            <AppText variant="body" color={colors.slate600}>{t("product.secureTransaction")}</AppText>
-          </View>
-
           <BadgeRow badges={product.badges} />
 
           {/* Quantity + ATC */}
@@ -551,11 +540,27 @@ export default function ProductDetailScreen() {
             <AppButton
               title={inStock ? t("product.addToCart") : t("product.outOfStock")}
               variant="accent"
+              size="lg"
               onPress={handleAddToCart}
               loading={adding}
               disabled={!inStock}
               style={{ marginTop: spacing[6] }}
             />
+          </View>
+
+          {/* Returns */}
+          <View style={styles.infoRow}>
+            <Icon name="replay" size={16} color={colors.slate600} />
+            <View>
+              <AppText variant="body" weight="bold" color={colors.foreground}>{t("product.thirtyDayReturns")}</AppText>
+              <AppText variant="caption" color={colors.slate600}>{t("product.easyReturns")}</AppText>
+            </View>
+          </View>
+
+          {/* Secure transaction */}
+          <View style={styles.infoRow}>
+            <Icon name="lock" size={16} color={colors.success} />
+            <AppText variant="body" color={colors.slate600}>{t("product.secureTransaction")}</AppText>
           </View>
 
           {/* Key Features */}

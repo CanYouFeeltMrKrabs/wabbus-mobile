@@ -21,6 +21,7 @@ import {
   StyleSheet,
   Dimensions,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
@@ -138,6 +139,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
+      <StatusBar style="light" />
       {/* Sticky search header */}
       <View style={[styles.searchHeader, { paddingTop: insets.top + spacing[2] }]}>
         <SearchBar editable={false} onPress={() => router.push(ROUTES.search)} />
@@ -146,6 +148,7 @@ export default function HomeScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        style={styles.scrollView}
       >
         <TopCategoriesBar />
         <HeroCarousel />
@@ -317,7 +320,8 @@ function SectionHeader({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
+  screen: { flex: 1, backgroundColor: colors.brandBlue },
+  scrollView: { backgroundColor: colors.background },
   searchHeader: {
     backgroundColor: colors.brandBlue,
     paddingHorizontal: spacing[4],

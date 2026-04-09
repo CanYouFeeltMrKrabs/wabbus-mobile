@@ -131,7 +131,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.white },
   close: { position: "absolute", top: 56, left: spacing[4], zIndex: 10 },
-  body: { paddingHorizontal: spacing[6], paddingTop: spacing[16], paddingBottom: spacing[10] },
+  body: { flexGrow: 1, paddingHorizontal: spacing[6], justifyContent: "center", paddingBottom: spacing[10] },
   logoWrap: { alignItems: "center", marginBottom: spacing[6] },
   logo: { width: 64, height: 64, borderRadius: 20, backgroundColor: colors.brandOrange, alignItems: "center", justifyContent: "center" },
   sub: { marginTop: spacing[1], marginBottom: spacing[6] },

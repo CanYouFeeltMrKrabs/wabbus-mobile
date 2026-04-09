@@ -5,7 +5,7 @@
  * A sticky "Add to Cart" bar slides up above the tab bar when the PDP emits
  * toggleStickyCart — matching the web StickyMobileCart behavior.
  */
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { View, Image, Pressable, StyleSheet, Animated, Easing, DeviceEventEmitter } from "react-native";
 import { Tabs, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -39,12 +39,37 @@ const STICKY_BAR_HEIGHT = 56;
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const { itemCount, addToCart } = useCart();
 
   const [stickyData, setStickyData] = useState<StickyPayload | null>(null);
   const stickyVisible = useRef(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(1)).current;
+
+  const dismissBar = useCallback(() => {
+    stickyVisible.current = false;
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 1,
+        duration: 250,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(() => setStickyData(null));
+  }, [fadeAnim, slideAnim]);
+
+  useEffect(() => {
+    if (!pathname.includes("/product/") && stickyVisible.current) {
+      dismissBar();
+    }
+  }, [pathname, dismissBar]);
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener("toggleStickyCart", ({ payload, visible }) => {
@@ -55,33 +80,27 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
-            duration: 220,
-            easing: Easing.out(Easing.cubic),
+            duration: 260,
+            easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),
-          Animated.timing(slideAnim, {
+          Animated.spring(slideAnim, {
             toValue: 0,
-            duration: 260,
-            easing: Easing.out(Easing.cubic),
+            tension: 80,
+            friction: 10,
             useNativeDriver: true,
           }),
         ]).start();
       } else if (!visible && stickyVisible.current) {
-        stickyVisible.current = false;
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 180,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }).start(() => setStickyData(null));
+        dismissBar();
       }
     });
     return () => sub.remove();
-  }, [fadeAnim, slideAnim]);
+  }, [fadeAnim, slideAnim, dismissBar]);
 
   const stickyTranslateY = slideAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 10],
+    outputRange: [0, STICKY_BAR_HEIGHT],
   });
 
   const handleAdd = async () => {

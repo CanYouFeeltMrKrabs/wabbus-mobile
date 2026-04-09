@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
   imageCard: {
     backgroundColor: colors.white,
     marginHorizontal: spacing[4],
-    marginTop: 100, // Make room for back button above card
+    marginTop: 52,
     borderRadius: borderRadius.lg,
     overflow: "hidden",
     borderWidth: 1,
