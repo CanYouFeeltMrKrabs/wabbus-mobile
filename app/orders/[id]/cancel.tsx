@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   ScrollView,
@@ -11,23 +11,19 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
+import { pickItemTitle, pickItemImage, pickUnitPriceCents } from "@/lib/orderHelpers";
 import { FALLBACK_IMAGE } from "@/lib/config";
+import { queryKeys } from "@/lib/queryKeys";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import type { Order, OrderItem, CancelReasonCode } from "@/lib/types";
-
-const REASONS: { code: CancelReasonCode; label: string }[] = [
-  { code: "CHANGED_MIND", label: "Changed my mind" },
-  { code: "FOUND_CHEAPER", label: "Found a better price" },
-  { code: "ORDERED_WRONG", label: "Ordered by mistake" },
-  { code: "NO_LONGER_NEEDED", label: "No longer needed" },
-  { code: "OTHER", label: "Other" },
-];
 
 export default function CancelOrderScreen() {
   return (
@@ -38,27 +34,33 @@ export default function CancelOrderScreen() {
 }
 
 function CancelContent() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const REASONS: { code: CancelReasonCode; label: string }[] = [
+    { code: "CHANGED_MIND", label: t("accountOrders.cancel.reasonChangedMind") },
+    { code: "FOUND_CHEAPER", label: t("accountOrders.cancel.reasonFoundCheaper") },
+    { code: "ORDERED_WRONG", label: t("accountOrders.cancel.reasonOrderedWrong") },
+    { code: "NO_LONGER_NEEDED", label: t("accountOrders.cancel.reasonNoLongerNeeded") },
+    { code: "OTHER", label: t("accountOrders.cancel.reasonOther") },
+  ];
+  const { data: orderData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.orders.detail(id!),
+    queryFn: () => customerFetch<any>(`/orders/${id}`),
+    enabled: !!id,
+  });
+  const order = (orderData?.order ?? orderData ?? null) as Order | null;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState<CancelReasonCode | null>(null);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  useEffect(() => {
-    if (!id) return;
-    customerFetch<any>(`/orders/${id}`)
-      .then((data) => setOrder(data.order ?? data))
-      .catch(() => setOrder(null))
-      .finally(() => setLoading(false));
-  }, [id]);
-
   const cancellableItems = (order?.items || []).filter(
-    (item) => !["CANCELLED", "SHIPPED", "DELIVERED"].includes(item.status),
+    (item) => !["CANCELLED", "SHIPPED", "DELIVERED"].includes(item.status ?? ""),
   );
 
   const toggleItem = (publicId: string) => {
@@ -71,8 +73,8 @@ function CancelContent() {
   };
 
   const estimatedRefund = cancellableItems
-    .filter((i) => selected.has(i.publicId))
-    .reduce((sum, i) => sum + i.unitPriceCents * i.quantity, 0);
+    .filter((i) => selected.has(i.publicId ?? ""))
+    .reduce((sum, i) => sum + pickUnitPriceCents(i) * (i.quantity ?? 0), 0);
 
   const handleSubmit = async () => {
     if (!reason || selected.size === 0) return;
@@ -87,9 +89,11 @@ function CancelContent() {
           }).catch(() => {}),
         );
       await Promise.all(promises);
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(id!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all() });
       setDone(true);
     } catch {
-      Alert.alert("Error", "Something went wrong. Please try again.");
+      Alert.alert(t("common.error"), t("accountOrders.cancel.errorSubmit"));
     } finally {
       setSubmitting(false);
     }
@@ -108,9 +112,9 @@ function CancelContent() {
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="cancel" size={48} color={colors.gray300} />
         <AppText variant="subtitle" color={colors.muted} align="center" style={{ marginTop: spacing[3] }}>
-          {!order ? "Order not found" : "This order can no longer be cancelled."}
+          {!order ? t("orders.notFound") : t("accountOrders.cancel.cannotCancel")}
         </AppText>
-        <AppButton title="Go Back" variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
+        <AppButton title={t("orders.goBack")} variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -120,12 +124,12 @@ function CancelContent() {
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="check-circle" size={48} color={colors.success} />
         <AppText variant="heading" style={{ marginTop: spacing[4] }}>
-          Cancellation Requested
+          {t("accountOrders.cancel.successHeading")}
         </AppText>
         <AppText variant="body" color={colors.muted} align="center" style={{ marginTop: spacing[2], maxWidth: 280 }}>
-          {selected.size} item{selected.size > 1 ? "s" : ""} cancelled. Estimated refund: {formatMoney(estimatedRefund)}
+          {t("accountOrders.cancel.successBody", { count: selected.size, amount: formatMoney(estimatedRefund) })}
         </AppText>
-        <AppButton title="Back to Order" variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[6] }} />
+        <AppButton title={t("accountOrders.cancel.backToOrder")} variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[6] }} />
       </View>
     );
   }
@@ -134,40 +138,41 @@ function CancelContent() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Cancel Items</AppText>
+        <AppText variant="title">{t("accountOrders.cancel.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppText variant="body" color={colors.muted} style={styles.desc}>
-          Select the items you want to cancel.
+          {t("accountOrders.cancel.subtitle")}
         </AppText>
 
         {cancellableItems.length === 0 ? (
           <AppText variant="body" color={colors.muted} align="center" style={{ marginTop: spacing[6] }}>
-            No items are eligible for cancellation.
+            {t("accountOrders.cancel.noEligible")}
           </AppText>
         ) : (
           <>
             {cancellableItems.map((item) => {
-              const isSelected = selected.has(item.publicId);
+              const pid = item.publicId ?? "";
+              const isSelected = selected.has(pid);
               return (
-                <Pressable key={item.publicId} onPress={() => toggleItem(item.publicId)} style={[styles.itemCard, isSelected && styles.itemSelected]}>
+                <Pressable key={pid} onPress={() => toggleItem(pid)} style={[styles.itemCard, isSelected && styles.itemSelected]}>
                   <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
                     {isSelected && <Icon name="check" size={14} color={colors.white} />}
                   </View>
-                  <Image source={{ uri: item.image || FALLBACK_IMAGE }} style={styles.itemImg} resizeMode="cover" />
+                  <Image source={{ uri: pickItemImage(item) || FALLBACK_IMAGE }} style={styles.itemImg} resizeMode="cover" />
                   <View style={styles.itemInfo}>
-                    <AppText variant="label" numberOfLines={2}>{item.title}</AppText>
-                    <AppText variant="caption">Qty: {item.quantity}</AppText>
-                    <AppText variant="priceSmall">{formatMoney(item.unitPriceCents * item.quantity)}</AppText>
+                    <AppText variant="label" numberOfLines={2}>{pickItemTitle(item)}</AppText>
+                    <AppText variant="caption">{t("orders.qtyLabel", { count: item.quantity ?? 0 })}</AppText>
+                    <AppText variant="priceSmall">{formatMoney(pickUnitPriceCents(item) * (item.quantity ?? 0))}</AppText>
                   </View>
                 </Pressable>
               );
             })}
 
             <AppText variant="subtitle" style={styles.sectionTitle}>
-              Reason for cancellation
+              {t("accountOrders.cancel.reasonHeading")}
             </AppText>
             {REASONS.map((r) => (
               <Pressable key={r.code} onPress={() => setReason(r.code)} style={[styles.reasonRow, reason === r.code && styles.reasonSelected]}>
@@ -181,7 +186,7 @@ function CancelContent() {
                 style={styles.noteInput}
                 value={note}
                 onChangeText={setNote}
-                placeholder="Tell us more (optional)"
+                placeholder={t("accountOrders.cancel.notePlaceholder")}
                 placeholderTextColor={colors.mutedLight}
                 multiline
                 maxLength={500}
@@ -190,13 +195,13 @@ function CancelContent() {
 
             {selected.size > 0 && (
               <View style={styles.summaryCard}>
-                <AppText variant="label">Estimated refund</AppText>
+                <AppText variant="label">{t("accountOrders.cancel.estimatedRefund")}</AppText>
                 <AppText variant="price">{formatMoney(estimatedRefund)}</AppText>
               </View>
             )}
 
             <AppButton
-              title={submitting ? "Cancelling..." : `Cancel ${selected.size} Item${selected.size !== 1 ? "s" : ""}`}
+              title={submitting ? t("accountOrders.cancel.cancelling") : t("accountOrders.cancel.cancelNItems", { count: selected.size })}
               variant="danger"
               fullWidth
               size="lg"

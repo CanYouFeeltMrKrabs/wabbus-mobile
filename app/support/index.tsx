@@ -2,6 +2,7 @@ import React from "react";
 import { View, Pressable, StyleSheet, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -9,13 +10,15 @@ import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 const SUPPORT_OPTIONS = [
-  { icon: "chat", title: "Live Chat", desc: "Chat with our support team", route: ROUTES.supportLiveChat },
-  { icon: "email", title: "Submit a Ticket", desc: "We'll get back to you within 24h", route: ROUTES.supportTicket },
-  { icon: "message-text", title: "My Messages", desc: "View conversations & cases", route: ROUTES.accountMessages },
-  { icon: "shopping-outline", title: "My Orders", desc: "Track, return, or cancel orders", route: ROUTES.orders },
+  { icon: "chat", titleKey: "support.optLiveChat", descKey: "support.optLiveChatDesc", route: ROUTES.supportLiveChat },
+  { icon: "email", titleKey: "support.optSubmitTicket", descKey: "support.optSubmitTicketDesc", route: ROUTES.supportTicket },
+  { icon: "storefront", titleKey: "support.optSellerMessages", descKey: "support.optSellerMessagesDesc", route: ROUTES.supportMessageSellerAll },
+  { icon: "message-text", titleKey: "support.optMyMessages", descKey: "support.optMyMessagesDesc", route: ROUTES.accountMessages },
+  { icon: "shopping-outline", titleKey: "support.optMyOrders", descKey: "support.optMyOrdersDesc", route: ROUTES.orders },
 ];
 
 export default function SupportScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -23,16 +26,16 @@ export default function SupportScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Support</AppText>
+        <AppText variant="title">{t("support.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.heroCard}>
           <Icon name="support-agent" size={40} color={colors.brandBlue} />
-          <AppText variant="title" style={styles.heroTitle}>How can we help?</AppText>
+          <AppText variant="title" style={styles.heroTitle}>{t("support.heroTitle")}</AppText>
           <AppText variant="body" color={colors.muted} align="center">
-            We&apos;re here to help with your orders, returns, and any questions.
+            {t("support.heroSubtitle")}
           </AppText>
         </View>
 
@@ -46,8 +49,8 @@ export default function SupportScreen() {
               <Icon name={opt.icon} size={24} color={colors.brandBlue} />
             </View>
             <View style={styles.optionText}>
-              <AppText variant="label">{opt.title}</AppText>
-              <AppText variant="caption">{opt.desc}</AppText>
+              <AppText variant="label">{t(opt.titleKey)}</AppText>
+              <AppText variant="caption">{t(opt.descKey)}</AppText>
             </View>
             <Icon name="chevron-right" size={20} color={colors.gray400} />
           </Pressable>

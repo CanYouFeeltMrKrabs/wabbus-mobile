@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -18,6 +19,7 @@ import { MAX_PASSWORD_LENGTH } from "@/lib/constants";
 import { ROUTES } from "@/lib/routes";
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { login } = useAuth();
@@ -35,7 +37,7 @@ export default function LoginScreen() {
       await login(email.trim(), password);
       router.back();
     } catch (e: any) {
-      setError(e.message || "Invalid email or password.");
+      setError(e.message || t("auth.login.errorBadCredentials"));
     } finally {
       setLoading(false);
     }
@@ -61,10 +63,10 @@ export default function LoginScreen() {
         </View>
 
         <AppText variant="heading" align="center">
-          Welcome Back
+          {t("auth.login.welcomeBack")}
         </AppText>
         <AppText variant="body" color={colors.muted} align="center" style={styles.sub}>
-          Sign in to your Wabbus account
+          {t("auth.login.subtitle")}
         </AppText>
 
         {error && (
@@ -77,13 +79,13 @@ export default function LoginScreen() {
         {/* Email */}
         <View style={styles.field}>
           <AppText variant="label" style={styles.fieldLabel}>
-            Email
+            {t("auth.login.emailLabel")}
           </AppText>
           <TextInput
             style={styles.input}
             value={email}
             onChangeText={setEmail}
-            placeholder="you@example.com"
+            placeholder={t("auth.login.emailPlaceholder")}
             placeholderTextColor={colors.mutedLight}
             keyboardType="email-address"
             autoCapitalize="none"
@@ -95,14 +97,14 @@ export default function LoginScreen() {
         {/* Password */}
         <View style={styles.field}>
           <AppText variant="label" style={styles.fieldLabel}>
-            Password
+            {t("auth.login.passwordLabel")}
           </AppText>
           <View style={styles.passwordRow}>
             <TextInput
               style={[styles.input, styles.passwordInput]}
               value={password}
               onChangeText={setPassword}
-              placeholder="Enter your password"
+              placeholder={t("auth.login.passwordPlaceholder")}
               placeholderTextColor={colors.mutedLight}
               secureTextEntry={!showPassword}
               autoComplete="password"
@@ -124,12 +126,12 @@ export default function LoginScreen() {
 
         <Pressable onPress={() => router.push(ROUTES.forgotPassword)} style={styles.forgotWrap}>
           <AppText variant="label" color={colors.brandBlue}>
-            Forgot password?
+            {t("auth.login.forgotPassword")}
           </AppText>
         </Pressable>
 
         <AppButton
-          title="Sign In"
+          title={t("auth.login.signIn")}
           variant="primary"
           fullWidth
           size="lg"
@@ -140,11 +142,11 @@ export default function LoginScreen() {
 
         <View style={styles.registerRow}>
           <AppText variant="body" color={colors.muted}>
-            Don&apos;t have an account?{" "}
+            {t("auth.login.noAccount")}{" "}
           </AppText>
           <Pressable onPress={() => router.replace(ROUTES.register)}>
             <AppText variant="body" color={colors.brandOrange} weight="bold">
-              Create one
+              {t("auth.login.createOne")}
             </AppText>
           </Pressable>
         </View>

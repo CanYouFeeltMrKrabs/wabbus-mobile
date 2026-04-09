@@ -1,18 +1,20 @@
 /**
  * Tab bar layout — 4 tabs: Home, Search, Cart, Account.
  * Active tab: flat orange background filling entire tab area, white icon, no labels.
- * Matches the reference HTML mockup from the design session.
+ *
+ * A sticky "Add to Cart" bar slides up above the tab bar when the PDP emits
+ * toggleStickyCart — matching the web StickyMobileCart behavior.
  */
 import React, { useState, useRef, useEffect } from "react";
-import { View, Pressable, StyleSheet, Animated, DeviceEventEmitter } from "react-native";
+import { View, Image, Pressable, StyleSheet, Animated, Easing, DeviceEventEmitter } from "react-native";
 import { Tabs, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@/components/ui/Icon";
 import AppText from "@/components/ui/AppText";
-import AppButton from "@/components/ui/AppButton";
 import { useCart } from "@/lib/cart";
 import { formatDollars } from "@/lib/money";
-import { colors, spacing, borderRadius } from "@/lib/theme";
+import { productImageUrl } from "@/lib/image";
+import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 const TAB_CONFIG = [
   { name: "index", label: "Home", icon: "home" },
@@ -21,113 +23,190 @@ const TAB_CONFIG = [
   { name: "account", label: "Account", icon: "person" },
 ] as const;
 
+type StickyPayload = {
+  image: string | null;
+  title: string;
+  productId: string;
+  slug: string;
+  price: number;
+  compareAtPrice: number | null;
+  inStock: boolean;
+  shippingLabel: string | null;
+  variantPublicId: string | null;
+};
+
+const STICKY_BAR_HEIGHT = 56;
+
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const { itemCount, addToCart } = useCart();
 
-  const [stickyProduct, setStickyProduct] = useState<any>(null);
-  const animVal = useRef(new Animated.Value(0)).current;
+  const [stickyData, setStickyData] = useState<StickyPayload | null>(null);
+  const stickyVisible = useRef(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener("toggleStickyCart", ({ product, visible }) => {
-      if (product) setStickyProduct(product);
-      if (visible) {
-        Animated.spring(animVal, {
-          toValue: 1,
-          damping: 20,
-          stiffness: 150,
+    const sub = DeviceEventEmitter.addListener("toggleStickyCart", ({ payload, visible }) => {
+      if (payload) setStickyData(payload);
+      if (visible && !stickyVisible.current) {
+        stickyVisible.current = true;
+        slideAnim.setValue(1);
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 220,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 260,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      } else if (!visible && stickyVisible.current) {
+        stickyVisible.current = false;
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 180,
+          easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
-        }).start();
-      } else {
-        animVal.setValue(0);
+        }).start(() => setStickyData(null));
       }
     });
     return () => sub.remove();
-  }, [animVal]);
+  }, [fadeAnim, slideAnim]);
 
-  const translateYTab = animVal.interpolate({ inputRange: [0, 1], outputRange: [0, 60] });
-  const opacityTab = animVal.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-
-  const translateYCart = animVal.interpolate({ inputRange: [0, 1], outputRange: [60, 0] });
-  const opacityCart = animVal.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+  const stickyTranslateY = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 10],
+  });
 
   const handleAdd = async () => {
-    if (!stickyProduct?.defaultVariantPublicId) return;
+    if (!stickyData?.variantPublicId) return;
     await addToCart({
-      variantPublicId: stickyProduct.defaultVariantPublicId,
-      price: stickyProduct.price,
-      title: stickyProduct.title,
-      image: stickyProduct.image || "",
+      variantPublicId: stickyData.variantPublicId,
+      price: stickyData.price,
+      title: stickyData.title,
+      image: stickyData.image || "",
       quantity: 1,
-      productId: stickyProduct.productId,
-      slug: stickyProduct.slug,
+      productId: stickyData.productId,
+      slug: stickyData.slug,
     });
   };
 
-  return (
-    <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
-      <Animated.View style={[styles.tabRow, { transform: [{ translateY: translateYTab }], opacity: opacityTab }]} pointerEvents={stickyProduct ? "none" : "auto"}>
-        {state.routes.map((route: any, index: number) => {
-          const focused = state.index === index;
-          const config = TAB_CONFIG[index];
-          if (!config) return null;
+  const thumbUri = stickyData?.image ? productImageUrl(stickyData.image, "thumb") : null;
+  const hasDiscount = stickyData?.compareAtPrice != null && stickyData.compareAtPrice > stickyData.price;
 
-          return (
-            <Pressable
-              key={route.key}
-              style={[
-                styles.tab,
-                { backgroundColor: focused ? colors.brandOrange : colors.transparent },
-              ]}
-              onPress={() => {
-                const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
-                if (!event.defaultPrevented) {
-                  navigation.navigate(route.name, route.params);
-                }
-              }}
-            >
-              <View>
-                <Icon
-                  name={config.icon}
-                  size={24}
-                  color={focused ? colors.white : colors.muted}
-                />
-                {config.name === "cart" && itemCount > 0 && (
-                  <View style={styles.cartBadge}>
-                    <AppText variant="tiny" color={colors.white} weight="bold" style={styles.cartBadgeText}>
-                      {itemCount > 99 ? "99+" : String(itemCount)}
-                    </AppText>
-                  </View>
+  return (
+    <View style={styles.wrapper}>
+      {/* Sticky cart bar — floats above the tab bar */}
+      <Animated.View
+        style={[
+          styles.stickyBar,
+          { transform: [{ translateY: stickyTranslateY }], opacity: fadeAnim },
+        ]}
+        pointerEvents={stickyData ? "auto" : "none"}
+      >
+        {stickyData && (
+          <View style={styles.stickyInner}>
+            {thumbUri && (
+              <View style={styles.stickyThumbWrap}>
+                <Image source={{ uri: thumbUri }} style={styles.stickyThumb} resizeMode="contain" />
+              </View>
+            )}
+
+            <View style={styles.stickyInfoCol}>
+              <View style={styles.stickyPriceRow}>
+                <AppText style={styles.stickyPrice}>
+                  {formatDollars(stickyData.price)}
+                </AppText>
+                {hasDiscount && (
+                  <AppText style={styles.stickyCompare}>
+                    {formatDollars(stickyData.compareAtPrice!)}
+                  </AppText>
                 )}
               </View>
-            </Pressable>
-          );
-        })}
-      </Animated.View>
-
-      <Animated.View 
-        style={[
-          StyleSheet.absoluteFill, 
-          styles.stickyCartContainer, 
-          { transform: [{ translateY: translateYCart }], opacity: opacityCart, paddingBottom: insets.bottom }
-        ]}
-        pointerEvents={stickyProduct ? "auto" : "none"}
-      >
-        {stickyProduct && (
-          <View style={styles.stickyCartInner}>
-            <View style={styles.stickyTextCol}>
-              <AppText style={styles.stickyPrice}>{formatDollars(stickyProduct.price)}</AppText>
-              <AppText style={styles.stickyStock}>In Stock</AppText>
+              <View style={styles.stickyMetaRow}>
+                <AppText style={[
+                  styles.stickyStock,
+                  { color: stickyData.inStock ? colors.success : colors.error },
+                ]}>
+                  {stickyData.inStock ? "In Stock" : "Out of Stock"}
+                </AppText>
+                {stickyData.shippingLabel && (
+                  <>
+                    <AppText style={styles.stickyDot}>·</AppText>
+                    <AppText style={[
+                      styles.stickyShipping,
+                      stickyData.shippingLabel === "Free Shipping" && { color: colors.success, fontWeight: "700" },
+                    ]}>
+                      {stickyData.shippingLabel}
+                    </AppText>
+                  </>
+                )}
+              </View>
             </View>
-            <AppButton 
-              title="Add to Cart" 
-              variant="accent" 
-              style={styles.stickyBtn} 
-              onPress={handleAdd} 
-            />
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.stickyBtn,
+                pressed && styles.stickyBtnPressed,
+                !stickyData.inStock && { opacity: 0.5 },
+              ]}
+              onPress={handleAdd}
+              disabled={!stickyData.inStock}
+            >
+              <Icon name="add-shopping-cart" size={18} color={colors.white} />
+              <AppText style={styles.stickyBtnText}>Add to Cart</AppText>
+            </Pressable>
           </View>
         )}
       </Animated.View>
+
+      {/* Tab bar — always visible */}
+      <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
+        <View style={styles.tabRow}>
+          {state.routes.map((route: any, index: number) => {
+            const focused = state.index === index;
+            const config = TAB_CONFIG[index];
+            if (!config) return null;
+
+            return (
+              <Pressable
+                key={route.key}
+                style={[
+                  styles.tab,
+                  { backgroundColor: focused ? colors.brandOrange : colors.transparent },
+                ]}
+                onPress={() => {
+                  const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+                  if (!event.defaultPrevented) {
+                    navigation.navigate(route.name, route.params);
+                  }
+                }}
+              >
+                <View>
+                  <Icon
+                    name={config.icon}
+                    size={24}
+                    color={focused ? colors.white : colors.muted}
+                  />
+                  {config.name === "cart" && itemCount > 0 && (
+                    <View style={styles.cartBadge}>
+                      <AppText variant="tiny" color={colors.white} weight="bold" style={styles.cartBadgeText}>
+                        {itemCount > 99 ? "99+" : String(itemCount)}
+                      </AppText>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
     </View>
   );
 }
@@ -150,6 +229,7 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  wrapper: {},
   tabBar: {
     backgroundColor: colors.white,
     borderTopWidth: 1,
@@ -185,33 +265,100 @@ const styles = StyleSheet.create({
     fontSize: 9,
     lineHeight: 12,
   },
-  stickyCartContainer: {
-    justifyContent: "center",
-    paddingHorizontal: spacing[4],
-    backgroundColor: colors.white,
+
+  /* ── Sticky cart bar ──────────────────────────────────── */
+  stickyBar: {
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: "rgba(226,232,240,0.9)",
+    shadowColor: colors.slate900,
+    shadowOffset: { width: 0, height: -12 },
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    elevation: 16,
   },
-  stickyCartInner: {
+  stickyInner: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    height: 42,
+    gap: spacing[1.5],
+    paddingHorizontal: spacing[2.5],
+    paddingVertical: spacing[1.5],
+    minHeight: STICKY_BAR_HEIGHT,
   },
-  stickyTextCol: {
+  stickyThumbWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.slate100,
+    backgroundColor: colors.slate50,
+  },
+  stickyThumb: {
+    width: "100%",
+    height: "100%",
+  },
+  stickyInfoCol: {
     flex: 1,
-    justifyContent: "center",
+    minWidth: 0,
+  },
+  stickyPriceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: spacing[1],
   },
   stickyPrice: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "900",
-    color: colors.foreground,
+    color: colors.slate900,
+    letterSpacing: -0.3,
+  },
+  stickyCompare: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.slate400,
+    textDecorationLine: "line-through",
+  },
+  stickyMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
+    marginTop: 1,
   },
   stickyStock: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: colors.success,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  stickyDot: {
+    fontSize: 11,
+    color: colors.slate300,
+  },
+  stickyShipping: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.slate500,
   },
   stickyBtn: {
-    paddingHorizontal: spacing[6],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[1],
+    backgroundColor: colors.brandOrange,
     borderRadius: borderRadius.full,
+    paddingHorizontal: spacing[4],
+    height: 40,
+    ...shadows.md,
+  },
+  stickyBtnPressed: {
+    backgroundColor: colors.brandOrangeHover,
+  },
+  stickyBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.white,
   },
 });

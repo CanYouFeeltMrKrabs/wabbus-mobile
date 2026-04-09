@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   ScrollView,
@@ -12,12 +12,15 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
 import { FALLBACK_IMAGE } from "@/lib/config";
+import { queryKeys } from "@/lib/queryKeys";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import type { Order, OrderItem, ReviewImageUpload } from "@/lib/types";
 
@@ -35,12 +38,43 @@ export default function ReviewScreen() {
 }
 
 function ReviewContent() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [alreadyReviewed, setAlreadyReviewed] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
+  const { data: orderData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.orders.detail(id!),
+    queryFn: () => customerFetch<any>(`/orders/${id}`),
+    enabled: !!id,
+  });
+
+  const order = (orderData?.order ?? orderData ?? null) as Order | null;
+
+  const productIds = useMemo(
+    () =>
+      (order?.items || [])
+        .map((i: any) => i.productId || i.publicProductId)
+        .filter(Boolean)
+        .join(","),
+    [order],
+  );
+
+  const { data: reviewsFromServer } = useQuery({
+    queryKey: ["reviews", "mine", productIds],
+    queryFn: () => customerFetch<any[]>(`/reviews/mine?productIds=${productIds}`),
+    enabled: !!productIds,
+  });
+
+  const [localReviewed, setLocalReviewed] = useState<Set<string>>(new Set());
+
+  const alreadyReviewed = useMemo(() => {
+    const fromServer = new Set(
+      (reviewsFromServer || []).map((r: any) => r.productId || r.publicProductId),
+    );
+    for (const pid of localReviewed) fromServer.add(pid);
+    return fromServer;
+  }, [reviewsFromServer, localReviewed]);
 
   const [selectedItem, setSelectedItem] = useState<ReviewableItem | null>(null);
   const [rating, setRating] = useState(0);
@@ -48,33 +82,6 @@ function ReviewContent() {
   const [images, setImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (!id) return;
-    customerFetch<any>(`/orders/${id}`)
-      .then((data) => {
-        const o = data.order ?? data;
-        setOrder(o);
-
-        const productIds = (o.items || [])
-          .map((i: any) => i.productId || i.publicProductId)
-          .filter(Boolean)
-          .join(",");
-
-        if (productIds) {
-          customerFetch<any[]>(`/reviews/mine?productIds=${productIds}`)
-            .then((reviews) => {
-              const ids = new Set(
-                (reviews || []).map((r: any) => r.productId || r.publicProductId),
-              );
-              setAlreadyReviewed(ids);
-            })
-            .catch(() => {});
-        }
-      })
-      .catch(() => setOrder(null))
-      .finally(() => setLoading(false));
-  }, [id]);
 
   const reviewableItems = (order?.items || []).filter(
     (item: any) => {
@@ -85,7 +92,7 @@ function ReviewContent() {
 
   const pickImages = async () => {
     if (images.length >= MAX_IMAGES) {
-      Alert.alert("Limit reached", `You can upload up to ${MAX_IMAGES} photos.`);
+      Alert.alert(t("accountOrders.review.limitReachedTitle"), t("accountOrders.review.limitReachedBody", { max: MAX_IMAGES }));
       return;
     }
 
@@ -165,15 +172,17 @@ function ReviewContent() {
         }),
       });
 
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(id!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(productId) });
       setDone(true);
-      setAlreadyReviewed((prev) => new Set([...prev, productId]));
+      setLocalReviewed((prev) => new Set([...prev, productId]));
     } catch (e: any) {
       if (e.status === 409) {
-        Alert.alert("Already reviewed", "You've already reviewed this product.");
-        setAlreadyReviewed((prev) => new Set([...prev, productId]));
+        Alert.alert(t("accountOrders.review.alreadyReviewedTitle"), t("accountOrders.review.alreadyReviewedBody"));
+        setLocalReviewed((prev) => new Set([...prev, productId]));
         setSelectedItem(null);
       } else {
-        Alert.alert("Error", e.message || "Unable to submit review.");
+        Alert.alert(t("common.error"), e.message || t("accountOrders.review.errorSubmit"));
       }
     } finally {
       setSubmitting(false);
@@ -193,14 +202,14 @@ function ReviewContent() {
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="star-check" size={48} color={colors.starGold} />
         <AppText variant="heading" style={{ marginTop: spacing[4] }}>
-          Review Submitted!
+          {t("accountOrders.review.successHeading")}
         </AppText>
         <AppText variant="body" color={colors.muted} align="center" style={{ marginTop: spacing[2], maxWidth: 280 }}>
-          Thank you for your feedback.
+          {t("accountOrders.review.successBody")}
         </AppText>
         {reviewableItems.length > 1 ? (
           <AppButton
-            title="Review Another Item"
+            title={t("accountOrders.review.reviewAnother")}
             variant="primary"
             onPress={() => {
               setDone(false);
@@ -212,7 +221,7 @@ function ReviewContent() {
             style={{ marginTop: spacing[6] }}
           />
         ) : (
-          <AppButton title="Back to Order" variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[6] }} />
+          <AppButton title={t("accountOrders.review.backToOrder")} variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[6] }} />
         )}
       </View>
     );
@@ -223,20 +232,20 @@ function ReviewContent() {
       <View style={[styles.screen, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-          <AppText variant="title">Write a Review</AppText>
+          <AppText variant="title">{t("accountOrders.review.heading")}</AppText>
           <View style={{ width: 44 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
           <AppText variant="body" color={colors.muted} style={styles.desc}>
-            Choose a product to review.
+            {t("accountOrders.review.selectPrompt")}
           </AppText>
 
           {reviewableItems.length === 0 ? (
             <View style={styles.emptyState}>
               <Icon name="star-check" size={48} color={colors.gray300} />
               <AppText variant="subtitle" color={colors.muted} style={{ marginTop: spacing[3] }}>
-                All items have been reviewed!
+                {t("accountOrders.review.allReviewed")}
               </AppText>
             </View>
           ) : (
@@ -245,7 +254,7 @@ function ReviewContent() {
                 <Image source={{ uri: item.image || FALLBACK_IMAGE }} style={styles.itemImg} resizeMode="cover" />
                 <View style={styles.itemInfo}>
                   <AppText variant="label" numberOfLines={2}>{item.title}</AppText>
-                  <AppText variant="caption" color={colors.brandBlue}>Tap to review</AppText>
+                  <AppText variant="caption" color={colors.brandBlue}>{t("accountOrders.review.tapToReview")}</AppText>
                 </View>
                 <Icon name="chevron-right" size={20} color={colors.muted} />
               </Pressable>
@@ -260,7 +269,7 @@ function ReviewContent() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => setSelectedItem(null)} style={{ width: 44 }} />
-        <AppText variant="title">Review</AppText>
+          <AppText variant="title">{t("accountOrders.review.reviewHeading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
@@ -272,7 +281,7 @@ function ReviewContent() {
           </AppText>
         </View>
 
-        <AppText variant="subtitle" style={styles.sectionTitle}>Rating</AppText>
+        <AppText variant="subtitle" style={styles.sectionTitle}>{t("accountOrders.review.ratingLabel")}</AppText>
         <View style={styles.starRow}>
           {[1, 2, 3, 4, 5].map((s) => (
             <Pressable key={s} onPress={() => setRating(s)} hitSlop={8}>
@@ -281,12 +290,12 @@ function ReviewContent() {
           ))}
         </View>
 
-        <AppText variant="subtitle" style={styles.sectionTitle}>Comment (optional)</AppText>
+        <AppText variant="subtitle" style={styles.sectionTitle}>{t("accountOrders.review.commentLabel")}</AppText>
         <TextInput
           style={styles.commentInput}
           value={comment}
           onChangeText={setComment}
-          placeholder="Share your experience..."
+          placeholder={t("accountOrders.review.commentPlaceholder")}
           placeholderTextColor={colors.mutedLight}
           multiline
           maxLength={MAX_COMMENT}
@@ -296,7 +305,7 @@ function ReviewContent() {
         </AppText>
 
         <AppText variant="subtitle" style={styles.sectionTitle}>
-          Photos (optional, up to {MAX_IMAGES})
+          {t("accountOrders.review.photosLabel", { max: MAX_IMAGES })}
         </AppText>
         <View style={styles.imageRow}>
           {images.map((uri, i) => (
@@ -315,7 +324,7 @@ function ReviewContent() {
         </View>
 
         <AppButton
-          title={submitting ? "Submitting..." : "Submit Review"}
+          title={submitting ? t("accountOrders.review.submitting") : t("accountOrders.review.submitReview")}
           variant="primary"
           fullWidth
           size="lg"

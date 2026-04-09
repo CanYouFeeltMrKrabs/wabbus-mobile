@@ -2,9 +2,9 @@ import React from "react";
 import { View, StyleSheet, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
-import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { useAuth } from "@/lib/auth";
 import { formatDate } from "@/lib/orderHelpers";
@@ -16,6 +16,7 @@ export default function AccountDetailsScreen() {
 }
 
 function AccountDetailsContent() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -24,20 +25,19 @@ function AccountDetailsContent() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Account Details</AppText>
+        <AppText variant="title">{t("account.details.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
-          <DetailRow label="First Name" value={user?.firstName || "—"} />
-          <DetailRow label="Last Name" value={user?.lastName || "—"} />
-          <DetailRow label="Email" value={user?.email || "—"} />
-          <DetailRow label="Member Since" value={formatDate(user?.createdAt)} />
+          <DetailRow label={t("account.details.name")} value={user?.name || "—"} />
+          <DetailRow label={t("account.details.email")} value={user?.email || "—"} />
+          <DetailRow label={t("account.details.memberSince")} value={formatDate(user?.createdAt)} />
         </View>
 
-        <AppButton title="Change Password" variant="outline" fullWidth icon="lock" onPress={() => router.push(ROUTES.accountChangePassword)} style={styles.actionBtn} />
-        <AppButton title="Change Email" variant="outline" fullWidth icon="email" onPress={() => router.push(ROUTES.accountChangeEmail)} />
+        <AppButton title={t("account.details.changePassword")} variant="outline" fullWidth icon="lock" onPress={() => router.push(ROUTES.accountChangePassword)} style={styles.actionBtn} />
+        <AppButton title={t("account.details.changeEmail")} variant="outline" fullWidth icon="email" onPress={() => router.push(ROUTES.accountChangeEmail)} />
       </ScrollView>
     </View>
   );

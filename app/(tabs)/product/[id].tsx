@@ -31,6 +31,8 @@ import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSl
 import RecentlyViewedSlider from "@/components/ui/RecentlyViewedSlider";
 import VariantSelector, { type VariantData } from "@/components/ui/VariantSelector";
 import { SkeletonProductDetail } from "@/components/ui/Skeleton";
+import { useTranslation } from "@/hooks/useT";
+import i18n from "@/i18n";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { publicFetch } from "@/lib/api";
 import { useCart } from "@/lib/cart";
@@ -40,6 +42,9 @@ import { formatSoldCount } from "@/lib/formatSoldCount";
 import { addToWishlist, removeFromWishlist, isInWishlist, onWishlistUpdate } from "@/lib/wishlist";
 import { addToRecentlyViewed } from "@/lib/recentlyViewed";
 import { ROUTES } from "@/lib/routes";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import { trackEvent, trackProductDwell } from "@/lib/tracker";
 
 const MAX_QTY = 99;
 const DISCOUNT_THRESHOLD = 5;
@@ -68,7 +73,7 @@ type ProductDetail = {
   title: string;
   description: string | null;
   image: string | null;
-  images?: string[];
+  images?: Array<string | { key?: string; optionGroupName?: string | null }>;
   price: number;
   compareAtPrice?: number | null;
   defaultVariantPublicId?: string | null;
@@ -115,22 +120,22 @@ type SpecRow = { label: string; value: string };
 
 function buildSpecRows(product: ProductDetail): SpecRow[] {
   const rows: SpecRow[] = [];
-  if (product.brandName) rows.push({ label: "Brand", value: product.brandName });
-  if (product.category?.name) rows.push({ label: "Category", value: product.category.name });
-  if (product.condition) rows.push({ label: "Condition", value: product.condition });
-  if (product.material) rows.push({ label: "Material", value: product.material });
-  if (product.countryOfOrigin) rows.push({ label: "Country of Origin", value: product.countryOfOrigin });
-  if (product.upcGtin) rows.push({ label: "UPC / GTIN", value: product.upcGtin });
-  if (product.mpn) rows.push({ label: "MPN", value: product.mpn });
-  if (product.careInstructions) rows.push({ label: "Care Instructions", value: product.careInstructions });
+  if (product.brandName) rows.push({ label: i18n.t("product.specs.brand"), value: product.brandName });
+  if (product.category?.name) rows.push({ label: i18n.t("product.specs.category"), value: product.category.name });
+  if (product.condition) rows.push({ label: i18n.t("product.specs.condition"), value: product.condition });
+  if (product.material) rows.push({ label: i18n.t("product.specs.material"), value: product.material });
+  if (product.countryOfOrigin) rows.push({ label: i18n.t("product.specs.countryOfOrigin"), value: product.countryOfOrigin });
+  if (product.upcGtin) rows.push({ label: i18n.t("product.specs.upcGtin"), value: product.upcGtin });
+  if (product.mpn) rows.push({ label: i18n.t("product.specs.mpn"), value: product.mpn });
+  if (product.careInstructions) rows.push({ label: i18n.t("product.specs.careInstructions"), value: product.careInstructions });
   if (product.weightOz != null && product.weightOz > 0) {
-    rows.push({ label: "Weight", value: formatWeight(product.weightOz) });
+    rows.push({ label: i18n.t("product.specs.weight"), value: formatWeight(product.weightOz) });
   }
   const dims = [product.lengthIn, product.widthIn, product.heightIn].filter(
     (v): v is number => v != null && v > 0,
   );
   if (dims.length === 3) {
-    rows.push({ label: "Dimensions", value: `${formatDimension(dims[0])} × ${formatDimension(dims[1])} × ${formatDimension(dims[2])}` });
+    rows.push({ label: i18n.t("product.specs.dimensions"), value: `${formatDimension(dims[0])} × ${formatDimension(dims[1])} × ${formatDimension(dims[2])}` });
   }
   return rows;
 }
@@ -138,22 +143,27 @@ function buildSpecRows(product: ProductDetail): SpecRow[] {
 // ─── Component ───────────────────────────────────────────────
 
 export default function ProductDetailScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { addToCart } = useCart();
 
-  const [product, setProduct] = useState<ProductDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: product = null, isPending: loading } = useQuery({
+    queryKey: queryKeys.products.detail(id!),
+    queryFn: () => publicFetch<ProductDetail>(`/products/public/${id}/view`),
+    enabled: !!id,
+  });
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [adding, setAdding] = useState(false);
   const [inWishlist, setInWishlist] = useState(false);
   const [specsExpanded, setSpecsExpanded] = useState(false);
-  const [bodyY, setBodyY] = useState(0);
-  const [btnY, setBtnY] = useState(0);
+  const bodyYRef = useRef(0);
+  const buyBoxLayoutRef = useRef({ y: 0, height: 0 });
+  const hasSeenBuyBox = useRef(false);
   const isStickyVisible = useRef(false);
-  const lastScrollY = useRef(0);
+  const scrollRef = useRef({ lastY: 0, lastT: 0, vel: 0, firstSample: true, shownAtT: 0, lastToggleT: 0 });
 
   const variantData: VariantData[] = useMemo(() => {
     if (!product?.variants?.length) return [];
@@ -191,63 +201,145 @@ export default function ProductDetailScreen() {
 
   const shippingCents = selectedVariant?.shippingPriceCents ?? product?.shippingPriceCents ?? null;
   const shippingLabel = shippingCents != null
-    ? shippingCents === 0 ? "Free Shipping" : `${formatDollars(shippingCents / 100)} shipping`
+    ? shippingCents === 0 ? t("product.freeShipping") : t("product.shippingCost", { amount: formatDollars(shippingCents / 100) })
     : null;
 
   const specRows = useMemo(() => product ? buildSpecRows(product) : [], [product]);
   const visibleSpecs = specsExpanded ? specRows : specRows.slice(0, INITIAL_SPECS_SHOWN);
 
+  const VEL_SMOOTH = 0.9;
+  const SHOW_VEL = -0.11;
+  const HIDE_VEL = 0.14;
+  const MIN_BAR_MS = 520;
+  const TOGGLE_COOLDOWN_MS = 400;
+  const PASS_MARGIN = 12;
+  const REVEAL_BELOW_NAV = 80;
+
+  const stickyPayload = useMemo(() => {
+    if (!product) return null;
+    const img = (product.images ?? [])
+      .map((i) => (typeof i === "string" ? i : i?.key) ?? null)
+      .find((k): k is string => typeof k === "string" && k.length > 0)
+      ?? product.image ?? null;
+    return {
+      image: img,
+      title: product.title,
+      productId: product.productId,
+      slug: product.slug,
+      price: displayPrice,
+      compareAtPrice: displayCompareAt,
+      inStock,
+      shippingLabel,
+      variantPublicId: activeVariantPublicId,
+    };
+  }, [product, displayPrice, displayCompareAt, inStock, shippingLabel, activeVariantPublicId]);
+
+  const handleBodyLayout = useCallback((e: any) => {
+    bodyYRef.current = e.nativeEvent.layout.y;
+  }, []);
+
+  const handleBuyBoxLayout = useCallback((e: any) => {
+    const { y, height } = e.nativeEvent.layout;
+    buyBoxLayoutRef.current = { y, height };
+  }, []);
+
   const handleScroll = useCallback((event: any) => {
     if (!product) return;
-    const currentScrollY = event.nativeEvent.contentOffset.y;
-    const isScrollingUp = currentScrollY < lastScrollY.current;
-    lastScrollY.current = currentScrollY;
 
-    const threshold = bodyY + btnY + 50;
-    let visible = false;
-    if (bodyY > 0 && btnY > 0 && currentScrollY > threshold) {
-      visible = !isScrollingUp;
+    const now = Date.now();
+    const s = scrollRef.current;
+    const scrollY = event.nativeEvent.contentOffset.y;
+    const viewportH = event.nativeEvent.layoutMeasurement.height;
+
+    let dtMs = now - s.lastT;
+    if (s.firstSample) { s.firstSample = false; dtMs = 16; }
+    dtMs = Math.max(dtMs, 1);
+    const dy = scrollY - s.lastY;
+    s.lastY = scrollY;
+    s.lastT = now;
+    const inst = dy / dtMs;
+    s.vel = VEL_SMOOTH * s.vel + (1 - VEL_SMOOTH) * inst;
+
+    const absBuyBoxBottom = bodyYRef.current + buyBoxLayoutRef.current.y + buyBoxLayoutRef.current.height;
+    if (absBuyBoxBottom <= 0) return;
+
+    const buyBoxViewportBottom = absBuyBoxBottom - scrollY;
+    const buyBoxViewportTop = buyBoxViewportBottom - buyBoxLayoutRef.current.height;
+
+    if (buyBoxViewportBottom > 0 && buyBoxViewportTop < viewportH) {
+      hasSeenBuyBox.current = true;
     }
-    if (visible !== isStickyVisible.current) {
-      isStickyVisible.current = visible;
-      DeviceEventEmitter.emit("toggleStickyCart", { product, visible });
+
+    const scrolledPastBuyBox = buyBoxViewportBottom < -PASS_MARGIN;
+    const buyBoxBackInReach = buyBoxViewportBottom > REVEAL_BELOW_NAV;
+    const eligible = hasSeenBuyBox.current && scrolledPastBuyBox;
+
+    const canToggle = now - s.lastToggleT >= TOGGLE_COOLDOWN_MS;
+    const minHeld = now - s.shownAtT >= MIN_BAR_MS;
+    let barOn = isStickyVisible.current;
+
+    if (!barOn) {
+      if (eligible && s.vel < SHOW_VEL && canToggle) {
+        barOn = true;
+        s.lastToggleT = now;
+        s.shownAtT = now;
+      }
+    } else {
+      if (buyBoxBackInReach && minHeld && canToggle) {
+        barOn = false;
+        s.lastToggleT = now;
+      } else if (s.vel > HIDE_VEL && minHeld && canToggle) {
+        barOn = false;
+        s.lastToggleT = now;
+      }
     }
-  }, [bodyY, btnY, product]);
+
+    if (barOn !== isStickyVisible.current) {
+      isStickyVisible.current = barOn;
+      DeviceEventEmitter.emit("toggleStickyCart", { payload: stickyPayload, visible: barOn });
+    }
+  }, [product, stickyPayload]);
 
   useEffect(() => {
     return () => {
-      DeviceEventEmitter.emit("toggleStickyCart", { product: null, visible: false });
+      DeviceEventEmitter.emit("toggleStickyCart", { payload: null, visible: false });
     };
   }, []);
 
+  const dwellMountRef = useRef(0);
   useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    publicFetch<ProductDetail>(`/products/public/${id}/view`)
-      .then((p) => {
-        setProduct(p);
-        const defaultId = p.defaultVariantPublicId ?? p.variants?.[0]?.publicId ?? null;
-        setSelectedVariantId(defaultId);
-        addToRecentlyViewed({
-          productId: p.productId,
-          variantPublicId: p.defaultVariantPublicId ?? "",
-          title: p.title,
-          price: Math.round(p.price * 100),
-          image: p.image || "",
-          slug: p.slug,
-          categoryId: p.categoryId,
-          compareAtPrice: p.compareAtPrice ? Math.round(Number(p.compareAtPrice) * 100) : null,
-          vendorName: p.vendorName,
-          ratingAvg: p.ratingAvg,
-          reviewCount: p.reviewCount,
-          soldCount: p.soldCount,
-          badges: p.badges,
-        });
-        isInWishlist(p.productId).then(setInWishlist);
-      })
-      .catch(() => setProduct(null))
-      .finally(() => setLoading(false));
-  }, [id]);
+    if (!product) return;
+    dwellMountRef.current = Date.now();
+    return () => {
+      const dwellMs = Date.now() - dwellMountRef.current;
+      if (dwellMs > 2000) {
+        trackProductDwell(product.productId, dwellMs);
+      }
+    };
+  }, [product?.productId]);
+
+  useEffect(() => {
+    if (!product) return;
+    void trackEvent("product_view", { productId: product.productId });
+    const defaultId = product.defaultVariantPublicId ?? product.variants?.[0]?.publicId ?? null;
+    setSelectedVariantId(defaultId);
+    addToRecentlyViewed({
+      productId: product.productId,
+      variantPublicId: product.defaultVariantPublicId ?? "",
+      title: product.title,
+      price: Math.round(product.price * 100),
+      image: product.image || "",
+      slug: product.slug,
+      categoryId: product.categoryId,
+      compareAtPrice: product.compareAtPrice ? Math.round(Number(product.compareAtPrice) * 100) : null,
+      vendorName: product.vendorName,
+      ratingAvg: product.ratingAvg,
+      reviewCount: product.reviewCount,
+      soldCount: product.soldCount,
+      badges: product.badges,
+    });
+    isInWishlist(product.productId).then(setInWishlist);
+  }, [product]);
 
   useEffect(() => {
     if (!product) return;
@@ -287,9 +379,9 @@ export default function ProductDetailScreen() {
         productId: product?.productId ?? "",
         slug: product?.slug ?? "",
       });
-      Alert.alert("Added to Cart", `${product?.title} (x${qty}) added to your cart.`);
+      Alert.alert(t("product.addedToCart"), t("product.addedToCartBody", { title: product?.title, qty }));
     } catch {
-      Alert.alert("Error", "Could not add to cart.");
+      Alert.alert(t("common.error"), t("product.errorAddToCart"));
     } finally {
       setAdding(false);
     }
@@ -307,13 +399,17 @@ export default function ProductDetailScreen() {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="error-outline" size={48} color={colors.gray300} />
-        <AppText variant="subtitle" color={colors.muted}>Product not found</AppText>
-        <AppButton title="Go Back" variant="outline" onPress={() => router.canGoBack() ? router.back() : router.replace(ROUTES.homeFeed)} style={{ marginTop: spacing[4] }} />
+        <AppText variant="subtitle" color={colors.muted}>{t("product.notFound")}</AppText>
+        <AppButton title={t("product.goBack")} variant="outline" onPress={() => router.canGoBack() ? router.back() : router.replace(ROUTES.homeFeed)} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
 
-  const images = product.images?.length ? product.images : [product.image || FALLBACK_IMAGE];
+  const images = (product.images ?? [])
+    .map((img) => (typeof img === "string" ? img : img?.key) ?? null)
+    .filter((key): key is string => typeof key === "string" && key.length > 0);
+  if (images.length === 0 && product.image) images.push(product.image);
+  if (images.length === 0) images.push(FALLBACK_IMAGE);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -329,7 +425,7 @@ export default function ProductDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         onScroll={handleScroll}
-        scrollEventThrottle={4}
+        scrollEventThrottle={16}
       >
         <ProductImageGallery
           images={images}
@@ -337,13 +433,13 @@ export default function ProductDetailScreen() {
           onToggleWishlist={toggleWishlist}
         />
 
-        <View style={styles.body} onLayout={(e) => setBodyY(e.nativeEvent.layout.y)}>
+        <View style={styles.body} onLayout={handleBodyLayout}>
           <AppText style={styles.productTitle}>{product.title}</AppText>
 
           {product.vendorName && (
             <Pressable onPress={() => product.vendorPublicId && router.push(ROUTES.vendor(product.vendorPublicId))}>
               <AppText variant="caption" style={styles.vendor}>
-                Sold by <AppText variant="caption" color={colors.brandBlueDark} weight="bold">{product.vendorName}</AppText>
+                {t("product.soldBy")} <AppText variant="caption" color={colors.brandBlueDark} weight="bold">{product.vendorName}</AppText>
               </AppText>
             </Pressable>
           )}
@@ -355,7 +451,7 @@ export default function ProductDetailScreen() {
 
           {product.soldCount != null && product.soldCount > 0 && (
             <AppText variant="caption" color={colors.slate600} style={{ marginTop: spacing[0.5] }}>
-              {formatSoldCount(product.soldCount)} bought in past month
+              {t("product.boughtInPastMonth", { count: formatSoldCount(product.soldCount) })}
             </AppText>
           )}
 
@@ -369,7 +465,7 @@ export default function ProductDetailScreen() {
                 </AppText>
                 <View style={styles.discountPill}>
                   <AppText style={styles.discountText}>
-                    {savingsPercent}% OFF
+                    {t("product.percentOff", { percent: savingsPercent })}
                   </AppText>
                 </View>
               </>
@@ -390,21 +486,21 @@ export default function ProductDetailScreen() {
 
           {/* Availability */}
           <View style={styles.availabilitySection}>
-            <AppText style={styles.availabilityTitle}>Availability</AppText>
+            <AppText style={styles.availabilityTitle}>{t("product.availability")}</AppText>
             {inStock ? (
               <View style={styles.stockRow}>
                 <Icon name="check-circle" size={16} color={colors.success} />
-                <AppText style={styles.stockTextGreen}>Ready to ship from warehouse</AppText>
+                <AppText style={styles.stockTextGreen}>{t("product.readyToShip")}</AppText>
               </View>
             ) : (
               <View style={styles.stockRow}>
                 <Icon name="cancel" size={16} color={colors.error} />
-                <AppText style={[styles.stockTextGreen, { color: colors.error }]}>Currently unavailable</AppText>
+                <AppText style={[styles.stockTextGreen, { color: colors.error }]}>{t("product.currentlyUnavailable")}</AppText>
               </View>
             )}
 
             {available !== null && available > 0 && available <= 5 && (
-              <AppText style={styles.lowStockText}>Only {available} left</AppText>
+              <AppText style={styles.lowStockText}>{t("product.onlyNLeft", { count: available })}</AppText>
             )}
           </View>
 
@@ -420,7 +516,7 @@ export default function ProductDetailScreen() {
           <View style={styles.infoRow}>
             <Icon name="schedule" size={16} color={colors.slate600} />
             <AppText variant="body" color={colors.slate600}>
-              Expected to ship within <AppText weight="bold" color={colors.foreground}>1-2 business days</AppText>
+              {t("product.expectedShipWithin")} <AppText weight="bold" color={colors.foreground}>{t("product.businessDays")}</AppText>
             </AppText>
           </View>
 
@@ -428,22 +524,22 @@ export default function ProductDetailScreen() {
           <View style={styles.infoRow}>
             <Icon name="replay" size={16} color={colors.slate600} />
             <View>
-              <AppText variant="body" weight="bold" color={colors.foreground}>30-Day Returns</AppText>
-              <AppText variant="caption" color={colors.slate600}>Easy returns if not satisfied</AppText>
+              <AppText variant="body" weight="bold" color={colors.foreground}>{t("product.thirtyDayReturns")}</AppText>
+              <AppText variant="caption" color={colors.slate600}>{t("product.easyReturns")}</AppText>
             </View>
           </View>
 
           {/* Secure transaction */}
           <View style={styles.infoRow}>
             <Icon name="lock" size={16} color={colors.success} />
-            <AppText variant="body" color={colors.slate600}>Secure transaction</AppText>
+            <AppText variant="body" color={colors.slate600}>{t("product.secureTransaction")}</AppText>
           </View>
 
           <BadgeRow badges={product.badges} />
 
           {/* Quantity + ATC */}
           <View style={styles.qtySection}>
-            <AppText style={styles.qtyLabel}>Quantity</AppText>
+            <AppText style={styles.qtyLabel}>{t("product.quantity")}</AppText>
             <QuantitySelector
               quantity={qty}
               onIncrease={() => setQty((q) => Math.min(MAX_QTY, q + 1))}
@@ -451,9 +547,9 @@ export default function ProductDetailScreen() {
             />
           </View>
 
-          <View onLayout={(e) => setBtnY(e.nativeEvent.layout.y)}>
+          <View onLayout={handleBuyBoxLayout}>
             <AppButton
-              title={inStock ? "Add to Cart" : "Out of Stock"}
+              title={inStock ? t("product.addToCart") : t("product.outOfStock")}
               variant="accent"
               onPress={handleAddToCart}
               loading={adding}
@@ -465,7 +561,7 @@ export default function ProductDetailScreen() {
           {/* Key Features */}
           {product.keyFeatures && product.keyFeatures.length > 0 && (
             <View style={styles.descSection}>
-              <AppText style={styles.descTitle}>Key Features</AppText>
+              <AppText style={styles.descTitle}>{t("product.keyFeatures")}</AppText>
               {product.keyFeatures.map((feature, idx) => (
                 <View key={idx} style={styles.featureRow}>
                   <View style={styles.featureBullet} />
@@ -480,7 +576,7 @@ export default function ProductDetailScreen() {
           {/* Product Specifications */}
           {specRows.length > 0 && (
             <View style={styles.descSection}>
-              <AppText style={styles.descTitle}>Product Specifications</AppText>
+              <AppText style={styles.descTitle}>{t("product.productSpecs")}</AppText>
               <View style={styles.specsTable}>
                 {visibleSpecs.map((row, i) => (
                   <View key={row.label} style={[styles.specRow, i % 2 === 0 && styles.specRowAlt]}>
@@ -492,7 +588,7 @@ export default function ProductDetailScreen() {
               {specRows.length > INITIAL_SPECS_SHOWN && (
                 <Pressable onPress={() => setSpecsExpanded((v) => !v)} style={styles.specsToggle}>
                   <AppText style={styles.specsToggleText}>
-                    {specsExpanded ? "Show less" : "Read more"}
+                    {specsExpanded ? t("product.showLess") : t("product.readMore")}
                   </AppText>
                 </Pressable>
               )}
@@ -502,7 +598,7 @@ export default function ProductDetailScreen() {
           {/* Description */}
           {product.description && (
             <View style={styles.descSection}>
-              <AppText style={styles.descTitle}>Product details</AppText>
+              <AppText style={styles.descTitle}>{t("product.productDetails")}</AppText>
               <AppText variant="body" color={colors.slate600}>{product.description}</AppText>
             </View>
           )}
@@ -518,7 +614,7 @@ export default function ProductDetailScreen() {
           {/* Vendor products */}
           {product.vendorPublicId && product.vendorName && (
             <ProductRecommendationSlider
-              title={`More from ${product.vendorName}`}
+              title={t("product.moreFrom", { name: product.vendorName })}
               apiUrl={`/products/public?vendorPublicId=${encodeURIComponent(product.vendorPublicId)}&take=11&sortBy=newest`}
               accentColor={colors.brandBlue}
               onAddToCart={handleAddToCart}
@@ -530,25 +626,25 @@ export default function ProductDetailScreen() {
           )}
 
           <ProductRecommendationSlider
-            title="Frequently Bought Together"
+            title={t("product.frequentlyBoughtTogether")}
             apiUrl={`/recommendations?context=product&productId=${encodeURIComponent(product.productId)}&type=bought_together&take=10`}
             accentColor={colors.brandBlue}
             onAddToCart={handleAddToCart}
           />
           <ProductRecommendationSlider
-            title="Customers Also Viewed"
+            title={t("product.customersAlsoViewed")}
             apiUrl={`/recommendations?context=product&productId=${encodeURIComponent(product.productId)}&type=viewed_together&take=10`}
             accentColor={colors.brandBlue}
             onAddToCart={handleAddToCart}
           />
           <ProductRecommendationSlider
-            title="Similar Products"
+            title={t("product.similarProducts")}
             apiUrl={`/recommendations?context=product&productId=${encodeURIComponent(product.productId)}&type=similar&take=10`}
             accentColor={colors.brandBlue}
             onAddToCart={handleAddToCart}
           />
           <ProductRecommendationSlider
-            title="Recommended for You"
+            title={t("product.recommendedForYou")}
             apiUrl="/products/public?take=10&sortBy=newest"
             accentColor={colors.brandBlue}
             onAddToCart={handleAddToCart}

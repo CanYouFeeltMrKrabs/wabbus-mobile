@@ -10,19 +10,22 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
+import { getQueryClient } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 
 const CATEGORIES = [
-  { code: "TECHNICAL", label: "Technical Issue", icon: "build" },
-  { code: "BILLING", label: "Billing", icon: "credit-card" },
-  { code: "ACCOUNT", label: "Account", icon: "account-circle" },
-  { code: "OTHER", label: "Other", icon: "help-circle" },
+  { code: "TECHNICAL", labelKey: "support.ticket.catTechnical", icon: "build" },
+  { code: "BILLING", labelKey: "support.ticket.catBilling", icon: "credit-card" },
+  { code: "ACCOUNT", labelKey: "support.ticket.catAccount", icon: "account-circle" },
+  { code: "OTHER", labelKey: "support.ticket.catOther", icon: "help-circle" },
 ];
 
 export default function SubmitTicketScreen() {
@@ -34,6 +37,7 @@ export default function SubmitTicketScreen() {
 }
 
 function TicketContent() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [category, setCategory] = useState<string | null>(null);
@@ -43,7 +47,7 @@ function TicketContent() {
 
   const handleSubmit = async () => {
     if (!category || !body.trim()) {
-      setError("Please select a category and describe your issue.");
+      setError(t("support.ticket.validationError"));
       return;
     }
 
@@ -54,9 +58,12 @@ function TicketContent() {
         method: "POST",
         body: JSON.stringify({ body: body.trim(), category }),
       });
+      const qc = getQueryClient();
+      qc.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
+      qc.invalidateQueries({ queryKey: queryKeys.messages.unread() });
       router.replace(ROUTES.accountMessages);
     } catch (e: any) {
-      setError(e.message || "Unable to submit ticket.");
+      setError(e.message || t("support.ticket.submitError"));
     } finally {
       setSubmitting(false);
     }
@@ -69,13 +76,13 @@ function TicketContent() {
     >
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Submit a Ticket</AppText>
+        <AppText variant="title">{t("support.ticket.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppText variant="subtitle" style={styles.sectionTitle}>
-          What's this about?
+          {t("support.ticket.whatsThisAbout")}
         </AppText>
 
         <View style={styles.categoryGrid}>
@@ -99,20 +106,20 @@ function TicketContent() {
                 align="center"
                 style={{ marginTop: spacing[1] }}
               >
-                {cat.label}
+                {t(cat.labelKey)}
               </AppText>
             </Pressable>
           ))}
         </View>
 
         <AppText variant="subtitle" style={styles.sectionTitle}>
-          Describe your issue
+          {t("support.ticket.describeIssue")}
         </AppText>
         <TextInput
           style={styles.textArea}
           value={body}
           onChangeText={setBody}
-          placeholder="Please provide as much detail as possible..."
+          placeholder={t("support.ticket.placeholder")}
           placeholderTextColor={colors.mutedLight}
           multiline
           maxLength={2000}
@@ -132,7 +139,7 @@ function TicketContent() {
         )}
 
         <AppButton
-          title={submitting ? "Submitting..." : "Submit Ticket"}
+          title={submitting ? t("support.ticket.submitting") : t("support.ticket.submit")}
           variant="primary"
           fullWidth
           size="lg"

@@ -2,6 +2,7 @@ import React, { useCallback } from "react";
 import { View, FlatList, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -17,6 +18,7 @@ import { colors, spacing } from "@/lib/theme";
 import type { CartItem } from "@/lib/types";
 
 export default function CartScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { items, subtotalCents, updateQuantity, removeItem } = useCart();
@@ -56,21 +58,21 @@ export default function CartScreen() {
         <View style={styles.emptyHero}>
           <Icon name="shopping-cart" size={64} color={colors.gray300} />
           <AppText variant="title" color={colors.muted} style={styles.emptyTitle}>
-            Your cart is empty
+            {t("cart.emptyTitle")}
           </AppText>
           <AppText variant="body" color={colors.mutedLight} align="center">
-            Browse our products and add items to your cart.
+            {t("cart.emptyDescription")}
           </AppText>
           <AppButton
-            title="Continue Shopping"
-            variant="accent"
+            title={t("cart.continueShopping")}
+            variant="primary"
             onPress={() => router.push(ROUTES.homeFeed)}
             icon="arrow-forward"
             style={styles.emptyBtn}
           />
         </View>
         <ProductRecommendationSlider
-          title="Trending Now"
+          title={t("cart.trendingNow")}
           apiUrl="/recommendations?context=home&strategy=trending&take=10"
           accentColor={colors.rose500}
         />
@@ -81,7 +83,7 @@ export default function CartScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <AppText variant="heading">Your Cart</AppText>
+        <AppText variant="heading">{t("cart.heading")}</AppText>
       </View>
 
       <FlatList

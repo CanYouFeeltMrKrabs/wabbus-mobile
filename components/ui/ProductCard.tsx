@@ -6,6 +6,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { View, Image, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "./AppText";
 import Icon from "./Icon";
 import StarRating from "./StarRating";
@@ -26,6 +27,7 @@ type Props = {
 };
 
 export default function ProductCard({ product, onAddToCart, imageSize = "card" }: Props) {
+  const { t } = useTranslation();
   const router = useRouter();
   const imageUri = productImageUrl(product.image, imageSize);
   const hasDiscount =
@@ -43,7 +45,7 @@ export default function ProductCard({ product, onAddToCart, imageSize = "card" }
   const toggleWishlist = useCallback(async () => {
     if (inWishlist) {
       await removeFromWishlist(product.productId);
-      showToast("Removed from wishlist", "info");
+      showToast(t("common.removedFromWishlist"), "info");
     } else {
       await addToWishlist({
         productId: product.productId,
@@ -54,7 +56,7 @@ export default function ProductCard({ product, onAddToCart, imageSize = "card" }
         slug: product.slug,
         categoryId: product.categoryId,
       });
-      showToast("Added to wishlist", "success");
+      showToast(t("common.addedToWishlist"), "success");
     }
   }, [inWishlist, product]);
 
@@ -65,7 +67,7 @@ export default function ProductCard({ product, onAddToCart, imageSize = "card" }
     >
       {/* Image */}
       <View style={styles.imageWrap}>
-        <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
+        <Image source={{ uri: imageUri }} style={styles.image} resizeMode="contain" />
 
         {/* Badges */}
         <View style={styles.badges}>
@@ -97,7 +99,7 @@ export default function ProductCard({ product, onAddToCart, imageSize = "card" }
 
         {product.vendorName && (
           <AppText variant="caption" numberOfLines={1} style={styles.vendor}>
-            Sold by{" "}
+            {t("common.soldBy")}{" "}
             <AppText style={styles.vendorNameHighlight}>
               {product.vendorName}
             </AppText>
@@ -150,7 +152,7 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   pressed: { opacity: 0.95, transform: [{ scale: 0.98 }] },
-  imageWrap: { aspectRatio: 4 / 3, backgroundColor: colors.gray50 },
+  imageWrap: { aspectRatio: 1, backgroundColor: colors.white },
   image: { width: "100%", height: "100%" },
   badges: { position: "absolute", top: spacing[1], left: spacing[1], zIndex: 10 },
   wishlist: {
@@ -180,7 +182,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     marginTop: spacing[2],
   },
-  priceCurrent: { fontSize: 14, fontWeight: "900", color: colors.brandOrange, lineHeight: 16 },
+  priceCurrent: { fontSize: 14, fontWeight: "900", color: colors.slate900, lineHeight: 16 },
   priceStrike: { fontSize: 11, color: colors.slate400, textDecorationLine: "line-through" },
   cartBtn: {
     backgroundColor: colors.brandBlue,

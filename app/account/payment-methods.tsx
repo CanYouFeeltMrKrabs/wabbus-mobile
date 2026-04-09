@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View, FlatList, Pressable, Alert,
   StyleSheet, ActivityIndicator,
@@ -6,11 +6,15 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { initPaymentSheet, presentPaymentSheet } from "@stripe/stripe-react-native";
+import i18n from "@/i18n";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import { useQuery } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
+import { queryKeys } from "@/lib/queryKeys";
 import { formatMoney } from "@/lib/money";
 import { showToast } from "@/lib/toast";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
@@ -19,10 +23,10 @@ import type { PaymentMethod } from "@/lib/types";
 function prettifyBrand(type?: string | null, brand?: string | null) {
   const b = (brand || "").trim();
   const t = (type || "").trim();
-  if (t === "us_bank_account") return b || "Bank account";
-  if (t === "link") return "Link";
-  if (t === "cashapp") return "Cash App Pay";
-  if (!b) return "Card";
+  if (t === "us_bank_account") return b || i18n.t("account.paymentMethods.bankAccount");
+  if (t === "link") return i18n.t("account.paymentMethods.link");
+  if (t === "cashapp") return i18n.t("account.paymentMethods.cashAppPay");
+  if (!b) return i18n.t("account.paymentMethods.card");
   return b.charAt(0).toUpperCase() + b.slice(1);
 }
 
@@ -42,71 +46,73 @@ export default function PaymentMethodsScreen() {
 }
 
 function PaymentMethodsContent() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [loaded, setLoaded] = useState(false);
-  const [methods, setMethods] = useState<PaymentMethod[]>([]);
-  const [creditBalanceCents, setCreditBalanceCents] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [addingCard, setAddingCard] = useState(false);
 
-  const loadMethods = useCallback(async () => {
-    try {
-      setError(null);
-      const [methodsData, creditData] = await Promise.all([
-        customerFetch<any>("/payments/methods"),
-        customerFetch<{ balanceCents?: number }>("/payments/credit-balance").catch(() => null),
-      ]);
-
+  const {
+    data: paymentData,
+    isLoading: loading,
+    refetch: refetchMethods,
+    error: fetchError,
+  } = useQuery({
+    queryKey: queryKeys.paymentMethods(),
+    queryFn: async () => {
+      const methodsData = await customerFetch<any>("/payments/methods");
       const list = Array.isArray(methodsData)
         ? methodsData
         : Array.isArray(methodsData?.methods)
           ? methodsData.methods
           : [];
+      return list as PaymentMethod[];
+    },
+  });
 
-      setMethods(list);
-      setCreditBalanceCents(creditData?.balanceCents ?? 0);
-    } catch {
-      setError("Unable to load payment methods.");
-    } finally {
-      setLoaded(true);
-    }
-  }, []);
+  const { data: creditBalanceCents = 0 } = useQuery({
+    queryKey: queryKeys.storeCredit(),
+    queryFn: async () => {
+      const data = await customerFetch<{ balanceCents?: number }>("/payments/credit-balance").catch(() => null);
+      return data?.balanceCents ?? 0;
+    },
+  });
 
-  useEffect(() => { loadMethods(); }, [loadMethods]);
+  const methods = paymentData ?? [];
+  const displayError = error || (fetchError ? t("account.paymentMethods.errorLoad") : null);
 
   const setDefault = useCallback(async (id: string) => {
     setBusyId(id);
     try {
       await customerFetch(`/payments/methods/${id}/default`, { method: "PATCH" });
-      await loadMethods();
-      showToast("Default payment method updated", "success");
+      await refetchMethods();
+      showToast(t("account.paymentMethods.toastDefaultUpdated"), "success");
     } catch {
-      showToast("Failed to update default", "error");
+      showToast(t("account.paymentMethods.toastDefaultFailed"), "error");
     } finally {
       setBusyId(null);
     }
-  }, [loadMethods]);
+  }, [refetchMethods, t]);
 
   const removeMethod = useCallback(async (id: string) => {
     Alert.alert(
-      "Remove Payment Method",
-      "Are you sure you want to remove this payment method?",
+      t("account.paymentMethods.removeTitle"),
+      t("account.paymentMethods.removeConfirm"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Remove",
+          text: t("common.remove"),
           style: "destructive",
           onPress: async () => {
             setBusyId(id);
             try {
               await customerFetch(`/payments/methods/${id}`, { method: "DELETE" });
-              await loadMethods();
-              showToast("Payment method removed", "success");
+              await refetchMethods();
+              showToast(t("account.paymentMethods.toastRemoved"), "success");
             } catch {
-              showToast("Failed to remove payment method", "error");
+              showToast(t("account.paymentMethods.toastRemoveFailed"), "error");
             } finally {
               setBusyId(null);
             }
@@ -114,7 +120,7 @@ function PaymentMethodsContent() {
         },
       ],
     );
-  }, [loadMethods]);
+  }, [refetchMethods, t]);
 
   const handleAddCard = useCallback(async () => {
     if (addingCard) return;
@@ -131,23 +137,23 @@ function PaymentMethodsContent() {
         returnURL: "wabbus://account/payment-methods",
       });
 
-      if (initError) throw new Error(initError.message || "Could not initialize card setup.");
+      if (initError) throw new Error(initError.message || t("account.paymentMethods.errorInitSetup"));
 
       const { error: presentError } = await presentPaymentSheet();
 
       if (presentError) {
         if (presentError.code === "Canceled") return;
-        throw new Error(presentError.message || "Card setup failed.");
+        throw new Error(presentError.message || t("account.paymentMethods.errorSetupFailed"));
       }
 
-      await loadMethods();
-      showToast("Card added successfully", "success");
+      await refetchMethods();
+      showToast(t("account.paymentMethods.toastCardAdded"), "success");
     } catch (e: any) {
-      setError(e.message || "Unable to add card. Please try again.");
+      setError(e.message || t("account.paymentMethods.errorAddCard"));
     } finally {
       setAddingCard(false);
     }
-  }, [addingCard, loadMethods]);
+  }, [addingCard, refetchMethods, t]);
 
   const sorted = useMemo(
     () => [...methods].sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault)),
@@ -158,7 +164,7 @@ function PaymentMethodsContent() {
     <View style={[s.screen, { paddingTop: insets.top }]}>
       <View style={s.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Payment Methods</AppText>
+        <AppText variant="title">{t("account.paymentMethods.heading")}</AppText>
         <Pressable onPress={handleAddCard} disabled={addingCard} hitSlop={8} style={{ width: 44, alignItems: "center", justifyContent: "center" }}>
           {addingCard ? (
             <ActivityIndicator size="small" color={colors.brandBlue} />
@@ -168,14 +174,14 @@ function PaymentMethodsContent() {
         </Pressable>
       </View>
 
-      {error && (
+      {displayError && (
         <View style={s.errorBanner}>
           <Icon name="error-outline" size={18} color={colors.error} />
-          <AppText variant="caption" color={colors.error} style={{ flex: 1 }}>{error}</AppText>
+          <AppText variant="caption" color={colors.error} style={{ flex: 1 }}>{displayError}</AppText>
         </View>
       )}
 
-      {!loaded ? (
+      {loading ? (
         <ActivityIndicator size="large" color={colors.brandBlue} style={s.loader} />
       ) : (
         <FlatList
@@ -185,12 +191,11 @@ function PaymentMethodsContent() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <>
-              {/* Store credit balance */}
               {creditBalanceCents > 0 && (
                 <View style={s.creditCard}>
                   <Icon name="account-balance-wallet" size={24} color={colors.success} />
                   <View style={{ marginLeft: spacing[3], flex: 1 }}>
-                    <AppText variant="label">Store Credit</AppText>
+                    <AppText variant="label">{t("account.paymentMethods.storeCredit")}</AppText>
                     <AppText variant="body" color={colors.success} weight="bold">
                       {formatMoney(creditBalanceCents)}
                     </AppText>
@@ -199,16 +204,16 @@ function PaymentMethodsContent() {
               )}
 
               {sorted.length > 0 && (
-                <AppText variant="subtitle" style={s.sectionTitle}>Saved Methods</AppText>
+                <AppText variant="subtitle" style={s.sectionTitle}>{t("account.paymentMethods.savedMethods")}</AppText>
               )}
             </>
           }
           ListEmptyComponent={
             <View style={s.empty}>
               <Icon name="credit-card" size={48} color={colors.gray300} />
-              <AppText variant="subtitle" color={colors.muted}>No saved payment methods</AppText>
+              <AppText variant="subtitle" color={colors.muted}>{t("account.paymentMethods.noSavedMethods")}</AppText>
               <AppText variant="body" color={colors.mutedLight} align="center">
-                Payment methods are saved automatically during checkout.
+                {t("account.paymentMethods.noSavedMethodsDesc")}
               </AppText>
             </View>
           }
@@ -228,7 +233,7 @@ function PaymentMethodsContent() {
                     <AppText variant="label">{brandLabel}</AppText>
                     {item.isDefault && (
                       <View style={s.defaultBadge}>
-                        <AppText variant="tiny" color={colors.brandBlue} weight="bold">DEFAULT</AppText>
+                        <AppText variant="tiny" color={colors.brandBlue} weight="bold">{t("account.paymentMethods.default")}</AppText>
                       </View>
                     )}
                   </View>
@@ -236,7 +241,7 @@ function PaymentMethodsContent() {
                     <AppText variant="body" color={colors.muted}>•••• {item.last4}</AppText>
                   )}
                   {expLabel && (
-                    <AppText variant="caption" color={colors.mutedLight}>Expires {expLabel}</AppText>
+                    <AppText variant="caption" color={colors.mutedLight}>{t("account.paymentMethods.expires", { exp: expLabel })}</AppText>
                   )}
                 </View>
                 <View style={s.methodActions}>
@@ -249,7 +254,7 @@ function PaymentMethodsContent() {
                       {busy ? (
                         <ActivityIndicator size="small" color={colors.brandBlue} />
                       ) : (
-                        <AppText variant="tiny" color={colors.brandBlue} weight="semibold">Set Default</AppText>
+                        <AppText variant="tiny" color={colors.brandBlue} weight="semibold">{t("account.paymentMethods.setDefault")}</AppText>
                       )}
                     </Pressable>
                   )}
@@ -268,7 +273,7 @@ function PaymentMethodsContent() {
             <View style={s.footer}>
               <Icon name="lock" size={14} color={colors.mutedLight} />
               <AppText variant="tiny" color={colors.mutedLight} style={{ marginLeft: spacing[1] }}>
-                Payment info is secured by Stripe
+                {t("account.paymentMethods.securedByStripe")}
               </AppText>
             </View>
           }

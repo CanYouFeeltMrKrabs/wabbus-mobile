@@ -14,9 +14,11 @@ export type PickedFile = {
   size: number;
 };
 
-export async function pickDocument(): Promise<PickedFile | null> {
+export async function pickDocument(opts?: {
+  type?: string | string[];
+}): Promise<PickedFile | null> {
   const result = await DocumentPicker.getDocumentAsync({
-    type: "*/*",
+    type: opts?.type ?? "*/*",
     copyToCacheDirectory: true,
   });
 
@@ -46,18 +48,22 @@ export async function uploadFileAuth(opts: {
   extraPresignBody?: Record<string, unknown>;
   extraConfirmBody?: Record<string, unknown>;
 }): Promise<UploadResult> {
-  const presignData = await customerFetch<{ uploadUrl: string; rawKey: string }>(
-    opts.presignUrl,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        mimeType: opts.file.mimeType,
-        fileSize: opts.file.size,
-        fileName: opts.file.name,
-        ...opts.extraPresignBody,
-      }),
-    },
-  );
+  const presignData = await customerFetch<{
+    uploadUrl: string;
+    rawKey?: string;
+    key?: string;
+  }>(opts.presignUrl, {
+    method: "POST",
+    body: JSON.stringify({
+      mimeType: opts.file.mimeType,
+      fileSize: opts.file.size,
+      fileName: opts.file.name,
+      ...opts.extraPresignBody,
+    }),
+  });
+
+  const presignKey = presignData.rawKey ?? presignData.key;
+  if (!presignKey) throw new Error("Presign did not return a storage key.");
 
   const blob = await fetch(opts.file.uri).then((r) => r.blob());
   const uploadRes = await fetch(presignData.uploadUrl, {
@@ -68,19 +74,25 @@ export async function uploadFileAuth(opts: {
 
   if (!uploadRes.ok) throw new Error("Upload to storage failed.");
 
-  const confirmData = await customerFetch<{ messagePublicId?: string; key?: string; rawKey?: string }>(
-    opts.confirmUrl,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        rawKey: presignData.rawKey,
-        ...opts.extraConfirmBody,
-      }),
-    },
-  );
+  const confirmData = await customerFetch<{
+    messagePublicId?: string;
+    key?: string;
+    rawKey?: string;
+    cleanKey?: string;
+  }>(opts.confirmUrl, {
+    method: "POST",
+    body: JSON.stringify({
+      key: presignKey,
+      ...opts.extraConfirmBody,
+    }),
+  });
 
   return {
-    key: confirmData.key ?? confirmData.rawKey ?? presignData.rawKey,
+    key:
+      confirmData.cleanKey ??
+      confirmData.key ??
+      confirmData.rawKey ??
+      presignKey,
     messagePublicId: confirmData.messagePublicId,
   };
 }
@@ -108,7 +120,11 @@ export async function uploadFileGuest(opts: {
   });
 
   if (!presignRes.ok) throw new Error("Presign failed.");
-  const presignData: { uploadUrl: string; rawKey: string } = await presignRes.json();
+  const presignData: { uploadUrl: string; rawKey?: string; key?: string } =
+    await presignRes.json();
+
+  const presignKey = presignData.rawKey ?? presignData.key;
+  if (!presignKey) throw new Error("Presign did not return a storage key.");
 
   const blob = await fetch(opts.file.uri).then((r) => r.blob());
   const uploadRes = await fetch(presignData.uploadUrl, {
@@ -124,16 +140,25 @@ export async function uploadFileGuest(opts: {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({
-      rawKey: presignData.rawKey,
+      key: presignKey,
       ...opts.extraConfirmBody,
     }),
   });
 
   if (!confirmRes.ok) throw new Error("Confirm failed.");
-  const confirmData = await confirmRes.json();
+  const confirmData: {
+    messagePublicId?: string;
+    key?: string;
+    rawKey?: string;
+    cleanKey?: string;
+  } = await confirmRes.json();
 
   return {
-    key: confirmData.key ?? confirmData.rawKey ?? presignData.rawKey,
+    key:
+      confirmData.cleanKey ??
+      confirmData.key ??
+      confirmData.rawKey ??
+      presignKey,
     messagePublicId: confirmData.messagePublicId,
   };
 }

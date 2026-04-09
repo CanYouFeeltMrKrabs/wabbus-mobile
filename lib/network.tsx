@@ -1,5 +1,13 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
-import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
+import React, { createContext, useContext, useEffect, useState } from "react";
+
+type NetInfoModule = typeof import("@react-native-community/netinfo");
+let NetInfo: NetInfoModule["default"] | null = null;
+
+try {
+  NetInfo = require("@react-native-community/netinfo").default;
+} catch {
+  if (__DEV__) console.warn("@react-native-community/netinfo unavailable — assuming online");
+}
 
 type NetworkState = {
   isConnected: boolean;
@@ -22,7 +30,9 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((netState: NetInfoState) => {
+    if (!NetInfo) return;
+
+    const unsubscribe = NetInfo.addEventListener((netState) => {
       setState({
         isConnected: netState.isConnected ?? true,
         isInternetReachable: netState.isInternetReachable ?? null,

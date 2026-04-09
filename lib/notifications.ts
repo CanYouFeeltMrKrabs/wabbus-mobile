@@ -1,28 +1,44 @@
 /**
  * Push notifications — register for tokens, send to backend, handle incoming.
  *
- * Uses expo-notifications + expo-device.
- * Token is registered with the backend after login and deregistered on logout.
+ * Uses expo-notifications + expo-device when native modules are available.
+ * Gracefully degrades to no-ops when running in Expo Go or environments
+ * without the native module (e.g. simulator without dev client).
  */
 
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
 import { customerFetch } from "./api";
 import { ROUTES } from "./routes";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowInForeground: true,
-  }),
-});
+type NotificationsModule = typeof import("expo-notifications");
+type DeviceModule = typeof import("expo-device");
+
+let Notifications: NotificationsModule | null = null;
+let Device: DeviceModule | null = null;
+
+try {
+  Notifications = require("expo-notifications");
+  Device = require("expo-device");
+} catch {
+  if (__DEV__) console.warn("expo-notifications native module unavailable — push disabled");
+}
+
+if (Notifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowInForeground: true,
+    }),
+  });
+}
 
 let cachedToken: string | null = null;
 
 export async function registerForPushNotifications(): Promise<string | null> {
+  if (!Notifications || !Device) return null;
+
   if (!Device.isDevice) {
     if (__DEV__) console.log("Push notifications require a physical device");
     return null;
@@ -137,4 +153,25 @@ export function parseNotificationRoute(
     default:
       return null;
   }
+}
+
+/**
+ * Subscribe to notification tap responses. Returns a cleanup function.
+ * No-ops when the native module is unavailable.
+ */
+export function addResponseListener(
+  callback: (data: Record<string, unknown> | undefined) => void,
+): () => void {
+  if (!Notifications) return () => {};
+
+  const subscription = Notifications.addNotificationResponseReceivedListener(
+    (response) => {
+      const data = response.notification.request.content.data as
+        | Record<string, unknown>
+        | undefined;
+      callback(data);
+    },
+  );
+
+  return () => subscription.remove();
 }

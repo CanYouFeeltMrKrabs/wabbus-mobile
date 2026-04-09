@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import {
   View,
   ScrollView,
@@ -10,15 +10,19 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
+import i18n from "@/i18n";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import { useQuery } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
 import { FALLBACK_IMAGE } from "@/lib/config";
 import { formatMoney } from "@/lib/money";
 import { buildCarrierTrackingUrl } from "@/lib/carrierTrackingUrl";
 import { formatDateLong, formatDateShort } from "@/lib/orderHelpers";
+import { queryKeys } from "@/lib/queryKeys";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 type Shipment = {
@@ -71,7 +75,6 @@ const STATUS_STEP: Record<string, number> = {
   DELIVERED: 3,
 };
 
-const STEP_LABELS = ["Ordered", "Shipped", "Out for Delivery", "Delivered"];
 const STEP_ICONS = ["check-circle", "local-shipping", "delivery-dining", "home"];
 
 function getItemTitle(item: OrderItemAPI): string {
@@ -79,7 +82,7 @@ function getItemTitle(item: OrderItemAPI): string {
     item.title ||
     item.productVariant?.product?.title ||
     item.productVariant?.title ||
-    "Item"
+    i18n.t("orders.tracking.itemFallback")
   );
 }
 
@@ -99,25 +102,25 @@ function formatRelativeDate(iso: string): string {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Tomorrow";
-  if (diff === -1) return "Yesterday";
+  if (diff === 0) return i18n.t("orders.tracking.today");
+  if (diff === 1) return i18n.t("orders.tracking.tomorrow");
+  if (diff === -1) return i18n.t("orders.tracking.yesterday");
   if (diff > 1 && diff <= 6) return d.toLocaleDateString("en-US", { weekday: "long" });
   return formatDateShort(iso);
 }
 
 function statusSubtitle(s: Shipment): string {
   if (s.status === "DELIVERED" && s.deliveredAt) {
-    return `Delivered ${formatDateLong(s.deliveredAt)}`;
+    return i18n.t("orders.tracking.deliveredOn", { date: formatDateLong(s.deliveredAt) });
   }
-  if (s.status === "OUT_FOR_DELIVERY") return "Arriving today";
+  if (s.status === "OUT_FOR_DELIVERY") return i18n.t("orders.tracking.arrivingToday");
   if (s.status === "IN_TRANSIT" && s.estimatedDelivery) {
-    return `Estimated ${formatRelativeDate(s.estimatedDelivery)}`;
+    return i18n.t("orders.tracking.estimated", { date: formatRelativeDate(s.estimatedDelivery) });
   }
   if (s.shippedAt) {
-    return `Shipped ${formatDateLong(s.shippedAt)}`;
+    return i18n.t("orders.tracking.shippedOn", { date: formatDateLong(s.shippedAt) });
   }
-  return "Preparing your order";
+  return i18n.t("orders.tracking.preparingOrder");
 }
 
 export default function TrackingScreen() {
@@ -125,19 +128,22 @@ export default function TrackingScreen() {
 }
 
 function TrackingContent() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [order, setOrder] = useState<OrderAPI | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!id) return;
-    customerFetch<OrderAPI>(`/orders/${id}`)
-      .then(setOrder)
-      .catch(() => setOrder(null))
-      .finally(() => setLoading(false));
-  }, [id]);
+  const STEP_LABELS = [
+    t("orders.tracking.stepOrdered"),
+    t("orders.tracking.stepShipped"),
+    t("orders.tracking.stepOutForDelivery"),
+    t("orders.tracking.stepDelivered"),
+  ];
+  const { data: order, isLoading: loading } = useQuery({
+    queryKey: queryKeys.orders.detail(id!),
+    queryFn: () => customerFetch<OrderAPI>(`/orders/${id}`),
+    enabled: !!id,
+  });
 
   const shipment = useMemo(() => {
     if (!order?.items) return null;
@@ -189,8 +195,8 @@ function TrackingContent() {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="error-outline" size={48} color={colors.gray300} />
-        <AppText variant="subtitle" color={colors.muted}>Order not found</AppText>
-        <AppButton title="Go Back" variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
+        <AppText variant="subtitle" color={colors.muted}>{t("orders.notFound")}</AppText>
+        <AppButton title={t("orders.goBack")} variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -202,22 +208,22 @@ function TrackingContent() {
     const isCancelled = st === "CANCELLED";
     const isPaid = st === "PAID" || st === "PROCESSING";
     const noShipTitle = isCancelled
-      ? "Order Cancelled"
+      ? t("orders.tracking.orderCancelled")
       : isPaid
-        ? "Being Prepared"
-        : "Tracking Unavailable";
+        ? t("orders.tracking.beingPrepared")
+        : t("orders.tracking.trackingUnavailable");
     const noShipSub = isCancelled
-      ? "This order has been cancelled."
+      ? t("orders.tracking.orderCancelledSub")
       : isPaid
-        ? "Your order is being prepared for shipment."
-        : "Tracking information is not yet available.";
+        ? t("orders.tracking.beingPreparedSub")
+        : t("orders.tracking.trackingUnavailableSub");
     const noShipIcon = isCancelled ? "cancel" : isPaid ? "inventory-2" : "local-shipping";
 
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-          <AppText variant="title">Tracking</AppText>
+          <AppText variant="title">{t("orders.tracking.heading")}</AppText>
           <View style={{ width: 44 }} />
         </View>
         <View style={styles.noShipCard}>
@@ -233,7 +239,7 @@ function TrackingContent() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Tracking</AppText>
+        <AppText variant="title">{t("orders.tracking.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
@@ -241,14 +247,14 @@ function TrackingContent() {
         {/* Hero: estimated delivery */}
         <View style={styles.heroCard}>
           <AppText style={styles.heroLabel}>
-            {isDelivered ? "DELIVERED" : "ESTIMATED DELIVERY"}
+            {isDelivered ? t("orders.tracking.delivered") : t("orders.tracking.estimatedDelivery")}
           </AppText>
           <AppText style={styles.heroBig}>
             {isDelivered
-              ? "Delivered"
+              ? t("orders.tracking.deliveredLabel")
               : shipment.estimatedDelivery
                 ? formatRelativeDate(shipment.estimatedDelivery)
-                : "Pending"}
+                : t("orders.tracking.pending")}
           </AppText>
           {!isDelivered && shipment.estimatedDelivery && (
             <AppText style={styles.heroSub}>
@@ -312,7 +318,7 @@ function TrackingContent() {
           <View style={styles.infoRow}>
             <View style={{ flex: 1 }}>
               <AppText variant="label" color={colors.slate500} style={styles.infoLabel}>
-                TRACKING ID
+                {t("orders.tracking.trackingId")}
               </AppText>
               <AppText style={styles.infoValue}>{shipment.trackingNumber}</AppText>
             </View>
@@ -322,7 +328,7 @@ function TrackingContent() {
                 onPress={() => Linking.openURL(trackingUrl)}
               >
                 <Icon name="map" size={16} color={colors.brandBlue} />
-                <AppText style={styles.trackBtnText}>Track</AppText>
+                <AppText style={styles.trackBtnText}>{t("orders.tracking.track")}</AppText>
               </Pressable>
             )}
           </View>
@@ -331,7 +337,7 @@ function TrackingContent() {
 
           <View>
             <AppText variant="label" color={colors.slate500} style={styles.infoLabel}>
-              CARRIER
+              {t("orders.tracking.carrier")}
             </AppText>
             <View style={styles.carrierRow}>
               <View style={styles.carrierIcon}>
@@ -340,7 +346,7 @@ function TrackingContent() {
               <View>
                 <AppText style={styles.carrierName}>{shipment.carrier}</AppText>
                 <AppText variant="caption" color={colors.slate500}>
-                  {shipment.carrierService || "Standard Delivery"}
+                  {shipment.carrierService || t("orders.tracking.standardDelivery")}
                 </AppText>
               </View>
             </View>
@@ -348,7 +354,7 @@ function TrackingContent() {
               <View style={styles.signedRow}>
                 <Icon name="verified" size={14} color={colors.slate400} />
                 <AppText variant="caption" color={colors.slate500}>
-                  Signed by {shipment.signedBy}
+                  {t("orders.tracking.signedBy", { name: shipment.signedBy })}
                 </AppText>
               </View>
             )}
@@ -361,7 +367,7 @@ function TrackingContent() {
             <View style={styles.packageHeader}>
               <Icon name="inventory" size={18} color={colors.brandBlue} />
               <AppText style={styles.packageTitle}>
-                Package ({packageItems.length} {packageItems.length === 1 ? "item" : "items"})
+                {t("orders.tracking.packageContains", { count: packageItems.length })}
               </AppText>
             </View>
             {packageItems.map((item, idx) => (
@@ -373,7 +379,7 @@ function TrackingContent() {
                 />
                 <View style={{ flex: 1 }}>
                   <AppText variant="label" numberOfLines={2}>{getItemTitle(item)}</AppText>
-                  <AppText variant="caption" color={colors.slate500}>Qty: {item.quantity}</AppText>
+                  <AppText variant="caption" color={colors.slate500}>{t("orders.qtyLabel", { count: item.quantity })}</AppText>
                 </View>
               </View>
             ))}

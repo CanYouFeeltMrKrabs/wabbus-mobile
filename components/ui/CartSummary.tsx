@@ -1,5 +1,6 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import { formatMoney } from "@/lib/money";
@@ -11,30 +12,31 @@ interface CartSummaryProps {
 }
 
 export default function CartSummary({ subtotalCents, onCheckout }: CartSummaryProps) {
+  const { t } = useTranslation();
   return (
     <View style={styles.container}>
       <View style={styles.row}>
-        <AppText variant="body" color={colors.muted}>Subtotal</AppText>
+        <AppText variant="body" color={colors.muted}>{t("cart.subtotal")}</AppText>
         <AppText variant="body" weight="semibold">
           {formatMoney(subtotalCents)}
         </AppText>
       </View>
       <View style={styles.row}>
-        <AppText variant="body" color={colors.muted}>Shipping & tax</AppText>
+        <AppText variant="body" color={colors.muted}>{t("cart.shippingAndTax")}</AppText>
         <AppText variant="caption" color={colors.success} weight="medium">
-          Calculated at checkout
+          {t("cart.calculatedAtCheckout")}
         </AppText>
       </View>
       
       <View style={styles.divider} />
       
       <View style={styles.totalRow}>
-        <AppText style={styles.totalLabel}>Estimated Total</AppText>
+        <AppText style={styles.totalLabel}>{t("cart.estimatedTotal")}</AppText>
         <AppText style={styles.totalPrice}>{formatMoney(subtotalCents)}</AppText>
       </View>
 
       <AppButton
-        title="Proceed to Checkout"
+        title={t("cart.proceedToCheckout")}
         variant="primary"
         iconRight="arrow-forward"
         fullWidth

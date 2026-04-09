@@ -11,30 +11,27 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
 import { productImageUrl } from "@/lib/image";
 import { getReturnStatusConfig } from "@/lib/orderStatus";
-import { formatDate, normalizeNumber, pickItemTitle } from "@/lib/orderHelpers";
+import { formatDate, normalizeNumber, pickItemTitle, pickItemImage, pickUnitPriceCents, orderTotalCents, orderItemCount } from "@/lib/orderHelpers";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import { SkeletonOrderCard } from "@/components/ui/Skeleton";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 import type { Order, ReturnRequest } from "@/lib/types";
 
 type Tab = "orders" | "returns" | "buyagain";
 type SortBy = "newest" | "oldest" | "total-high" | "total-low";
-
-const SORT_OPTIONS: { value: SortBy; label: string }[] = [
-  { value: "newest", label: "Newest" },
-  { value: "oldest", label: "Oldest" },
-  { value: "total-high", label: "Total: High" },
-  { value: "total-low", label: "Total: Low" },
-];
 
 type BuyAgainItem = {
   productId: string;
@@ -55,15 +52,15 @@ function extractBuyAgainItems(orders: Order[]): BuyAgainItem[] {
   for (const order of delivered) {
     if (!order.items) continue;
     for (const item of order.items) {
-      const key = item.publicId || item.title;
+      const key = item.publicId || pickItemTitle(item);
       if (seen.has(key)) continue;
       seen.add(key);
       items.push({
-        productId: (item as any).productId ?? "",
-        variantPublicId: (item as any).variantPublicId ?? "",
-        title: item.title,
-        image: item.image ?? "",
-        price: item.unitPriceCents,
+        productId: item.productVariant?.product?.productId ?? "",
+        variantPublicId: item.productVariant?.publicId ?? "",
+        title: pickItemTitle(item),
+        image: pickItemImage(item) ?? "",
+        price: pickUnitPriceCents(item),
         lastOrderDate: order.createdAt,
       });
     }
@@ -72,15 +69,72 @@ function extractBuyAgainItems(orders: Order[]): BuyAgainItem[] {
 }
 
 export default function OrdersScreen() {
+  return <RequireAuth><OrdersContent /></RequireAuth>;
+}
+
+function OrdersContent() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { isLoggedIn } = useAuth();
   const { addToCart } = useCart();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [returns, setReturns] = useState<ReturnRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [returnsLoading, setReturnsLoading] = useState(true);
+  const SORT_OPTIONS: { value: SortBy; label: string }[] = [
+    { value: "newest", label: t("accountOrders.sortNewest") },
+    { value: "oldest", label: t("accountOrders.sortOldest") },
+    { value: "total-high", label: t("accountOrders.sortTotalHigh") },
+    { value: "total-low", label: t("accountOrders.sortTotalLow") },
+  ];
+
+  const { data: ordersData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.orders.list(),
+    queryFn: () => customerFetch<any>("/orders?limit=50"),
+    enabled: isLoggedIn,
+  });
+
+  const { data: returnsData, isLoading: returnsLoading } = useQuery({
+    queryKey: queryKeys.returns.list(),
+    queryFn: () => customerFetch<any>("/returns"),
+    enabled: isLoggedIn,
+  });
+
+  type CaseLite = { caseNumber: string; status: string; resolutionIntent: string; order: { publicId?: string } };
+  const { data: cases = [] } = useQuery({
+    queryKey: queryKeys.messages.cases.listFlat(),
+    queryFn: async () => {
+      const raw = await customerFetch<any>("/cases/mine?limit=200");
+      if (raw && typeof raw === "object" && Array.isArray(raw.data)) return raw.data as CaseLite[];
+      return Array.isArray(raw) ? raw as CaseLite[] : [];
+    },
+    enabled: isLoggedIn,
+    staleTime: 5 * 60_000,
+  });
+
+  const activeCasesByOrder = useMemo(() => {
+    const ACTIVE_STATUSES = ["OPEN", "AWAITING_VENDOR", "AWAITING_CUSTOMER", "AWAITING_SUPPORT", "IN_PROGRESS", "OPEN_PENDING_FLAG_OR_DECISION"];
+    const map = new Map<string, CaseLite[]>();
+    for (const c of cases) {
+      if (!ACTIVE_STATUSES.includes(c.status)) continue;
+      const key = c.order?.publicId;
+      if (!key) continue;
+      const arr = map.get(key);
+      if (arr) arr.push(c);
+      else map.set(key, [c]);
+    }
+    return map;
+  }, [cases]);
+
+  const initialOrders = useMemo(() => {
+    const d = ordersData;
+    return Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : []);
+  }, [ordersData]);
+
+  const returns: ReturnRequest[] = useMemo(() => {
+    const d = returnsData;
+    return Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : []);
+  }, [returnsData]);
+
+  const [extraOrders, setExtraOrders] = useState<Order[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -90,38 +144,29 @@ export default function OrdersScreen() {
   const [sortBy, setSortBy] = useState<SortBy>("newest");
   const [showSort, setShowSort] = useState(false);
 
-  const loadOrders = useCallback(async (nextCursor?: string | null) => {
-    if (!isLoggedIn) { setLoading(false); return; }
-    const isLoadMore = !!nextCursor;
-    if (isLoadMore) setLoadingMore(true); else setLoading(true);
+  useEffect(() => {
+    setCursor(ordersData?.nextCursor ?? null);
+    setHasMore(!!ordersData?.hasMore);
+    setExtraOrders([]);
+  }, [ordersData]);
+
+  const orders = useMemo(
+    () => [...initialOrders, ...extraOrders],
+    [initialOrders, extraOrders],
+  );
+
+  const loadMore = useCallback(async (nextCursor: string) => {
+    setLoadingMore(true);
     try {
-      const params = new URLSearchParams({ limit: "50" });
-      if (nextCursor) params.set("cursor", nextCursor);
+      const params = new URLSearchParams({ limit: "50", cursor: nextCursor });
       const data = await customerFetch<any>(`/orders?${params}`);
       const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-      setOrders((prev) => isLoadMore ? [...prev, ...list] : list);
+      setExtraOrders((prev) => [...prev, ...list]);
       setCursor(data?.nextCursor ?? null);
       setHasMore(!!data?.hasMore);
-    } catch {
-      if (!isLoadMore) setOrders([]);
-    }
-    if (isLoadMore) setLoadingMore(false); else setLoading(false);
-  }, [isLoggedIn]);
-
-  const loadReturns = useCallback(async () => {
-    if (!isLoggedIn) { setReturnsLoading(false); return; }
-    setReturnsLoading(true);
-    try {
-      const raw = await customerFetch<any>("/returns");
-      const list = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : []);
-      setReturns(list);
-    } catch {
-      setReturns([]);
-    }
-    setReturnsLoading(false);
-  }, [isLoggedIn]);
-
-  useEffect(() => { loadOrders(); loadReturns(); }, [loadOrders, loadReturns]);
+    } catch {}
+    setLoadingMore(false);
+  }, []);
 
   const buyAgainItems = useMemo(() => extractBuyAgainItems(orders), [orders]);
 
@@ -141,8 +186,8 @@ export default function OrdersScreen() {
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       }
       if (sortBy === "total-high" || sortBy === "total-low") {
-        const ta = normalizeNumber(a.totalAmount) ?? a.totalCents;
-        const tb = normalizeNumber(b.totalAmount) ?? b.totalCents;
+        const ta = normalizeNumber(a.totalAmount) ?? 0;
+        const tb = normalizeNumber(b.totalAmount) ?? 0;
         return sortBy === "total-high" ? tb - ta : ta - tb;
       }
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -161,9 +206,9 @@ export default function OrdersScreen() {
         productId: item.productId,
         slug: "",
       });
-      Alert.alert("Added to Cart", `${item.title} added to your cart.`);
+      Alert.alert(t("accountOrders.addedToCartTitle"), t("accountOrders.addedToCartBody", { title: item.title }));
     } catch {
-      Alert.alert("Error", "Could not add to cart.");
+      Alert.alert(t("common.error"), t("accountOrders.addToCartError"));
     }
   }, [addToCart]);
 
@@ -175,8 +220,8 @@ export default function OrdersScreen() {
     return (
       <View style={[st.empty, { paddingTop: insets.top }]}>
         <Icon name="receipt-long" size={48} color={colors.gray300} />
-        <AppText variant="subtitle" color={colors.muted}>Sign in to view your orders</AppText>
-        <AppButton title="Sign In" variant="primary" onPress={() => router.push(ROUTES.login)} style={{ marginTop: spacing[4] }} />
+        <AppText variant="subtitle" color={colors.muted}>{t("accountOrders.signInPrompt")}</AppText>
+        <AppButton title={t("accountOrders.signIn")} variant="primary" onPress={() => router.push(ROUTES.login)} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -185,7 +230,7 @@ export default function OrdersScreen() {
     <View style={[st.screen, { paddingTop: insets.top }]}>
       <View style={st.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">My Orders</AppText>
+        <AppText variant="title">{t("accountOrders.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
@@ -200,7 +245,7 @@ export default function OrdersScreen() {
             <AppText
               style={[st.tabText, activeTab === tab && st.tabTextActive]}
             >
-              {tab === "orders" ? "Orders" : tab === "returns" ? "Returns" : "Buy Again"}
+              {tab === "orders" ? t("accountOrders.tabOrders") : tab === "returns" ? t("accountOrders.tabReturns") : t("accountOrders.tabBuyAgain")}
             </AppText>
           </Pressable>
         ))}
@@ -215,7 +260,7 @@ export default function OrdersScreen() {
               <Icon name="search" size={18} color={colors.muted} />
               <TextInput
                 style={st.searchField}
-                placeholder="Search orders…"
+                placeholder={t("accountOrders.searchPlaceholder")}
                 placeholderTextColor={colors.mutedLight}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -262,7 +307,7 @@ export default function OrdersScreen() {
             <View style={st.empty}>
               <Icon name="receipt-long" size={48} color={colors.gray300} />
               <AppText variant="subtitle" color={colors.muted}>
-                {searchQuery ? "No orders match your search" : "No orders yet"}
+                {searchQuery ? t("accountOrders.noMatchingOrders") : t("accountOrders.noOrdersYet")}
               </AppText>
             </View>
           ) : (
@@ -271,31 +316,42 @@ export default function OrdersScreen() {
               keyExtractor={(o) => o.publicId}
               contentContainerStyle={st.list}
               showsVerticalScrollIndicator={false}
-              onEndReached={() => { if (hasMore && !loadingMore) loadOrders(cursor); }}
+              onEndReached={() => { if (hasMore && !loadingMore && cursor) loadMore(cursor); }}
               onEndReachedThreshold={0.3}
               ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={colors.brandBlue} style={{ marginVertical: spacing[4] }} /> : null}
-              renderItem={({ item: order }) => (
-                <Pressable
-                  style={({ pressed }) => [st.orderCard, pressed && { opacity: 0.9 }]}
-                  onPress={() => router.push(ROUTES.orderDetail(order.publicId))}
-                >
-                  <View style={st.orderRow}>
-                    <AppText variant="label">Order {orderDisplayId(order)}</AppText>
-                    <View style={[st.statusBadge, { backgroundColor: order.status === "DELIVERED" ? colors.successLight : colors.brandBlueLight }]}>
-                      <AppText variant="tiny" color={order.status === "DELIVERED" ? colors.success : colors.brandBlue} weight="bold">
-                        {order.status.replace(/_/g, " ")}
-                      </AppText>
+              renderItem={({ item: order }) => {
+                const orderCases = activeCasesByOrder.get(order.publicId);
+                return (
+                  <Pressable
+                    style={({ pressed }) => [st.orderCard, pressed && { opacity: 0.9 }]}
+                    onPress={() => router.push(ROUTES.orderDetail(order.publicId))}
+                  >
+                    <View style={st.orderRow}>
+                      <AppText variant="label">{t("accountOrders.orderLabel", { id: orderDisplayId(order) })}</AppText>
+                      <View style={[st.statusBadge, { backgroundColor: order.status === "DELIVERED" ? colors.successLight : colors.brandBlueLight }]}>
+                        <AppText variant="tiny" color={order.status === "DELIVERED" ? colors.success : colors.brandBlue} weight="bold">
+                          {order.status.replace(/_/g, " ")}
+                        </AppText>
+                      </View>
                     </View>
-                  </View>
-                  <View style={st.orderRow}>
-                    <AppText variant="caption">{formatDate(order.createdAt)}</AppText>
-                    <AppText variant="priceSmall">{formatMoney(order.totalCents)}</AppText>
-                  </View>
-                  <AppText variant="caption" style={st.itemCount}>
-                    {order.itemCount} item{order.itemCount !== 1 ? "s" : ""}
-                  </AppText>
-                </Pressable>
-              )}
+                    <View style={st.orderRow}>
+                      <AppText variant="caption">{formatDate(order.createdAt)}</AppText>
+                      <AppText variant="priceSmall">{formatMoney(orderTotalCents(order))}</AppText>
+                    </View>
+                    <AppText variant="caption" style={st.itemCount}>
+                      {t("accountOrders.itemCount", { count: orderItemCount(order) })}
+                    </AppText>
+                    {orderCases && orderCases.length > 0 && (
+                      <View style={st.caseBadgeRow}>
+                        <Icon name="flag" size={12} color={colors.warning} />
+                        <AppText variant="tiny" color={colors.warning} weight="semibold">
+                          {t("accountOrders.activeCases", { count: orderCases.length })}
+                        </AppText>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              }}
             />
           )}
         </>
@@ -309,9 +365,9 @@ export default function OrdersScreen() {
           ) : returns.length === 0 ? (
             <View style={st.empty}>
               <Icon name="assignment-return" size={48} color={colors.gray300} />
-              <AppText variant="subtitle" color={colors.muted}>No returns</AppText>
+              <AppText variant="subtitle" color={colors.muted}>{t("accountOrders.noReturns")}</AppText>
               <AppText variant="caption" color={colors.muted} style={{ textAlign: "center", paddingHorizontal: spacing[8] }}>
-                Return requests will appear here once submitted.
+                {t("accountOrders.returnsWillAppear")}
               </AppText>
             </View>
           ) : (
@@ -323,11 +379,10 @@ export default function OrdersScreen() {
               renderItem={({ item: ret }) => {
                 const returnStatus = getReturnStatusConfig(ret.status);
                 const itemTitle = ret.orderItem?.title || "Item";
-                const orderLabel = ret.orderItem?.order?.orderNumber
-                  ? `Order #${ret.orderItem.order.orderNumber}`
-                  : ret.orderItem?.order?.publicId
-                    ? `Order #${ret.orderItem.order.publicId.slice(0, 8)}`
-                    : "";
+                const orderNum = ret.orderItem?.order?.orderNumber
+                  ?? ret.orderItem?.order?.publicId?.slice(0, 8)
+                  ?? "";
+                const orderLabel = orderNum ? t("accountOrders.orderPrefix", { number: orderNum }) : "";
 
                 return (
                   <View style={st.returnCard}>
@@ -356,7 +411,7 @@ export default function OrdersScreen() {
                     </View>
                     {ret.status === "AWAITING_SHIPMENT" && ret.shipBy && (
                       <AppText variant="caption" color={colors.warning} style={{ marginTop: spacing[1] }}>
-                        Ship by {formatDate(ret.shipBy)}
+                        {t("accountOrders.shipBy", { date: formatDate(ret.shipBy) })}
                       </AppText>
                     )}
                   </View>
@@ -375,9 +430,9 @@ export default function OrdersScreen() {
           ) : buyAgainItems.length === 0 ? (
             <View style={st.empty}>
               <Icon name="shopping-cart" size={48} color={colors.gray300} />
-              <AppText variant="subtitle" color={colors.muted}>No delivered orders yet</AppText>
+              <AppText variant="subtitle" color={colors.muted}>{t("accountOrders.noDeliveredOrders")}</AppText>
               <AppText variant="caption" color={colors.muted} style={{ textAlign: "center", paddingHorizontal: spacing[8] }}>
-                Items from your delivered orders will appear here for quick reordering.
+                {t("accountOrders.buyAgainEmpty")}
               </AppText>
             </View>
           ) : (
@@ -402,14 +457,14 @@ export default function OrdersScreen() {
                     {formatMoney(item.price)}
                   </AppText>
                   <AppText variant="caption" color={colors.muted} style={{ marginTop: spacing[0.5] }}>
-                    Last ordered {formatDate(item.lastOrderDate)}
+                    {t("accountOrders.lastOrdered", { date: formatDate(item.lastOrderDate) })}
                   </AppText>
                   <Pressable
                     style={st.buyAgainBtn}
                     onPress={() => handleBuyAgainAddToCart(item)}
                   >
                     <Icon name="add-shopping-cart" size={14} color={colors.brandBlue} />
-                    <AppText style={st.buyAgainBtnText}>Add to Cart</AppText>
+                    <AppText style={st.buyAgainBtnText}>{t("accountOrders.addToCart")}</AppText>
                   </Pressable>
                 </View>
               )}
@@ -475,6 +530,17 @@ const st = StyleSheet.create({
   orderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing[1] },
   statusBadge: { paddingHorizontal: spacing[2], paddingVertical: spacing[0.5], borderRadius: borderRadius.sm },
   itemCount: { marginTop: spacing[1] },
+  caseBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
+    marginTop: spacing[2],
+    backgroundColor: colors.warningLight,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.sm,
+    alignSelf: "flex-start",
+  },
   returnCard: {
     backgroundColor: colors.card, borderRadius: borderRadius.xl, padding: spacing[4],
     marginBottom: spacing[3], ...shadows.sm,

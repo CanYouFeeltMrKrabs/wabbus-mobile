@@ -35,6 +35,8 @@ export const ROUTES = {
   orderReturn: (id: string | number) => `/orders/${id}/return` as const,
   orderReview: (id: string | number) => `/orders/${id}/review` as const,
   orderMissing: (id: string | number) => `/orders/${id}/missing` as const,
+  orderCase: (id: string | number, issueId: string) =>
+    `/orders/${id}/case?issueId=${encodeURIComponent(issueId)}` as const,
 
   // Account
   accountDetails: "/account/details" as const,
@@ -59,13 +61,22 @@ export const ROUTES = {
   supportLiveChat: "/support/live-chat" as const,
   supportMessageSeller: (orderId: string | number) =>
     `/support/message-seller/${orderId}` as const,
+  supportMessageSellerAll: "/support/message-seller/all" as const,
 
   // Vendor
   vendor: (id: string) => `/vendor/${id}` as const,
+  vendorReviews: (id: string) => `/vendor/${id}/reviews` as const,
 
   // Product redirect (internal id → public)
   productRedirect: (id: string | number) => `/product-redirect/${id}` as const,
 
   // Impersonation
   impersonate: "/impersonate" as const,
+
+  recommended: "/recommended" as const,
+
+  // Legal
+  terms: "/terms" as const,
+  privacy: "/privacy" as const,
+  contact: "/contact" as const,
 } as const;

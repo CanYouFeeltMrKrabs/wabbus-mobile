@@ -3,17 +3,22 @@ import { View, FlatList, StyleSheet, ActivityIndicator, Pressable, ScrollView } 
 import { SkeletonGrid } from "@/components/ui/Skeleton";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import ProductCard from "@/components/ui/ProductCard";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
+import OutageBanner from "@/components/ui/OutageBanner";
 import Icon from "@/components/ui/Icon";
 import { colors, spacing, borderRadius } from "@/lib/theme";
 import { API_BASE } from "@/lib/config";
 import { useCart } from "@/lib/cart";
 import { CATEGORY_SHORT_NAMES } from "@/lib/categories";
 import { ROUTES } from "@/lib/routes";
+import { trackEvent } from "@/lib/tracker";
 import type { PublicProduct } from "@/lib/types";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 
 import { PAGE_SIZE as PAGE_SIZES } from "@/lib/constants";
 
@@ -25,88 +30,89 @@ type SortOption = {
 };
 
 const SORT_OPTIONS: SortOption[] = [
-  { key: "bestselling", label: "Best Selling" },
-  { key: "newest", label: "Newest" },
-  { key: "priceAsc", label: "Price: Low" },
-  { key: "priceDesc", label: "Price: High" },
-  { key: "rating", label: "Top Rated" },
-  { key: "reviews", label: "Most Reviews" },
+  { key: "bestselling", label: "category.sort.bestSelling" },
+  { key: "newest", label: "category.sort.newest" },
+  { key: "priceAsc", label: "category.sort.priceLow" },
+  { key: "priceDesc", label: "category.sort.priceHigh" },
+  { key: "rating", label: "category.sort.topRated" },
+  { key: "reviews", label: "category.sort.mostReviews" },
 ];
 
 export default function CategoryScreen() {
+  const { t } = useTranslation();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { addToCart } = useCart();
 
-  const [products, setProducts] = useState<PublicProduct[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [extraProducts, setExtraProducts] = useState<PublicProduct[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [sort, setSort] = useState("bestselling");
   const [hasMore, setHasMore] = useState(true);
   const skipRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchProducts = useCallback(
-    async (reset: boolean, sortBy: string) => {
-      if (!slug) return;
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      const skip = reset ? 0 : skipRef.current;
-      if (reset) {
-        setLoading(true);
-        setProducts([]);
-        setHasMore(true);
-        skipRef.current = 0;
-      } else {
-        setLoadingMore(true);
-      }
-
-      try {
-        const res = await fetch(
-          `${API_BASE}/products/public?take=${PAGE_SIZE}&skip=${skip}&categorySlug=${slug}&sortBy=${sortBy}`,
-          { signal: controller.signal },
-        );
-        const data = await res.json();
-        const items: PublicProduct[] = Array.isArray(data) ? data : data.products || [];
-
-        if (reset) {
-          setProducts(items);
-        } else {
-          setProducts((prev) => [...prev, ...items]);
-        }
-        skipRef.current = (reset ? 0 : skip) + items.length;
-        setHasMore(items.length >= PAGE_SIZE);
-      } catch (e: any) {
-        if (e?.name !== "AbortError") {
-          if (reset) setProducts([]);
-        }
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
+  const { data: initialProducts, isPending: loading, isError: fetchError, dataUpdatedAt } = useQuery({
+    queryKey: queryKeys.categories.products(slug!, { sortBy: sort }),
+    queryFn: async ({ signal }) => {
+      const res = await fetch(
+        `${API_BASE}/products/public?take=${PAGE_SIZE}&skip=0&categorySlug=${slug}&sortBy=${sort}`,
+        { signal },
+      );
+      const data = await res.json();
+      return (Array.isArray(data) ? data : data.products || []) as PublicProduct[];
     },
-    [slug],
-  );
+    enabled: !!slug,
+  });
 
   useEffect(() => {
-    fetchProducts(true, sort);
-    return () => abortRef.current?.abort();
+    if (!initialProducts) return;
+    setExtraProducts([]);
+    skipRef.current = initialProducts.length;
+    setHasMore(initialProducts.length >= PAGE_SIZE);
+    if (slug) {
+      void trackEvent("category_view", { metadata: { slug } });
+    }
+  }, [dataUpdatedAt, slug]);
+
+  const products = initialProducts
+    ? extraProducts.length > 0 ? [...initialProducts, ...extraProducts] : initialProducts
+    : [];
+
+  const fetchMore = useCallback(async () => {
+    if (!slug) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/products/public?take=${PAGE_SIZE}&skip=${skipRef.current}&categorySlug=${slug}&sortBy=${sort}`,
+        { signal: controller.signal },
+      );
+      const data = await res.json();
+      const items: PublicProduct[] = Array.isArray(data) ? data : data.products || [];
+      setExtraProducts((prev) => [...prev, ...items]);
+      skipRef.current += items.length;
+      setHasMore(items.length >= PAGE_SIZE);
+    } catch (e: any) {
+      if (e?.name !== "AbortError") { /* noop */ }
+    } finally {
+      setLoadingMore(false);
+    }
   }, [slug, sort]);
 
   const handleLoadMore = useCallback(() => {
     if (loadingMore || !hasMore || loading) return;
-    fetchProducts(false, sort);
-  }, [loadingMore, hasMore, loading, sort, fetchProducts]);
+    fetchMore();
+  }, [loadingMore, hasMore, loading, fetchMore]);
 
   const handleSortChange = useCallback((newSort: string) => {
     if (newSort === sort) return;
     setSort(newSort);
   }, [sort]);
 
-  const title = CATEGORY_SHORT_NAMES[slug || ""] || slug?.replace(/-/g, " ") || "Category";
+  const title = CATEGORY_SHORT_NAMES[slug || ""] || slug?.replace(/-/g, " ") || t("category.fallback");
 
   const handleAddToCart = useCallback(
     (product: PublicProduct) => {
@@ -124,13 +130,34 @@ export default function CategoryScreen() {
   );
 
   const renderFooter = useCallback(() => {
-    if (!loadingMore) return null;
     return (
-      <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color={colors.brandBlue} />
+      <View>
+        {loadingMore && (
+          <View style={styles.footerLoader}>
+            <ActivityIndicator size="small" color={colors.brandBlue} />
+          </View>
+        )}
+        {!hasMore && slug && (
+          <View style={styles.footerRecos}>
+            <ProductRecommendationSlider
+              title={t("category.trendingIn", { name: title })}
+              apiUrl={`/recommendations?context=category&categorySlug=${encodeURIComponent(slug)}&take=10`}
+              queryKey={queryKeys.recommendations.category(slug)}
+              accentColor="#14b8a6"
+              onAddToCart={handleAddToCart}
+            />
+            <ProductRecommendationSlider
+              title={t("category.newIn", { name: title })}
+              apiUrl={`/products/public?categorySlug=${encodeURIComponent(slug)}&sortBy=newest&take=10`}
+              queryKey={queryKeys.categories.newArrivals(0)}
+              accentColor={colors.violet500}
+              onAddToCart={handleAddToCart}
+            />
+          </View>
+        )}
       </View>
     );
-  }, [loadingMore]);
+  }, [loadingMore, hasMore, slug, title, handleAddToCart]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -152,7 +179,7 @@ export default function CategoryScreen() {
                 style={[styles.sortPill, active && styles.sortPillActive]}
               >
                 <AppText style={[styles.sortText, active && styles.sortTextActive]}>
-                  {opt.label}
+                  {t(opt.label)}
                 </AppText>
               </Pressable>
             );
@@ -169,20 +196,28 @@ export default function CategoryScreen() {
         </ScrollView>
       ) : products.length === 0 ? (
         <ScrollView contentContainerStyle={styles.emptyScroll}>
+          {fetchError && (
+            <View style={{ paddingHorizontal: spacing[4], paddingTop: spacing[4] }}>
+              <OutageBanner />
+            </View>
+          )}
           <View style={styles.emptyHero}>
             <Icon name="inventory-2" size={48} color={colors.gray300} />
-            <AppText variant="subtitle" color={colors.muted}>No products in this category</AppText>
+            <AppText variant="subtitle" color={colors.muted}>
+              {fetchError ? t("category.couldNotLoad") : t("category.noProducts")}
+            </AppText>
             <Pressable onPress={() => router.push(ROUTES.homeFeed)}>
-              <AppText variant="label" color={colors.brandBlue}>Browse all products</AppText>
+              <AppText variant="label" color={colors.brandBlue}>{t("category.browseAll")}</AppText>
             </Pressable>
           </View>
           <ProductRecommendationSlider
-            title="Trending Now"
-            apiUrl="/recommendations?context=home&strategy=trending&take=10"
+            title={t("category.trendingInThis")}
+            apiUrl={`/recommendations?context=category&categorySlug=${encodeURIComponent(slug!)}&strategy=trending&take=10`}
+            queryKey={queryKeys.recommendations.category(slug!)}
             accentColor={colors.rose500}
           />
           <ProductRecommendationSlider
-            title="Suggestions for you"
+            title={t("category.suggestionsForYou")}
             apiUrl="/products/public?take=10&sortBy=newest"
             accentColor={colors.brandBlue}
           />
@@ -240,4 +275,5 @@ const styles = StyleSheet.create({
   gridContent: { paddingTop: spacing[2], paddingBottom: spacing[10], gap: spacing[3] },
   gridCell: { flex: 1 },
   footerLoader: { paddingVertical: spacing[6], alignItems: "center" },
+  footerRecos: { marginTop: spacing[4] },
 });

@@ -11,23 +11,36 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
+import { pickItemTitle, pickItemImage } from "@/lib/orderHelpers";
 import { FALLBACK_IMAGE } from "@/lib/config";
+import { queryKeys } from "@/lib/queryKeys";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import type { Order, ReturnReasonCode, ReturnResolution } from "@/lib/types";
 
 type ReturnOrderItem = {
-  publicId: string;
-  title: string;
-  image: string | null;
-  quantity: number;
-  unitPriceCents: number;
-  status: string;
+  publicId?: string | null;
+  title?: string | null;
+  image?: string | null;
+  quantity?: number | null;
+  unitPrice?: string | number | null;
+  status?: string | null;
   quantityReturned?: number;
+  productVariant?: {
+    publicId?: string | null;
+    title?: string | null;
+    product?: {
+      title?: string | null;
+      imageUrl?: string | null;
+      images?: Array<{ key?: string; url?: string }> | null;
+    } | null;
+  } | null;
 };
 
 type ExistingReturn = {
@@ -39,20 +52,23 @@ type ExistingReturn = {
   }>;
 };
 
-const REASONS: { code: ReturnReasonCode; label: string }[] = [
-  { code: "DAMAGED", label: "Item arrived damaged" },
-  { code: "DEFECTIVE", label: "Item is defective" },
-  { code: "WRONG_ITEM", label: "Received wrong item" },
-  { code: "NOT_AS_DESCRIBED", label: "Not as described" },
-  { code: "DOESNT_FIT", label: "Doesn't fit" },
-  { code: "CHANGED_MIND", label: "Changed my mind" },
-  { code: "OTHER", label: "Other" },
+type ReasonOption = { code: ReturnReasonCode; labelKey: string };
+type ResolutionOption = { code: ReturnResolution; labelKey: string };
+
+const REASON_OPTIONS: ReasonOption[] = [
+  { code: "DAMAGED", labelKey: "accountOrders.return.reasonDamaged" },
+  { code: "DEFECTIVE", labelKey: "accountOrders.return.reasonDefective" },
+  { code: "WRONG_ITEM", labelKey: "accountOrders.return.reasonWrongItem" },
+  { code: "NOT_AS_DESCRIBED", labelKey: "accountOrders.return.reasonNotAsDescribed" },
+  { code: "DOESNT_FIT", labelKey: "accountOrders.return.reasonDoesntFit" },
+  { code: "CHANGED_MIND", labelKey: "accountOrders.return.reasonChangedMind" },
+  { code: "OTHER", labelKey: "accountOrders.return.reasonOther" },
 ];
 
-const ALL_RESOLUTIONS: { code: ReturnResolution; label: string }[] = [
-  { code: "REFUND", label: "Refund to original payment" },
-  { code: "STORE_CREDIT", label: "Store credit" },
-  { code: "REPLACEMENT", label: "Replacement" },
+const RESOLUTION_OPTIONS: ResolutionOption[] = [
+  { code: "REFUND", labelKey: "accountOrders.return.resolutionRefund" },
+  { code: "STORE_CREDIT", labelKey: "accountOrders.return.resolutionStoreCredit" },
+  { code: "REPLACEMENT", labelKey: "accountOrders.return.resolutionReplacement" },
 ];
 
 export default function ReturnScreen() {
@@ -64,11 +80,42 @@ export default function ReturnScreen() {
 }
 
 function ReturnContent() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: orderData, isLoading: orderLoading } = useQuery({
+    queryKey: queryKeys.orders.detail(id!),
+    queryFn: () => customerFetch<any>(`/orders/${id}`),
+    enabled: !!id,
+  });
+
+  const { data: returnsRaw, isLoading: returnsLoading } = useQuery({
+    queryKey: queryKeys.returns.list(),
+    queryFn: () => customerFetch<any>("/returns"),
+    enabled: !!id,
+  });
+
+  const loading = orderLoading || returnsLoading;
+  const order = (orderData?.order ?? orderData ?? null) as Order | null;
+
+  const pendingReturnItems = useMemo(() => {
+    const returnsList: ExistingReturn[] =
+      Array.isArray(returnsRaw?.data) ? returnsRaw.data :
+      Array.isArray(returnsRaw) ? returnsRaw : [];
+    const pending = new Map<string, number>();
+    for (const ret of returnsList) {
+      if (["CLOSED", "CLOSED_EXPIRED", "REFUNDED", "CREDITED"].includes(ret.status)) continue;
+      for (const item of ret.items ?? []) {
+        const itemId = item.orderItemPublicId ?? item.orderItem?.publicId;
+        const qty = item.quantityToReturn ?? 0;
+        if (itemId) pending.set(itemId, (pending.get(itemId) ?? 0) + qty);
+      }
+    }
+    return pending;
+  }, [returnsRaw]);
+
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
   const [reason, setReason] = useState<ReturnReasonCode | null>(null);
   const [resolution, setResolution] = useState<ReturnResolution>("REFUND");
@@ -76,62 +123,23 @@ function ReturnContent() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  const [pendingReturnItems, setPendingReturnItems] = useState<Map<string, number>>(new Map());
-  const [replacementBlocked, setReplacementBlocked] = useState(false);
-  const [replacementBlockReason, setReplacementBlockReason] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!id) return;
-    Promise.all([
-      customerFetch<any>(`/orders/${id}`),
-      customerFetch<any>("/returns").catch(() => null),
-    ])
-      .then(([orderData, returnsData]) => {
-        setOrder(orderData.order ?? orderData);
-
-        const returnsList: ExistingReturn[] =
-          Array.isArray(returnsData?.data) ? returnsData.data :
-          Array.isArray(returnsData) ? returnsData : [];
-
-        const pending = new Map<string, number>();
-        for (const ret of returnsList) {
-          if (["CLOSED", "CLOSED_EXPIRED", "REFUNDED", "CREDITED"].includes(ret.status)) continue;
-          for (const item of ret.items ?? []) {
-            const itemId = item.orderItemPublicId ?? item.orderItem?.publicId;
-            const qty = item.quantityToReturn ?? 0;
-            if (itemId) pending.set(itemId, (pending.get(itemId) ?? 0) + qty);
-          }
-        }
-        setPendingReturnItems(pending);
-      })
-      .catch(() => setOrder(null))
-      .finally(() => setLoading(false));
-  }, [id]);
-
   const firstSelectedId = useMemo(() => [...selected.keys()][0] ?? null, [selected]);
 
-  useEffect(() => {
-    if (!firstSelectedId) {
-      setReplacementBlocked(false);
-      setReplacementBlockReason(null);
-      return;
-    }
-    customerFetch<{ blocked?: boolean; code?: string }>(
-      `/returns/replacement-check/${firstSelectedId}`,
-    )
-      .then((data) => {
-        setReplacementBlocked(!!data.blocked);
-        setReplacementBlockReason(data.code ?? null);
-      })
-      .catch(() => {
-        setReplacementBlocked(false);
-        setReplacementBlockReason(null);
-      });
-  }, [firstSelectedId]);
+  const { data: replacementCheckData } = useQuery({
+    queryKey: queryKeys.returns.replacementCheck(firstSelectedId!),
+    queryFn: () =>
+      customerFetch<{ blocked?: boolean; code?: string }>(
+        `/returns/replacement-check/${firstSelectedId}`,
+      ),
+    enabled: !!firstSelectedId,
+  });
+
+  const replacementBlocked = !!replacementCheckData?.blocked;
+  const replacementBlockReason = replacementCheckData?.code ?? null;
 
   const availableResolutions = useMemo(() => {
-    if (replacementBlocked) return ALL_RESOLUTIONS.filter((r) => r.code !== "REPLACEMENT");
-    return ALL_RESOLUTIONS;
+    if (replacementBlocked) return RESOLUTION_OPTIONS.filter((r) => r.code !== "REPLACEMENT");
+    return RESOLUTION_OPTIONS;
   }, [replacementBlocked]);
 
   useEffect(() => {
@@ -139,13 +147,13 @@ function ReturnContent() {
   }, [replacementBlocked, resolution]);
 
   const returnableItems = ((order?.items || []) as ReturnOrderItem[]).filter(
-    (item) => !["CANCELLED", "REFUNDED"].includes(item.status),
+    (item) => !["CANCELLED", "REFUNDED"].includes(item.status ?? ""),
   );
 
   const getAvailable = (item: ReturnOrderItem) => {
-    const pending = pendingReturnItems.get(item.publicId) ?? 0;
+    const pending = pendingReturnItems.get(item.publicId ?? "") ?? 0;
     const returned = item.quantityReturned ?? 0;
-    return Math.max(0, item.quantity - returned - pending);
+    return Math.max(0, (item.quantity ?? 0) - returned - pending);
   };
 
   const toggleItem = (publicId: string, available: number) => {
@@ -172,10 +180,10 @@ function ReturnContent() {
     setSubmitting(true);
     try {
       const items = returnableItems
-        .filter((i) => selected.has(i.publicId))
+        .filter((i) => selected.has(i.publicId ?? ""))
         .map((i) => ({
           orderItemPublicId: i.publicId,
-          quantityToReturn: selected.get(i.publicId) ?? i.quantity,
+          quantityToReturn: selected.get(i.publicId ?? "") ?? (i.quantity ?? 0),
         }));
 
       await customerFetch("/returns", {
@@ -188,9 +196,12 @@ function ReturnContent() {
         }),
       });
 
+      queryClient.invalidateQueries({ queryKey: queryKeys.returns.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(id!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.cases.all() });
       setDone(true);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to submit return request.");
+      Alert.alert(t("common.error"), e.message || t("accountOrders.return.errorSubmit"));
     } finally {
       setSubmitting(false);
     }
@@ -209,9 +220,9 @@ function ReturnContent() {
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="package-variant" size={48} color={colors.gray300} />
         <AppText variant="subtitle" color={colors.muted} align="center" style={{ marginTop: spacing[3] }}>
-          {!order ? "Order not found" : "Returns are only available for delivered orders."}
+          {!order ? t("orders.notFound") : t("accountOrders.return.deliveredOnly")}
         </AppText>
-        <AppButton title="Go Back" variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
+        <AppButton title={t("orders.goBack")} variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -221,12 +232,12 @@ function ReturnContent() {
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="check-circle" size={48} color={colors.success} />
         <AppText variant="heading" style={{ marginTop: spacing[4] }}>
-          Return Requested
+          {t("accountOrders.return.successHeading")}
         </AppText>
         <AppText variant="body" color={colors.muted} align="center" style={{ marginTop: spacing[2], maxWidth: 280 }}>
-          Your return request has been submitted. We'll review it and get back to you.
+          {t("accountOrders.return.successBody")}
         </AppText>
-        <AppButton title="Back to Order" variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[6] }} />
+        <AppButton title={t("accountOrders.return.backToOrder")} variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[6] }} />
       </View>
     );
   }
@@ -235,50 +246,52 @@ function ReturnContent() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Return Items</AppText>
+        <AppText variant="title">{t("accountOrders.return.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppText variant="body" color={colors.muted} style={styles.desc}>
-          Select items to return and choose a reason.
+          {t("accountOrders.return.subtitle")}
         </AppText>
 
-        {returnableItems.map((item) => {
+        {returnableItems.map((item, idx) => {
+          const pid = item.publicId ?? "";
+          const qty = item.quantity ?? 0;
           const available = getAvailable(item);
           const isDisabled = available <= 0;
-          const isSelected = selected.has(item.publicId);
-          const selectedQty = selected.get(item.publicId) ?? 1;
+          const isSelected = selected.has(pid);
+          const selectedQty = selected.get(pid) ?? 1;
           return (
-            <View key={item.publicId}>
+            <View key={pid || idx}>
               <Pressable
-                onPress={() => toggleItem(item.publicId, available)}
+                onPress={() => toggleItem(pid, available)}
                 disabled={isDisabled}
                 style={[styles.itemCard, isSelected && styles.itemSelected, isDisabled && { opacity: 0.5 }]}
               >
                 <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
                   {isSelected && <Icon name="check" size={14} color={colors.white} />}
                 </View>
-                <Image source={{ uri: item.image || FALLBACK_IMAGE }} style={styles.itemImg} resizeMode="cover" />
+                <Image source={{ uri: pickItemImage(item) || FALLBACK_IMAGE }} style={styles.itemImg} resizeMode="cover" />
                 <View style={styles.itemInfo}>
-                  <AppText variant="label" numberOfLines={2}>{item.title}</AppText>
+                  <AppText variant="label" numberOfLines={2}>{pickItemTitle(item)}</AppText>
                   {isDisabled ? (
                     <AppText variant="caption" color={colors.warning}>
-                      {(pendingReturnItems.get(item.publicId) ?? 0) > 0 ? "Return pending" : "Fully returned"}
+                      {(pendingReturnItems.get(pid) ?? 0) > 0 ? t("accountOrders.return.returnPending") : t("accountOrders.return.fullyReturned")}
                     </AppText>
-                  ) : available < item.quantity ? (
-                    <AppText variant="caption" color={colors.muted}>{available} of {item.quantity} available</AppText>
+                  ) : available < qty ? (
+                    <AppText variant="caption" color={colors.muted}>{t("accountOrders.return.availableOf", { available, total: qty })}</AppText>
                   ) : (
-                    <AppText variant="caption">Qty: {item.quantity}</AppText>
+                    <AppText variant="caption">{t("orders.qtyLabel", { count: qty })}</AppText>
                   )}
                 </View>
               </Pressable>
               {isSelected && available > 1 && (
                 <View style={styles.qtyStepper}>
-                  <AppText variant="caption" weight="bold" color={colors.muted}>Quantity</AppText>
+                  <AppText variant="caption" weight="bold" color={colors.muted}>{t("accountOrders.return.quantity")}</AppText>
                   <View style={styles.qtyControls}>
                     <Pressable
-                      onPress={() => setItemQty(item.publicId, Math.max(1, selectedQty - 1))}
+                      onPress={() => setItemQty(pid, Math.max(1, selectedQty - 1))}
                       style={styles.qtyBtn}
                     >
                       <Icon name="remove" size={16} color={colors.brandOrange} />
@@ -287,12 +300,12 @@ function ReturnContent() {
                       {selectedQty}
                     </AppText>
                     <Pressable
-                      onPress={() => setItemQty(item.publicId, Math.min(available, selectedQty + 1))}
+                      onPress={() => setItemQty(pid, Math.min(available, selectedQty + 1))}
                       style={[styles.qtyBtn, styles.qtyBtnPlus]}
                     >
                       <Icon name="add" size={16} color={colors.white} />
                     </Pressable>
-                    <AppText variant="caption" color={colors.muted}>of {available}</AppText>
+                    <AppText variant="caption" color={colors.muted}>{t("accountOrders.return.ofTotal", { total: available })}</AppText>
                   </View>
                 </View>
               )}
@@ -300,11 +313,11 @@ function ReturnContent() {
           );
         })}
 
-        <AppText variant="subtitle" style={styles.sectionTitle}>Reason</AppText>
-        {REASONS.map((r) => (
+        <AppText variant="subtitle" style={styles.sectionTitle}>{t("accountOrders.return.reasonHeading")}</AppText>
+        {REASON_OPTIONS.map((r) => (
           <Pressable key={r.code} onPress={() => setReason(r.code)} style={[styles.reasonRow, reason === r.code && styles.reasonSelected]}>
             <View style={[styles.radio, reason === r.code && styles.radioChecked]} />
-            <AppText variant="body">{r.label}</AppText>
+            <AppText variant="body">{t(r.labelKey)}</AppText>
           </Pressable>
         ))}
 
@@ -312,30 +325,30 @@ function ReturnContent() {
           style={styles.noteInput}
           value={note}
           onChangeText={setNote}
-          placeholder="Additional details (optional)"
+          placeholder={t("accountOrders.return.notePlaceholder")}
           placeholderTextColor={colors.mutedLight}
           multiline
           maxLength={500}
         />
 
-        <AppText variant="subtitle" style={styles.sectionTitle}>Preferred Resolution</AppText>
+        <AppText variant="subtitle" style={styles.sectionTitle}>{t("accountOrders.return.resolutionHeading")}</AppText>
         {replacementBlocked && replacementBlockReason && (
           <View style={styles.warningBanner}>
             <Icon name="info-outline" size={16} color={colors.warning} />
             <AppText variant="caption" color={colors.warning} style={{ flex: 1 }}>
-              Replacement is not available for this item ({replacementBlockReason.replace(/_/g, " ").toLowerCase()}).
+              {t("accountOrders.return.replacementBlocked", { reason: replacementBlockReason.replace(/_/g, " ").toLowerCase() })}
             </AppText>
           </View>
         )}
         {availableResolutions.map((r) => (
           <Pressable key={r.code} onPress={() => setResolution(r.code)} style={[styles.reasonRow, resolution === r.code && styles.reasonSelected]}>
             <View style={[styles.radio, resolution === r.code && styles.radioChecked]} />
-            <AppText variant="body">{r.label}</AppText>
+            <AppText variant="body">{t(r.labelKey)}</AppText>
           </Pressable>
         ))}
 
         <AppButton
-          title={submitting ? "Submitting..." : `Request Return for ${selected.size} Item${selected.size !== 1 ? "s" : ""}`}
+          title={submitting ? t("accountOrders.return.submitting") : t("accountOrders.return.requestReturn", { count: selected.size })}
           variant="primary"
           fullWidth
           size="lg"

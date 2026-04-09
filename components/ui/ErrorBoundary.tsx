@@ -1,5 +1,6 @@
 import React, { Component, type ErrorInfo, type ReactNode } from "react";
 import { View, StyleSheet, ScrollView } from "react-native";
+import i18n from "@/i18n";
 import AppText from "./AppText";
 import AppButton from "./AppButton";
 import Icon from "./Icon";
@@ -43,10 +44,10 @@ export default class ErrorBoundary extends Component<Props, State> {
               <Icon name="error-outline" size={56} color={colors.brandOrange} />
             </View>
             <AppText variant="title" align="center" style={styles.heading}>
-              Something went wrong
+              {i18n.t("common.somethingWentWrong")}
             </AppText>
             <AppText variant="body" color={colors.muted} align="center" style={styles.message}>
-              An unexpected error occurred. Please try again.
+              {i18n.t("common.unexpectedError")}
             </AppText>
             {__DEV__ && this.state.error && (
               <View style={styles.debugBox}>
@@ -56,7 +57,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               </View>
             )}
             <AppButton
-              title="Try Again"
+              title={i18n.t("common.tryAgain")}
               variant="primary"
               onPress={this.handleRetry}
               style={styles.retryBtn}

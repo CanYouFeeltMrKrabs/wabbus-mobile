@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   FlatList,
@@ -13,11 +13,14 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
+import { queryKeys } from "@/lib/queryKeys";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
 import { pickDocument, uploadFileAuth } from "@/lib/fileUpload";
 
@@ -45,23 +48,16 @@ export default function ConversationScreen() {
 }
 
 function ConversationContent() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList>(null);
+  const queryClient = useQueryClient();
 
-  const [convo, setConvo] = useState<ConversationDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [reply, setReply] = useState("");
-  const [sending, setSending] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!id) {
-      setLoading(false);
-      return;
-    }
-    try {
+  const { data: convo = null, isLoading: loading, refetch: refetchConvo } = useQuery({
+    queryKey: queryKeys.messages.conversations.detail(id!),
+    queryFn: async () => {
       const detail = await customerFetch<ConversationDetail>(`/messages/conversations/${id}`);
       if (!detail.messages) {
         const msgs = await customerFetch<{ data?: ConvoMessage[]; messages?: ConvoMessage[] }>(
@@ -69,18 +65,15 @@ function ConversationContent() {
         );
         detail.messages = msgs.data || msgs.messages || [];
       }
-      setConvo(detail);
-    } catch {
-      setConvo(null);
-    }
-    setLoading(false);
-  }, [id]);
+      return detail;
+    },
+    enabled: !!id,
+    refetchInterval: 30_000,
+  });
 
-  useEffect(() => {
-    load();
-    const interval = setInterval(load, 30_000);
-    return () => clearInterval(interval);
-  }, [load]);
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const handleSend = async () => {
     if (!reply.trim() || !id) return;
@@ -91,10 +84,12 @@ function ConversationContent() {
         body: JSON.stringify({ body: reply.trim() }),
       });
       setReply("");
-      await load();
+      await refetchConvo();
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.conversations.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.unread() });
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 200);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to send message.");
+      Alert.alert(t("common.error"), e.message || t("messages.conversation.errorSend"));
     } finally {
       setSending(false);
     }
@@ -107,13 +102,14 @@ function ConversationContent() {
     const action = isArchived ? "unarchive" : "archive";
     try {
       await customerFetch(`/messages/conversations/${id}/${action}`, { method: "PATCH" });
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.conversations.list() });
       if (isArchived) {
-        await load();
+        await refetchConvo();
       } else {
         router.back();
       }
     } catch (e: any) {
-      Alert.alert("Error", e.message || `Failed to ${action} conversation.`);
+      Alert.alert(t("common.error"), e.message || t("messages.conversation.errorArchive", { action }));
     }
   };
 
@@ -128,13 +124,13 @@ function ConversationContent() {
         presignUrl: "/uploads/customer-chat-attachment",
         confirmUrl: "/uploads/chat-attachment/confirm",
         file,
-        extraPresignBody: { conversationPublicId: id },
-        extraConfirmBody: { conversationPublicId: id },
+        extraPresignBody: { context: "convo", entityId: id },
       });
-      await load();
+      await refetchConvo();
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.conversations.list() });
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 200);
     } catch {
-      Alert.alert("Error", "Failed to upload attachment.");
+      Alert.alert(t("common.error"), t("messages.conversation.errorUpload"));
     } finally {
       setUploading(false);
     }
@@ -152,8 +148,8 @@ function ConversationContent() {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="error-outline" size={48} color={colors.gray300} />
-        <AppText variant="subtitle" color={colors.muted}>Conversation not found</AppText>
-        <AppButton title="Go Back" variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
+        <AppText variant="subtitle" color={colors.muted}>{t("messages.conversation.notFound")}</AppText>
+        <AppButton title={t("messages.conversation.goBack")} variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -190,7 +186,7 @@ function ConversationContent() {
             <View style={[styles.bubbleRow, isCustomer ? styles.bubbleRight : styles.bubbleLeft]}>
               <View style={[styles.bubble, isCustomer ? styles.bubbleCustomer : styles.bubbleSeller]}>
                 <AppText variant="caption" weight="semibold" color={isCustomer ? colors.white : colors.foreground} style={styles.senderLabel}>
-                  {isCustomer ? "You" : "Seller"}
+                  {isCustomer ? t("messages.conversation.you") : t("messages.conversation.seller")}
                 </AppText>
                 {!!m.body && (
                   <AppText variant="bodySmall" color={isCustomer ? colors.white : colors.foreground}>
@@ -201,7 +197,7 @@ function ConversationContent() {
                   <Pressable onPress={() => Linking.openURL(attachUrl)} style={styles.attachmentLink}>
                     <Icon name="attach-file" size={14} color={isCustomer ? colors.white : colors.brandBlue} />
                     <AppText variant="caption" color={isCustomer ? colors.white : colors.brandBlue} weight="semibold">
-                      Attachment
+                      {t("messages.conversation.attachment")}
                     </AppText>
                   </Pressable>
                 )}
@@ -231,7 +227,7 @@ function ConversationContent() {
           style={styles.composerInput}
           value={reply}
           onChangeText={setReply}
-          placeholder="Type a message..."
+          placeholder={t("messages.conversation.placeholder")}
           placeholderTextColor={colors.mutedLight}
           multiline
           maxLength={2000}

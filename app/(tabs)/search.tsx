@@ -23,8 +23,10 @@ import SearchBar from "@/components/ui/SearchBar";
 import ProductCard from "@/components/ui/ProductCard";
 import Icon from "@/components/ui/Icon";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
+import OutageBanner from "@/components/ui/OutageBanner";
 import { SkeletonGrid } from "@/components/ui/Skeleton";
 import RecentlyViewedSlider from "@/components/ui/RecentlyViewedSlider";
+import { useTranslation } from "@/hooks/useT";
 import { colors, spacing, borderRadius } from "@/lib/theme";
 import { searchTypesense } from "@/lib/search";
 import { API_BASE } from "@/lib/config";
@@ -33,16 +35,19 @@ import { fetchCategoriesClient, type CategoryLink } from "@/lib/categories";
 import type { PublicProduct, TypesenseHit } from "@/lib/types";
 import { computeBadges } from "@/lib/badges";
 import { PAGE_SIZE as PAGE_SIZES } from "@/lib/constants";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import { trackEvent } from "@/lib/tracker";
 
 const PAGE_SIZE = PAGE_SIZES.PRODUCTS_SEARCH;
 
 const SORT_OPTIONS = [
-  { value: "", label: "Relevance" },
-  { value: "priceAsc", label: "Price: Low" },
-  { value: "priceDesc", label: "Price: High" },
-  { value: "newest", label: "Newest" },
-  { value: "rating", label: "Top Rated" },
-  { value: "bestselling", label: "Best Selling" },
+  { value: "", labelKey: "search.sort.relevance" },
+  { value: "priceAsc", labelKey: "search.sort.priceLow" },
+  { value: "priceDesc", labelKey: "search.sort.priceHigh" },
+  { value: "newest", labelKey: "search.sort.newest" },
+  { value: "rating", labelKey: "search.sort.topRated" },
+  { value: "bestselling", labelKey: "search.sort.bestSelling" },
 ];
 
 function hitToProduct(hit: TypesenseHit): PublicProduct {
@@ -79,12 +84,16 @@ function normalizeProducts(data: unknown): PublicProduct[] {
 }
 
 export default function SearchScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { addToCart } = useCart();
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("");
   const [category, setCategory] = useState("");
-  const [categories, setCategories] = useState<CategoryLink[]>([]);
+  const { data: categories = [] } = useQuery({
+    queryKey: queryKeys.categories.all(),
+    queryFn: fetchCategoriesClient,
+  });
   const [results, setResults] = useState<PublicProduct[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -93,10 +102,6 @@ export default function SearchScreen() {
   const [searched, setSearched] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    fetchCategoriesClient().then(setCategories).catch(() => {});
-  }, []);
 
   const doSearch = useCallback(async (q: string, sort?: string, cat?: string, pageNum = 1, append = false) => {
     if (!append) abortRef.current?.abort();
@@ -180,6 +185,8 @@ export default function SearchScreen() {
 
   const handleSubmit = useCallback(() => {
     Keyboard.dismiss();
+    const q = query.trim();
+    if (q) void trackEvent("search", { searchQuery: q });
     doSearch(query, sortBy, category);
   }, [query, sortBy, category, doSearch]);
 
@@ -192,13 +199,21 @@ export default function SearchScreen() {
 
   const handleSort = useCallback((value: string) => {
     setSortBy(value);
-    if (query.trim().length >= 2) doSearch(query, value, category);
+    const q = query.trim();
+    if (q.length >= 2) {
+      void trackEvent("search", { searchQuery: q });
+      doSearch(query, value, category);
+    }
   }, [query, category, doSearch]);
 
   const handleCategoryFilter = useCallback((slug: string) => {
     const newCat = category === slug ? "" : slug;
     setCategory(newCat);
-    if (query.trim().length >= 2) doSearch(query, sortBy, newCat);
+    const q = query.trim();
+    if (q.length >= 2) {
+      void trackEvent("search", { searchQuery: q });
+      doSearch(query, sortBy, newCat);
+    }
   }, [query, sortBy, category, doSearch]);
 
   const handleLoadMore = useCallback(() => {
@@ -243,12 +258,15 @@ export default function SearchScreen() {
         </ScrollView>
       ) : searchError ? (
         <View style={styles.empty}>
+          <View style={{ paddingHorizontal: spacing[4], width: "100%" }}>
+            <OutageBanner />
+          </View>
           <Icon name="cloud-off" size={48} color={colors.gray300} />
           <AppText variant="subtitle" color={colors.muted} style={styles.emptyText}>
-            Search is temporarily unavailable
+            {t("search.searchUnavailable")}
           </AppText>
           <Pressable onPress={handleSubmit} style={styles.retryBtn}>
-            <AppText variant="label" color={colors.brandBlue} weight="bold">Try again</AppText>
+            <AppText variant="label" color={colors.brandBlue} weight="bold">{t("search.tryAgain")}</AppText>
           </Pressable>
         </View>
       ) : searched && results.length === 0 ? (
@@ -256,11 +274,11 @@ export default function SearchScreen() {
           <View style={styles.emptyBlock}>
             <Icon name="search-off" size={48} color={colors.gray300} />
             <AppText variant="subtitle" color={colors.muted} style={styles.emptyText}>
-              No results for &ldquo;{query}&rdquo;
+              {t("search.noResultsFor", { query })}
             </AppText>
           </View>
           <ProductRecommendationSlider
-            title="Recommended for You"
+            title={t("search.recommendedForYou")}
             apiUrl="/products/public?take=10&sortBy=newest"
             accentColor={colors.brandBlue}
           />
@@ -270,7 +288,7 @@ export default function SearchScreen() {
         <>
           <View style={styles.toolbarRow}>
             <AppText variant="caption">
-              {total} result{total !== 1 ? "s" : ""}
+              {total === 1 ? t("search.resultCount", { count: total }) : t("search.resultCountPlural", { count: total })}
             </AppText>
 
             {/* Category filter */}
@@ -307,13 +325,13 @@ export default function SearchScreen() {
                     color={sortBy === opt.value ? colors.white : colors.muted}
                     weight={sortBy === opt.value ? "semibold" : "normal"}
                   >
-                    {opt.label}
-                  </AppText>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-          <FlatList
+                  {t(opt.labelKey)}
+                </AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+        <FlatList
             data={results}
             numColumns={2}
             keyExtractor={(item) => item.productId}
@@ -341,7 +359,7 @@ export default function SearchScreen() {
         <View style={styles.empty}>
           <Icon name="search" size={48} color={colors.gray300} />
           <AppText variant="subtitle" color={colors.muted} style={styles.emptyText}>
-            Search for products
+            {t("search.searchForProducts")}
           </AppText>
         </View>
       )}

@@ -1,56 +1,63 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { View, ScrollView, Image, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import RequireAuth from "@/components/ui/RequireAuth";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { productImageUrl } from "@/lib/image";
-import { formatDate } from "@/lib/orderHelpers";
+import { formatDate, pickItemTitle, pickItemImage, pickUnitPriceCents, orderTotalCents } from "@/lib/orderHelpers";
 import { ROUTES } from "@/lib/routes";
+import { trackEvent } from "@/lib/tracker";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { OrderItem } from "@/lib/types";
 
 type OrderResponse = {
-  id: number;
   publicId?: string;
   orderNumber?: string | null;
   status: string;
-  totalCents: number;
   totalAmount?: string | number | null;
-  currency?: string;
+  currency?: string | null;
   createdAt: string;
-  items?: OrderItem[];
+  items?: OrderItem[] | null;
 };
 
 export default function OrderCompleteScreen() {
+  return (
+    <RequireAuth>
+      <OrderCompleteContent />
+    </RequireAuth>
+  );
+}
+
+function OrderCompleteContent() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
-  const [order, setOrder] = useState<OrderResponse | null>(null);
-  const [loading, setLoading] = useState(!!orderId);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!orderId) {
-      setError("No order reference found.");
-      setLoading(false);
-      return;
-    }
-
-    customerFetch<OrderResponse>(`/orders/${encodeURIComponent(orderId)}`)
-      .then((data) => {
-        setOrder(data);
-        setError(null);
-      })
-      .catch(() => {
-        setError("Your order was placed successfully, but we couldn't load the details right now.");
-      })
-      .finally(() => setLoading(false));
+    if (orderId) void trackEvent("purchase", { metadata: { orderId } });
   }, [orderId]);
+
+  const { data: order, isLoading: loading, isError } = useQuery({
+    queryKey: queryKeys.orders.detail(orderId!),
+    queryFn: () => customerFetch<OrderResponse>(`/orders/${encodeURIComponent(orderId!)}`),
+    enabled: !!orderId,
+  });
+
+  const error = !orderId
+    ? t("orderComplete.noOrderRef")
+    : isError
+      ? t("orderComplete.couldntLoadDetails")
+      : null;
 
   const orderDisplayId = order?.orderNumber || order?.publicId || orderId || "";
 
@@ -59,7 +66,7 @@ export default function OrderCompleteScreen() {
       <View style={[s.center, { paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color={colors.brandBlue} />
         <AppText variant="body" color={colors.muted} style={{ marginTop: spacing[3] }}>
-          Loading order…
+          {t("orderComplete.loading")}
         </AppText>
       </View>
     );
@@ -79,14 +86,14 @@ export default function OrderCompleteScreen() {
           </View>
           <View style={s.actions}>
             <AppButton
-              title="View Orders"
+              title={t("orderComplete.viewOrders")}
               variant="primary"
               fullWidth
               onPress={() => router.replace(ROUTES.orders)}
               style={s.btn}
             />
             <AppButton
-              title="Continue Shopping"
+              title={t("orderComplete.continueShopping")}
               variant="outline"
               fullWidth
               onPress={() => router.replace(ROUTES.homeFeed)}
@@ -105,10 +112,10 @@ export default function OrderCompleteScreen() {
             <Icon name="check" size={48} color={colors.white} />
           </View>
           <AppText variant="heading" align="center" style={s.title}>
-            Order Placed!
+            {t("orderComplete.successTitle")}
           </AppText>
           <AppText variant="body" color={colors.muted} align="center" style={s.subtitle}>
-            Thank you for shopping with Wabbus. You'll receive a confirmation email shortly.
+            {t("orderComplete.thankYou")}
           </AppText>
         </View>
 
@@ -126,7 +133,7 @@ export default function OrderCompleteScreen() {
             <View style={s.orderHeader}>
               <View>
                 <AppText variant="tiny" color={colors.muted} weight="bold" style={{ textTransform: "uppercase", letterSpacing: 1 }}>
-                  Order Number
+                  {t("orderComplete.orderNumber")}
                 </AppText>
                 <AppText variant="label" style={{ marginTop: spacing[0.5] }}>
                   {orderDisplayId}
@@ -134,7 +141,7 @@ export default function OrderCompleteScreen() {
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <AppText variant="tiny" color={colors.muted} weight="bold" style={{ textTransform: "uppercase", letterSpacing: 1 }}>
-                  Date
+                  {t("orderComplete.date")}
                 </AppText>
                 <AppText variant="caption" style={{ marginTop: spacing[0.5] }}>
                   {formatDate(order.createdAt)}
@@ -142,26 +149,26 @@ export default function OrderCompleteScreen() {
               </View>
             </View>
 
-            {order.items?.map((item: OrderItem) => (
-              <View key={item.publicId} style={s.itemRow}>
+            {order.items?.map((item: OrderItem, idx: number) => (
+              <View key={item.publicId ?? idx} style={s.itemRow}>
                 <Image
-                  source={{ uri: productImageUrl(item.image, "thumb") }}
+                  source={{ uri: productImageUrl(pickItemImage(item), "thumb") }}
                   style={s.itemImg}
                   resizeMode="cover"
                 />
                 <View style={s.itemInfo}>
-                  <AppText variant="caption" numberOfLines={2}>{item.title}</AppText>
+                  <AppText variant="caption" numberOfLines={2}>{pickItemTitle(item)}</AppText>
                   <AppText variant="tiny" color={colors.muted}>
-                    Qty: {item.quantity} · {formatMoney(item.unitPriceCents * item.quantity)}
+                    {t("orderComplete.qtyAndPrice", { qty: item.quantity ?? 0, price: formatMoney(pickUnitPriceCents(item) * (item.quantity ?? 0)) })}
                   </AppText>
                 </View>
               </View>
             ))}
 
             <View style={s.totalRow}>
-              <AppText variant="subtitle">Total</AppText>
+              <AppText variant="subtitle">{t("orderComplete.total")}</AppText>
               <AppText variant="subtitle" color={colors.brandBlue}>
-                {formatMoney(order.totalCents)}
+                {formatMoney(orderTotalCents(order))}
               </AppText>
             </View>
           </View>
@@ -171,8 +178,9 @@ export default function OrderCompleteScreen() {
         {order && (
           <View style={s.recsSection}>
             <ProductRecommendationSlider
-              title="Based on Your Purchase"
-              apiUrl={`/recommendations?context=post_purchase&orderId=${encodeURIComponent(String(order.id))}&take=10`}
+              title={t("orderComplete.basedOnYourPurchase")}
+              apiUrl={`/recommendations?context=post_purchase&orderId=${encodeURIComponent(order.publicId ?? orderId ?? "")}&take=10`}
+              queryKey={queryKeys.recommendations.postPurchase(order.publicId ?? orderId ?? "")}
               accentColor={colors.success}
             />
           </View>
@@ -180,14 +188,14 @@ export default function OrderCompleteScreen() {
 
         <View style={s.actions}>
           <AppButton
-            title="View Orders"
+            title={t("orderComplete.viewOrders")}
             variant="primary"
             fullWidth
             onPress={() => router.replace(ROUTES.orders)}
             style={s.btn}
           />
           <AppButton
-            title="Continue Shopping"
+            title={t("orderComplete.continueShopping")}
             variant="outline"
             fullWidth
             onPress={() => router.replace(ROUTES.homeFeed)}

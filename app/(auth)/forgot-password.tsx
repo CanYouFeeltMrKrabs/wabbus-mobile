@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -25,6 +26,7 @@ const STEPS: Step[] = ["email", "code", "password"];
 const CODE_LENGTH = 6;
 
 export default function ForgotPasswordScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -78,7 +80,7 @@ export default function ForgotPasswordScreen() {
       if (e instanceof FetchError && e.status === 429) {
         startCooldown();
       }
-      Alert.alert("Error", e.message || "Something went wrong.");
+      Alert.alert(t("common.error"), e.message || t("auth.forgotPassword.errorGeneric"));
     } finally {
       setLoading(false);
     }
@@ -99,7 +101,7 @@ export default function ForgotPasswordScreen() {
       if (e instanceof FetchError && e.status === 429) {
         startCooldown();
       }
-      Alert.alert("Error", e.message || "Something went wrong.");
+      Alert.alert(t("common.error"), e.message || t("auth.forgotPassword.errorGeneric"));
     } finally {
       setLoading(false);
     }
@@ -133,7 +135,7 @@ export default function ForgotPasswordScreen() {
   const handleVerifyCode = async () => {
     const fullCode = code.join("");
     if (fullCode.length !== CODE_LENGTH) {
-      Alert.alert("Error", "Please enter the full 6-digit code.");
+      Alert.alert(t("common.error"), t("auth.forgotPassword.errorFullCode"));
       return;
     }
 
@@ -149,7 +151,7 @@ export default function ForgotPasswordScreen() {
       setResetSessionToken(data.resetSessionToken);
       setStep("password");
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Invalid or expired code. Please try again.");
+      Alert.alert(t("common.error"), e.message || t("auth.forgotPassword.errorInvalidCode"));
     } finally {
       setLoading(false);
     }
@@ -157,15 +159,15 @@ export default function ForgotPasswordScreen() {
 
   const handleResetPassword = async () => {
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      Alert.alert("Error", `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      Alert.alert(t("common.error"), t("auth.forgotPassword.errorMinPassword", { min: MIN_PASSWORD_LENGTH }));
       return;
     }
     if (newPassword.length > MAX_PASSWORD_LENGTH) {
-      Alert.alert("Error", `Password must be at most ${MAX_PASSWORD_LENGTH} characters.`);
+      Alert.alert(t("common.error"), t("auth.forgotPassword.errorMaxPassword", { max: MAX_PASSWORD_LENGTH }));
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match.");
+      Alert.alert(t("common.error"), t("auth.forgotPassword.errorMismatch"));
       return;
     }
 
@@ -178,7 +180,7 @@ export default function ForgotPasswordScreen() {
       setSuccess(true);
       setTimeout(() => router.replace(ROUTES.login), 2000);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to reset password. Please start over.");
+      Alert.alert(t("common.error"), e.message || t("auth.forgotPassword.errorResetFailed"));
     } finally {
       setLoading(false);
     }
@@ -192,10 +194,10 @@ export default function ForgotPasswordScreen() {
         <View style={styles.body}>
           <Icon name="check-circle" size={48} color={colors.success} />
           <AppText variant="heading" style={styles.title}>
-            Password Reset!
+            {t("auth.forgotPassword.successHeading")}
           </AppText>
           <AppText variant="body" color={colors.muted} align="center" style={styles.desc}>
-            Your password has been reset. Redirecting to sign in...
+            {t("auth.forgotPassword.success")}
           </AppText>
         </View>
       </View>
@@ -249,17 +251,17 @@ export default function ForgotPasswordScreen() {
           <>
             <Icon name="lock-reset" size={48} color={colors.brandBlue} />
             <AppText variant="heading" style={styles.title}>
-              Forgot Password
+              {t("auth.forgotPassword.heading")}
             </AppText>
             <AppText variant="body" color={colors.muted} align="center" style={styles.desc}>
-              Enter your email and we&apos;ll send you a 6-digit reset code.
+              {t("auth.forgotPassword.subtitle")}
             </AppText>
             <View style={styles.field}>
               <TextInput
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="you@example.com"
+                placeholder={t("auth.login.emailPlaceholder")}
                 placeholderTextColor={colors.mutedLight}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -267,7 +269,7 @@ export default function ForgotPasswordScreen() {
               />
             </View>
             <AppButton
-              title={cooldown > 0 ? `Wait ${cooldown}s` : "Send Reset Code"}
+              title={cooldown > 0 ? t("auth.forgotPassword.waitCooldown", { cooldown }) : t("auth.forgotPassword.sendResetCode")}
               variant="primary"
               fullWidth
               size="lg"
@@ -284,10 +286,10 @@ export default function ForgotPasswordScreen() {
           <>
             <Icon name="dialpad" size={48} color={colors.brandBlue} />
             <AppText variant="heading" style={styles.title}>
-              Enter Your Code
+              {t("auth.forgotPassword.enterCodeHeading")}
             </AppText>
             <AppText variant="body" color={colors.muted} align="center" style={styles.desc}>
-              We sent a 6-digit code to {email}
+              {t("auth.forgotPassword.codeSentTo", { email })}
             </AppText>
 
             <View style={styles.codeRow}>
@@ -310,7 +312,7 @@ export default function ForgotPasswordScreen() {
             </View>
 
             <AppButton
-              title={loading ? "Verifying..." : "Verify Code"}
+              title={loading ? t("auth.forgotPassword.verifying") : t("auth.forgotPassword.verifyCode")}
               variant="primary"
               fullWidth
               size="lg"
@@ -330,7 +332,7 @@ export default function ForgotPasswordScreen() {
                 color={cooldown > 0 ? colors.muted : colors.brandBlue}
                 weight="semibold"
               >
-                {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
+                {cooldown > 0 ? t("auth.forgotPassword.resendCodeIn", { cooldown }) : t("auth.forgotPassword.resendCode")}
               </AppText>
             </Pressable>
           </>
@@ -341,22 +343,22 @@ export default function ForgotPasswordScreen() {
           <>
             <Icon name="lock" size={48} color={colors.brandBlue} />
             <AppText variant="heading" style={styles.title}>
-              Set New Password
+              {t("auth.forgotPassword.setNewPassword")}
             </AppText>
             <AppText variant="body" color={colors.muted} align="center" style={styles.desc}>
-              Choose a strong password for your account.
+              {t("auth.forgotPassword.setNewPasswordSubtitle")}
             </AppText>
 
             <View style={styles.field}>
               <AppText variant="label" style={styles.label}>
-                New password
+                {t("auth.forgotPassword.newPasswordLabel")}
               </AppText>
               <View style={styles.passwordWrap}>
                 <TextInput
                   style={[styles.input, styles.passwordInput]}
                   value={newPassword}
                   onChangeText={setNewPassword}
-                  placeholder={`Min. ${MIN_PASSWORD_LENGTH} characters`}
+                  placeholder={t("auth.forgotPassword.newPasswordPlaceholder", { min: MIN_PASSWORD_LENGTH })}
                   placeholderTextColor={colors.mutedLight}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
@@ -379,14 +381,14 @@ export default function ForgotPasswordScreen() {
 
             <View style={styles.field}>
               <AppText variant="label" style={styles.label}>
-                Confirm password
+                {t("auth.forgotPassword.confirmPasswordLabel")}
               </AppText>
               <View style={styles.passwordWrap}>
                 <TextInput
                   style={[styles.input, styles.passwordInput]}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  placeholder="Re-enter your password"
+                  placeholder={t("auth.forgotPassword.confirmPlaceholder")}
                   placeholderTextColor={colors.mutedLight}
                   secureTextEntry={!showConfirm}
                   autoCapitalize="none"
@@ -408,7 +410,7 @@ export default function ForgotPasswordScreen() {
             </View>
 
             <AppButton
-              title={loading ? "Resetting..." : "Reset Password"}
+              title={loading ? t("auth.forgotPassword.resetting") : t("auth.forgotPassword.resetPassword")}
               variant="primary"
               fullWidth
               size="lg"
@@ -424,7 +426,7 @@ export default function ForgotPasswordScreen() {
         <Pressable onPress={() => router.replace(ROUTES.login)} style={styles.backBtn}>
           <Icon name="arrow-left" size={16} color={colors.muted} />
           <AppText variant="body" color={colors.muted}>
-            Back to sign in
+            {t("auth.forgotPassword.backToSignIn")}
           </AppText>
         </Pressable>
       </View>

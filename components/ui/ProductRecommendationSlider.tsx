@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback } from "react";
 import { View, FlatList, StyleSheet } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import AppText from "@/components/ui/AppText";
 import ProductCard from "@/components/ui/ProductCard";
 import { SkeletonSlider } from "@/components/ui/Skeleton";
@@ -10,38 +11,40 @@ import type { PublicProduct } from "@/lib/types";
 export type ProductRecommendationSliderProps = {
   title: string;
   apiUrl: string;
+  queryKey?: readonly unknown[];
   accentColor?: string;
   onAddToCart?: (product: PublicProduct) => void;
   postProcess?: (data: any) => PublicProduct[];
 };
 
+function defaultExtract(data: unknown, postProcess?: (data: any) => PublicProduct[]): PublicProduct[] {
+  if (postProcess) return postProcess(data);
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object" && "products" in data) return (data as any).products ?? [];
+  return [];
+}
+
 export default function ProductRecommendationSlider({
   title,
   apiUrl,
+  queryKey,
   accentColor = colors.brandBlue,
   onAddToCart,
   postProcess,
 }: ProductRecommendationSliderProps) {
-  const [products, setProducts] = useState<PublicProduct[]>([]);
-  const [loading, setLoading] = useState(true);
+  const stablePostProcess = useCallback(
+    (d: unknown) => defaultExtract(d, postProcess),
+    [postProcess],
+  );
 
-  useEffect(() => {
-    setLoading(true);
-    publicFetch(apiUrl)
-      .then((data) => {
-        let productList: PublicProduct[] = [];
-        if (postProcess) {
-          productList = postProcess(data);
-        } else if (Array.isArray(data)) {
-          productList = data;
-        } else if (data && typeof data === "object" && "products" in data) {
-          productList = (data as any).products ?? [];
-        }
-        setProducts(productList);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [apiUrl, postProcess]);
+  const { data: products = [], isLoading: loading } = useQuery({
+    queryKey: queryKey ?? ["recs", apiUrl],
+    queryFn: async () => {
+      const data = await publicFetch(apiUrl);
+      return stablePostProcess(data);
+    },
+    staleTime: 5 * 60_000,
+  });
 
   if (!loading && products.length === 0) return null;
 

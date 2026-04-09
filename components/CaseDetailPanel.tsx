@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -17,6 +18,7 @@ import TicketThread from "@/components/TicketThread";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/orderHelpers";
+import { queryKeys } from "@/lib/queryKeys";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import { pickDocument, uploadFileAuth, type PickedFile } from "@/lib/fileUpload";
@@ -76,46 +78,36 @@ type Props = {
 export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [detail, setDetail] = useState<CustomerCaseDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const [caseMessages, setCaseMessages] = useState<CaseMessage[]>([]);
+  const {
+    data: detail = null,
+    isLoading: loading,
+    error: detailError,
+    refetch: refetchDetail,
+  } = useQuery({
+    queryKey: queryKeys.messages.cases.detail(caseNumber),
+    queryFn: () => customerFetch<CustomerCaseDetail>(`/cases/${caseNumber}`),
+    enabled: !!caseNumber,
+  });
+
+  const error = detailError ? ((detailError as Error).message ?? "Failed to load case") : null;
+
+  const { data: caseMessages = [] } = useQuery({
+    queryKey: queryKeys.messages.cases.messages(caseNumber),
+    queryFn: async () => {
+      const data = await customerFetch<{ messages?: CaseMessage[] }>(`/cases/${caseNumber}/messages`);
+      return Array.isArray(data?.messages) ? data.messages : Array.isArray(data) ? (data as CaseMessage[]) : [];
+    },
+    enabled: !!caseNumber,
+    refetchInterval: 30_000,
+  });
+
   const [followUpText, setFollowUpText] = useState("");
   const [sending, setSending] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<PickedFile | null>(null);
   const [uploading, setUploading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-
-  const fetchCase = useCallback(() => {
-    if (!caseNumber) return;
-    setLoading(true);
-    setError(null);
-    customerFetch<CustomerCaseDetail>(`/cases/${caseNumber}`)
-      .then(setDetail)
-      .catch((e) => {
-        setError(e?.message ?? "Failed to load case");
-        setDetail(null);
-      })
-      .finally(() => setLoading(false));
-  }, [caseNumber]);
-
-  const fetchMessages = useCallback(() => {
-    if (!caseNumber) return;
-    customerFetch<{ messages?: CaseMessage[] }>(`/cases/${caseNumber}/messages`)
-      .then((data) => {
-        const msgs = Array.isArray(data?.messages) ? data.messages : Array.isArray(data) ? (data as CaseMessage[]) : [];
-        setCaseMessages(msgs);
-      })
-      .catch(() => {});
-  }, [caseNumber]);
-
-  useEffect(() => {
-    fetchCase();
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchCase, fetchMessages]);
 
   const handlePickAttachment = useCallback(async () => {
     const file = await pickDocument();
@@ -156,14 +148,14 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
       });
       setFollowUpText("");
       setPendingAttachment(null);
-      fetchMessages();
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.cases.messages(caseNumber) });
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to send follow-up.");
     } finally {
       setSending(false);
     }
-  }, [followUpText, pendingAttachment, caseNumber, fetchMessages]);
+  }, [followUpText, pendingAttachment, caseNumber, queryClient]);
 
   const headerContent = (
     <View style={[styles.header, { paddingTop: insets.top + spacing[2] }]}>
@@ -207,7 +199,7 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
             title="Retry"
             variant="outline"
             size="sm"
-            onPress={fetchCase}
+            onPress={() => refetchDetail()}
             style={{ marginTop: spacing[3] }}
           />
         </View>

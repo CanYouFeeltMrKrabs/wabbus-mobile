@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, FlatList, Image, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import { API_BASE } from "@/lib/config";
 import { productImageUrl } from "@/lib/image";
@@ -13,6 +14,7 @@ interface CartRecommendationsProps {
 }
 
 export default function CartRecommendations({ cart }: CartRecommendationsProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [products, setProducts] = useState<PublicProduct[]>([]);
 
@@ -42,7 +44,7 @@ export default function CartRecommendations({ cart }: CartRecommendationsProps) 
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.accent} />
-        <AppText variant="subtitle" weight="bold">You Might Also Like</AppText>
+        <AppText variant="subtitle" weight="bold">{t("common.youMightAlsoLike")}</AppText>
       </View>
       <FlatList
         data={products}

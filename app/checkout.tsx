@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
   View, ScrollView, Pressable, TextInput, Switch,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView,
@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -14,12 +15,15 @@ import { formatMoney } from "@/lib/money";
 import { productImageUrl } from "@/lib/image";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import type { CheckoutAddress } from "@/lib/types";
+import { trackEvent } from "@/lib/tracker";
+import { trackCustomerEvent, flushCustomerEvents } from "@/lib/customerTracker";
 
 function StepIndicator({ current }: { current: CheckoutStep }) {
+  const { t } = useTranslation();
   const steps: { key: CheckoutStep; label: string }[] = [
-    { key: "address", label: "Address" },
-    { key: "payment", label: "Payment" },
-    { key: "review", label: "Review" },
+    { key: "address", label: t("checkout.stepAddress") },
+    { key: "payment", label: t("checkout.stepPayment") },
+    { key: "review", label: t("checkout.stepReview") },
   ];
 
   const idx = steps.findIndex((s) => s.key === current);
@@ -98,7 +102,8 @@ const f = StyleSheet.create({
 function AddressCard({ addr, selected, onSelect }: {
   addr: CheckoutAddress; selected: boolean; onSelect: () => void;
 }) {
-  const name = [addr.firstName, addr.lastName].filter(Boolean).join(" ") || addr.fullName || "Address";
+  const { t } = useTranslation();
+  const name = [addr.firstName, addr.lastName].filter(Boolean).join(" ") || addr.fullName || t("checkout.addressFallback");
   return (
     <Pressable
       style={[ac.card, selected && ac.cardSelected]}
@@ -120,7 +125,7 @@ function AddressCard({ addr, selected, onSelect }: {
       </View>
       {addr.isDefault && (
         <View style={ac.badge}>
-          <AppText variant="tiny" color={colors.brandBlue} weight="bold">DEFAULT</AppText>
+          <AppText variant="tiny" color={colors.brandBlue} weight="bold">{t("checkout.default")}</AppText>
         </View>
       )}
     </Pressable>
@@ -156,9 +161,46 @@ const ac = StyleSheet.create({
 });
 
 export default function CheckoutScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const c = useCheckout();
+  const beginCheckoutTracked = useRef(false);
+  const placingOrderRef = useRef(false);
+  placingOrderRef.current = c.placingOrder;
+  const stepRef = useRef(c.step);
+  stepRef.current = c.step;
+  const addressCompleteRef = useRef(c.addressComplete);
+  addressCompleteRef.current = c.addressComplete;
+  const totalCentsRef = useRef(c.totalCents);
+  totalCentsRef.current = c.totalCents;
+  const isGuestRef = useRef(c.isGuest);
+  isGuestRef.current = c.isGuest;
+
+  useEffect(() => {
+    if (c.cartLoading || c.cartItems.length === 0) return;
+    if (beginCheckoutTracked.current) return;
+    beginCheckoutTracked.current = true;
+    void trackEvent("begin_checkout");
+  }, [c.cartLoading, c.cartItems.length]);
+
+  useEffect(() => {
+    return () => {
+      if (!placingOrderRef.current) {
+        const lastStep = stepRef.current === "review" || stepRef.current === "placing"
+          ? "payment_ready"
+          : addressCompleteRef.current
+            ? "address_complete"
+            : "started";
+        trackCustomerEvent("customer.checkout.abandoned", {
+          lastStep,
+          totalCents: totalCentsRef.current ?? null,
+          isGuest: isGuestRef.current,
+        });
+        flushCustomerEvents();
+      }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goBack = useCallback(() => {
     if (c.step === "payment") c.setStep("address");
@@ -167,17 +209,17 @@ export default function CheckoutScreen() {
   }, [c.step, router]);
 
   const stepTitle =
-    c.step === "address" ? "Shipping" :
-    c.step === "payment" ? "Payment" :
-    c.step === "placing" ? "Placing Order" :
-    "Review & Pay";
+    c.step === "address" ? t("checkout.titleShipping") :
+    c.step === "payment" ? t("checkout.titlePayment") :
+    c.step === "placing" ? t("checkout.titlePlacingOrder") :
+    t("checkout.titleReviewPay");
 
   if (c.cartLoading) {
     return (
       <View style={[s.center, { paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color={colors.brandBlue} />
         <AppText variant="body" color={colors.muted} style={{ marginTop: spacing[3] }}>
-          Loading checkout…
+          {t("checkout.loadingCheckout")}
         </AppText>
       </View>
     );
@@ -187,8 +229,8 @@ export default function CheckoutScreen() {
     return (
       <View style={[s.center, { paddingTop: insets.top }]}>
         <Icon name="shopping-cart" size={48} color={colors.gray300} />
-        <AppText variant="subtitle" color={colors.muted}>Your cart is empty</AppText>
-        <AppButton title="Continue Shopping" variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
+        <AppText variant="subtitle" color={colors.muted}>{t("checkout.emptyCart")}</AppText>
+        <AppButton title={t("checkout.continueShopping")} variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -223,10 +265,10 @@ export default function CheckoutScreen() {
         <View style={s.center}>
           <ActivityIndicator size="large" color={colors.brandBlue} />
           <AppText variant="subtitle" color={colors.muted} style={{ marginTop: spacing[4] }}>
-            Placing your order…
+            {t("checkout.placingYourOrder")}
           </AppText>
           <AppText variant="caption" color={colors.mutedLight} style={{ marginTop: spacing[1] }}>
-            Please don't close the app
+            {t("checkout.dontCloseApp")}
           </AppText>
         </View>
       )}
@@ -242,51 +284,51 @@ export default function CheckoutScreen() {
             {/* Guest email */}
             {c.isGuest && (
               <View style={s.section}>
-                <AppText variant="subtitle" style={s.sectionTitle}>Contact</AppText>
+                <AppText variant="subtitle" style={s.sectionTitle}>{t("checkout.contactTitle")}</AppText>
                 <Field
-                  label="Email"
+                  label={t("checkout.emailLabel")}
                   value={c.guestEmail}
                   onChangeText={c.setGuestEmail}
-                  placeholder="you@example.com"
+                  placeholder={t("checkout.emailPlaceholder")}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoComplete="email"
                 />
                 <AppText variant="tiny" color={colors.mutedLight}>
-                  We'll send your order confirmation here.
+                  {t("checkout.emailHint")}
                 </AppText>
               </View>
             )}
 
             <View style={s.section}>
-              <AppText variant="subtitle" style={s.sectionTitle}>Shipping Address</AppText>
+              <AppText variant="subtitle" style={s.sectionTitle}>{t("checkout.shippingAddressTitle")}</AppText>
 
               {c.isGuest ? (
                 <>
                   <View style={s.row}>
                     <View style={s.halfField}>
-                      <Field label="First name" value={c.guestFirstName} onChangeText={c.setGuestFirstName} autoComplete="given-name" />
+                      <Field label={t("checkout.firstName")} value={c.guestFirstName} onChangeText={c.setGuestFirstName} autoComplete="given-name" />
                     </View>
                     <View style={s.halfField}>
-                      <Field label="Last name" value={c.guestLastName} onChangeText={c.setGuestLastName} autoComplete="family-name" />
-                    </View>
-                  </View>
-                  <Field label="Address" value={c.guestLine1} onChangeText={c.setGuestLine1} autoComplete="street-address" />
-                  <Field label="Apt / Suite (optional)" value={c.guestLine2} onChangeText={c.setGuestLine2} />
-                  <View style={s.row}>
-                    <View style={s.halfField}>
-                      <Field label="City" value={c.guestCity} onChangeText={c.setGuestCity} />
-                    </View>
-                    <View style={s.halfField}>
-                      <Field label="State" value={c.guestState} onChangeText={c.setGuestState} />
+                      <Field label={t("checkout.lastName")} value={c.guestLastName} onChangeText={c.setGuestLastName} autoComplete="family-name" />
                     </View>
                   </View>
+                  <Field label={t("checkout.addressLabel")} value={c.guestLine1} onChangeText={c.setGuestLine1} autoComplete="street-address" />
+                  <Field label={t("checkout.aptSuiteOptional")} value={c.guestLine2} onChangeText={c.setGuestLine2} />
                   <View style={s.row}>
                     <View style={s.halfField}>
-                      <Field label="ZIP" value={c.guestPostcode} onChangeText={c.setGuestPostcode} keyboardType="numeric" autoComplete="postal-code" />
+                      <Field label={t("checkout.city")} value={c.guestCity} onChangeText={c.setGuestCity} />
                     </View>
                     <View style={s.halfField}>
-                      <Field label="Phone (optional)" value={c.guestPhone} onChangeText={c.setGuestPhone} keyboardType="phone-pad" autoComplete="tel" />
+                      <Field label={t("checkout.state")} value={c.guestState} onChangeText={c.setGuestState} />
+                    </View>
+                  </View>
+                  <View style={s.row}>
+                    <View style={s.halfField}>
+                      <Field label={t("checkout.zip")} value={c.guestPostcode} onChangeText={c.setGuestPostcode} keyboardType="numeric" autoComplete="postal-code" />
+                    </View>
+                    <View style={s.halfField}>
+                      <Field label={t("checkout.phoneOptional")} value={c.guestPhone} onChangeText={c.setGuestPhone} keyboardType="phone-pad" autoComplete="tel" />
                     </View>
                   </View>
                 </>
@@ -303,43 +345,43 @@ export default function CheckoutScreen() {
 
                   {c.showAddAddress ? (
                     <View style={s.addForm}>
-                      <AppText variant="label" style={{ marginBottom: spacing[3] }}>New Address</AppText>
+                      <AppText variant="label" style={{ marginBottom: spacing[3] }}>{t("checkout.newAddress")}</AppText>
                       <View style={s.row}>
                         <View style={s.halfField}>
-                          <Field label="First name" value={c.newAddrFirst} onChangeText={c.setNewAddrFirst} />
+                          <Field label={t("checkout.firstName")} value={c.newAddrFirst} onChangeText={c.setNewAddrFirst} />
                         </View>
                         <View style={s.halfField}>
-                          <Field label="Last name" value={c.newAddrLast} onChangeText={c.setNewAddrLast} />
+                          <Field label={t("checkout.lastName")} value={c.newAddrLast} onChangeText={c.setNewAddrLast} />
                         </View>
                       </View>
-                      <Field label="Address" value={c.newAddrLine1} onChangeText={c.setNewAddrLine1} />
-                      <Field label="Apt / Suite (optional)" value={c.newAddrLine2} onChangeText={c.setNewAddrLine2} />
+                      <Field label={t("checkout.addressLabel")} value={c.newAddrLine1} onChangeText={c.setNewAddrLine1} />
+                      <Field label={t("checkout.aptSuiteOptional")} value={c.newAddrLine2} onChangeText={c.setNewAddrLine2} />
                       <View style={s.row}>
                         <View style={s.halfField}>
-                          <Field label="City" value={c.newAddrCity} onChangeText={c.setNewAddrCity} />
+                          <Field label={t("checkout.city")} value={c.newAddrCity} onChangeText={c.setNewAddrCity} />
                         </View>
                         <View style={s.halfField}>
-                          <Field label="State" value={c.newAddrState} onChangeText={c.setNewAddrState} />
+                          <Field label={t("checkout.state")} value={c.newAddrState} onChangeText={c.setNewAddrState} />
                         </View>
                       </View>
                       <View style={s.row}>
                         <View style={s.halfField}>
-                          <Field label="ZIP" value={c.newAddrPostcode} onChangeText={c.setNewAddrPostcode} keyboardType="numeric" />
+                          <Field label={t("checkout.zip")} value={c.newAddrPostcode} onChangeText={c.setNewAddrPostcode} keyboardType="numeric" />
                         </View>
                         <View style={s.halfField}>
-                          <Field label="Phone (opt)" value={c.newAddrPhone} onChangeText={c.setNewAddrPhone} keyboardType="phone-pad" />
+                          <Field label={t("checkout.phoneOpt")} value={c.newAddrPhone} onChangeText={c.setNewAddrPhone} keyboardType="phone-pad" />
                         </View>
                       </View>
                       <View style={s.row}>
                         <AppButton
-                          title={c.savingAddress ? "Saving…" : "Save Address"}
+                          title={c.savingAddress ? t("checkout.savingAddress") : t("checkout.saveAddress")}
                           variant="primary"
                           onPress={c.handleAddAddress}
                           disabled={c.savingAddress}
                           style={{ flex: 1, marginRight: spacing[2] }}
                         />
                         <AppButton
-                          title="Cancel"
+                          title={t("checkout.cancel")}
                           variant="outline"
                           onPress={() => c.setShowAddAddress(false)}
                           style={{ flex: 1 }}
@@ -348,7 +390,7 @@ export default function CheckoutScreen() {
                     </View>
                   ) : (
                     <AppButton
-                      title="Add New Address"
+                      title={t("checkout.addNewAddress")}
                       variant="outline"
                       icon="add"
                       onPress={() => c.setShowAddAddress(true)}
@@ -362,9 +404,9 @@ export default function CheckoutScreen() {
 
             {/* Billing address */}
             <View style={s.section}>
-              <AppText variant="subtitle" style={s.sectionTitle}>Billing Address</AppText>
+              <AppText variant="subtitle" style={s.sectionTitle}>{t("checkout.billingAddressTitle")}</AppText>
               <View style={s.toggleRow}>
-                <AppText variant="body" style={{ flex: 1 }}>Same as shipping</AppText>
+                <AppText variant="body" style={{ flex: 1 }}>{t("checkout.sameAsShipping")}</AppText>
                 <Switch
                   value={c.billingSameAsShipping}
                   onValueChange={c.setBillingSameAsShipping}
@@ -373,16 +415,47 @@ export default function CheckoutScreen() {
                 />
               </View>
 
-              {!c.billingSameAsShipping && !c.isGuest && c.addresses.length > 0 && (
+              {!c.billingSameAsShipping && (
                 <View style={{ marginTop: spacing[3] }}>
-                  {c.addresses.map((addr) => (
-                    <AddressCard
-                      key={addr.publicId}
-                      addr={addr}
-                      selected={c.billingAddressId === addr.publicId}
-                      onSelect={() => c.setBillingAddressId(addr.publicId)}
-                    />
-                  ))}
+                  {c.isGuest ? (
+                    <>
+                      <View style={s.row}>
+                        <View style={s.halfField}>
+                          <Field label={t("checkout.firstName")} value={c.gBillFirstName} onChangeText={c.setGBillFirstName} autoComplete="given-name" />
+                        </View>
+                        <View style={s.halfField}>
+                          <Field label={t("checkout.lastName")} value={c.gBillLastName} onChangeText={c.setGBillLastName} autoComplete="family-name" />
+                        </View>
+                      </View>
+                      <Field label={t("checkout.addressLabel")} value={c.gBillLine1} onChangeText={c.setGBillLine1} autoComplete="street-address" />
+                      <Field label={t("checkout.aptSuiteOptional")} value={c.gBillLine2} onChangeText={c.setGBillLine2} />
+                      <View style={s.row}>
+                        <View style={s.halfField}>
+                          <Field label={t("checkout.city")} value={c.gBillCity} onChangeText={c.setGBillCity} />
+                        </View>
+                        <View style={s.halfField}>
+                          <Field label={t("checkout.state")} value={c.gBillState} onChangeText={c.setGBillState} />
+                        </View>
+                      </View>
+                      <View style={s.row}>
+                        <View style={s.halfField}>
+                          <Field label={t("checkout.zip")} value={c.gBillPostcode} onChangeText={c.setGBillPostcode} keyboardType="numeric" autoComplete="postal-code" />
+                        </View>
+                        <View style={s.halfField}>
+                          <Field label={t("checkout.phoneOptional")} value={c.gBillPhone} onChangeText={c.setGBillPhone} keyboardType="phone-pad" autoComplete="tel" />
+                        </View>
+                      </View>
+                    </>
+                  ) : c.addresses.length > 0 ? (
+                    c.addresses.map((addr) => (
+                      <AddressCard
+                        key={addr.publicId}
+                        addr={addr}
+                        selected={c.billingAddressId === addr.publicId}
+                        onSelect={() => c.setBillingAddressId(addr.publicId)}
+                      />
+                    ))
+                  ) : null}
                 </View>
               )}
             </View>
@@ -390,7 +463,7 @@ export default function CheckoutScreen() {
 
           <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
             <AppButton
-              title="Continue to Payment"
+              title={t("checkout.continueToPayment")}
               variant="primary"
               fullWidth
               size="lg"
@@ -410,15 +483,15 @@ export default function CheckoutScreen() {
               <View style={s.section}>
                 <View style={s.creditRow}>
                   <View style={{ flex: 1 }}>
-                    <AppText variant="label">Store Credit</AppText>
+                    <AppText variant="label">{t("checkout.storeCredit")}</AppText>
                     <AppText variant="caption" color={colors.muted}>
-                      {formatMoney(c.creditBalanceCents)} available
+                      {t("checkout.creditAvailable", { amount: formatMoney(c.creditBalanceCents) })}
                     </AppText>
                     {c.useStoreCredit && (
                       <AppText variant="tiny" color={colors.success}>
                         {c.creditFullyCovered
-                          ? "Fully covers this order"
-                          : `−${formatMoney(c.creditApplicableCents)} applied`}
+                          ? t("checkout.creditFullyCovered")
+                          : t("checkout.creditApplied", { amount: formatMoney(c.creditApplicableCents) })}
                       </AppText>
                     )}
                   </View>
@@ -433,19 +506,19 @@ export default function CheckoutScreen() {
             )}
 
             <View style={s.section}>
-              <AppText variant="subtitle" style={s.sectionTitle}>Payment Method</AppText>
+              <AppText variant="subtitle" style={s.sectionTitle}>{t("checkout.paymentMethodTitle")}</AppText>
               {c.creditFullyCovered ? (
                 <View style={s.creditCoveredCard}>
                   <Icon name="check-circle" size={24} color={colors.success} />
                   <AppText variant="body" color={colors.success} style={{ marginLeft: spacing[2], flex: 1 }}>
-                    Store credit covers this order — no additional payment needed
+                    {t("checkout.creditCoversOrder")}
                   </AppText>
                 </View>
               ) : (
                 <>
                   {c.savedMethods.length > 0 && (
                     <View style={{ marginBottom: spacing[3] }}>
-                      <AppText variant="caption" weight="semibold" style={{ marginBottom: spacing[2] }}>Saved Cards</AppText>
+                      <AppText variant="caption" weight="semibold" style={{ marginBottom: spacing[2] }}>{t("checkout.savedCards")}</AppText>
                       {c.savedMethods.map((m) => (
                         <Pressable
                           key={m.stripePaymentMethodId}
@@ -462,13 +535,13 @@ export default function CheckoutScreen() {
                             </AppText>
                             {m.expMonth && m.expYear && (
                               <AppText variant="tiny" color={colors.muted}>
-                                Expires {String(m.expMonth).padStart(2, "0")}/{m.expYear}
+                                {t("checkout.expires", { exp: `${String(m.expMonth).padStart(2, "0")}/${m.expYear}` })}
                               </AppText>
                             )}
                           </View>
                           {m.isDefault && (
                             <View style={s.defaultBadge}>
-                              <AppText variant="tiny" color={colors.brandBlue} weight="bold">DEFAULT</AppText>
+                              <AppText variant="tiny" color={colors.brandBlue} weight="bold">{t("checkout.default")}</AppText>
                             </View>
                           )}
                         </Pressable>
@@ -480,10 +553,10 @@ export default function CheckoutScreen() {
                     <Icon name="credit-card" size={24} color={colors.brandBlue} />
                     <View style={{ marginLeft: spacing[3], flex: 1 }}>
                       <AppText variant="label">
-                        {c.savedMethods.length > 0 ? "New Card" : "Card Payment"}
+                        {c.savedMethods.length > 0 ? t("checkout.newCard") : t("checkout.cardPayment")}
                       </AppText>
                       <AppText variant="caption" color={colors.muted}>
-                        Enter card details securely via Stripe
+                        {t("checkout.enterCardDetails")}
                       </AppText>
                     </View>
                   </View>
@@ -494,7 +567,7 @@ export default function CheckoutScreen() {
 
           <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
             <AppButton
-              title="Review Order"
+              title={t("checkout.reviewOrder")}
               variant="primary"
               fullWidth
               size="lg"
@@ -511,9 +584,9 @@ export default function CheckoutScreen() {
             {/* Shipping summary */}
             <View style={s.section}>
               <View style={s.sectionHeader}>
-                <AppText variant="subtitle">Shipping</AppText>
+                <AppText variant="subtitle">{t("checkout.shippingSection")}</AppText>
                 <Pressable onPress={() => c.setStep("address")}>
-                  <AppText variant="caption" color={colors.brandBlue} weight="semibold">Edit</AppText>
+                  <AppText variant="caption" color={colors.brandBlue} weight="semibold">{t("checkout.edit")}</AppText>
                 </Pressable>
               </View>
               {c.isGuest ? (
@@ -545,7 +618,7 @@ export default function CheckoutScreen() {
             {/* Items */}
             <View style={s.section}>
               <AppText variant="subtitle" style={s.sectionTitle}>
-                Items ({c.cartItems.length})
+                {t("checkout.itemsCount", { count: c.cartItems.length })}
               </AppText>
               {c.cartItems.map((item) => (
                 <View key={item.publicId} style={s.itemRow}>
@@ -556,7 +629,7 @@ export default function CheckoutScreen() {
                   />
                   <View style={s.itemInfo}>
                     <AppText variant="caption" numberOfLines={2}>{item.title}</AppText>
-                    <AppText variant="tiny" color={colors.muted}>Qty: {item.quantity}</AppText>
+                    <AppText variant="tiny" color={colors.muted}>{t("checkout.qtyLabel", { count: item.quantity })}</AppText>
                   </View>
                   <AppText variant="label">{formatMoney(item.unitPriceCents * item.quantity)}</AppText>
                 </View>
@@ -566,31 +639,31 @@ export default function CheckoutScreen() {
             {/* Totals */}
             <View style={s.section}>
               <View style={s.totalRow}>
-                <AppText variant="body" color={colors.muted}>Subtotal</AppText>
+                <AppText variant="body" color={colors.muted}>{t("checkout.subtotal")}</AppText>
                 <AppText variant="body">{formatMoney(c.serverCart?.subtotalCents ?? c.subtotalCents)}</AppText>
               </View>
               {c.serverCart && (
                 <>
                   <View style={s.totalRow}>
-                    <AppText variant="body" color={colors.muted}>Shipping</AppText>
+                    <AppText variant="body" color={colors.muted}>{t("checkout.shipping")}</AppText>
                     <AppText variant="body">
-                      {c.serverCart.shippingCents === 0 ? "Free" : formatMoney(c.serverCart.shippingCents)}
+                      {c.serverCart.shippingCents === 0 ? t("checkout.shippingFree") : formatMoney(c.serverCart.shippingCents)}
                     </AppText>
                   </View>
                   <View style={s.totalRow}>
-                    <AppText variant="body" color={colors.muted}>Tax</AppText>
+                    <AppText variant="body" color={colors.muted}>{t("checkout.tax")}</AppText>
                     <AppText variant="body">{formatMoney(c.serverCart.taxCents)}</AppText>
                   </View>
                 </>
               )}
               {c.creditApplicableCents > 0 && (
                 <View style={s.totalRow}>
-                  <AppText variant="body" color={colors.success}>Store Credit</AppText>
+                  <AppText variant="body" color={colors.success}>{t("checkout.storeCreditLabel")}</AppText>
                   <AppText variant="body" color={colors.success}>−{formatMoney(c.creditApplicableCents)}</AppText>
                 </View>
               )}
               <View style={[s.totalRow, s.totalRowFinal]}>
-                <AppText variant="subtitle">Total</AppText>
+                <AppText variant="subtitle">{t("checkout.total")}</AppText>
                 <AppText variant="title" color={c.creditFullyCovered ? colors.success : colors.foreground}>
                   {c.creditFullyCovered ? "$0.00" : formatMoney(c.stripeAmountCents > 0 ? c.stripeAmountCents : c.totalCents)}
                 </AppText>
@@ -601,10 +674,10 @@ export default function CheckoutScreen() {
           <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
             <AppButton
               title={c.placingOrder
-                ? "Placing Order…"
+                ? t("checkout.placingOrder")
                 : c.creditFullyCovered
-                  ? "Place Order"
-                  : `Pay ${formatMoney(c.stripeAmountCents > 0 ? c.stripeAmountCents : c.totalCents)}`
+                  ? t("checkout.placeOrder")
+                  : t("checkout.payAmount", { amount: formatMoney(c.stripeAmountCents > 0 ? c.stripeAmountCents : c.totalCents) })
               }
               variant="primary"
               fullWidth

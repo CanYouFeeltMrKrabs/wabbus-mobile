@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { View, ScrollView, Image, StyleSheet, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -9,29 +11,48 @@ import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { productImageUrl } from "@/lib/image";
-import { formatDate } from "@/lib/orderHelpers";
+import { formatDate, pickItemTitle, pickItemImage, pickUnitPriceCents, orderTotalCents } from "@/lib/orderHelpers";
+import { queryKeys } from "@/lib/queryKeys";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { Order, OrderItem } from "@/lib/types";
+
+type OrderItemCaseEntry = { caseNumber: string };
+
+function orderItemHasCase(
+  item: OrderItem
+): item is OrderItem & { caseItems: OrderItemCaseEntry[] } {
+  const raw = item as OrderItem & { caseItems?: OrderItemCaseEntry[] };
+  return (
+    Array.isArray(raw.caseItems) &&
+    raw.caseItems.length > 0 &&
+    Boolean(raw.caseItems[0]?.caseNumber)
+  );
+}
+
+function orderHasAnyCase(items: OrderItem[] | undefined): boolean {
+  return items?.some(orderItemHasCase) ?? false;
+}
+
+function firstCaseNumberFromOrder(items: OrderItem[] | undefined): string | undefined {
+  const found = items?.find(orderItemHasCase);
+  return found?.caseItems[0]?.caseNumber;
+}
 
 export default function OrderDetailScreen() {
   return <RequireAuth><OrderDetailContent /></RequireAuth>;
 }
 
 function OrderDetailContent() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!id) return;
-    customerFetch<Order>(`/orders/${id}`)
-      .then(setOrder)
-      .catch(() => setOrder(null))
-      .finally(() => setLoading(false));
-  }, [id]);
+  const { data: order, isLoading: loading } = useQuery({
+    queryKey: queryKeys.orders.detail(id!),
+    queryFn: () => customerFetch<Order>(`/orders/${id}`),
+    enabled: !!id,
+  });
 
   if (loading) {
     return (
@@ -45,8 +66,8 @@ function OrderDetailContent() {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="error-outline" size={48} color={colors.gray300} />
-        <AppText variant="subtitle" color={colors.muted}>Order not found</AppText>
-        <AppButton title="Go Back" variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
+        <AppText variant="subtitle" color={colors.muted}>{t("orders.notFound")}</AppText>
+        <AppButton title={t("orders.goBack")} variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -55,27 +76,27 @@ function OrderDetailContent() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Order #{order.publicId.slice(0, 8)}</AppText>
+        <AppText variant="title">{t("orders.orderHeading", { id: (order.publicId ?? "").slice(0, 8) })}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Status */}
         <View style={styles.statusCard}>
-          <AppText variant="label">Status</AppText>
+          <AppText variant="label">{t("orders.status")}</AppText>
           <AppText variant="subtitle" color={colors.brandBlue}>{order.status.replace(/_/g, " ")}</AppText>
-          <AppText variant="caption" style={styles.date}>Placed {formatDate(order.createdAt)}</AppText>
+          <AppText variant="caption" style={styles.date}>{t("orders.placedDate", { date: formatDate(order.createdAt) })}</AppText>
         </View>
 
         {/* Items */}
-        <AppText variant="subtitle" style={styles.sectionTitle}>Items</AppText>
-        {order.items?.map((item: OrderItem) => (
-          <View key={item.publicId} style={styles.itemCard}>
-            <Image source={{ uri: productImageUrl(item.image, "thumb") }} style={styles.itemImg} resizeMode="cover" />
+        <AppText variant="subtitle" style={styles.sectionTitle}>{t("orders.itemsTitle")}</AppText>
+        {order.items?.map((item: OrderItem, idx: number) => (
+          <View key={item.publicId ?? idx} style={styles.itemCard}>
+            <Image source={{ uri: productImageUrl(pickItemImage(item), "thumb") }} style={styles.itemImg} resizeMode="cover" />
             <View style={styles.itemInfo}>
-              <AppText variant="label" numberOfLines={2}>{item.title}</AppText>
-              <AppText variant="caption">Qty: {item.quantity}</AppText>
-              <AppText variant="priceSmall">{formatMoney(item.unitPriceCents * item.quantity)}</AppText>
+              <AppText variant="label" numberOfLines={2}>{pickItemTitle(item)}</AppText>
+              <AppText variant="caption">{t("orders.qtyLabel", { count: item.quantity ?? 0 })}</AppText>
+              <AppText variant="priceSmall">{formatMoney(pickUnitPriceCents(item) * (item.quantity ?? 0))}</AppText>
             </View>
           </View>
         ))}
@@ -83,8 +104,8 @@ function OrderDetailContent() {
         {/* Total */}
         <View style={styles.totalCard}>
           <View style={styles.totalRow}>
-            <AppText variant="subtitle">Total</AppText>
-            <AppText variant="price">{formatMoney(order.totalCents)}</AppText>
+            <AppText variant="subtitle">{t("orders.total")}</AppText>
+            <AppText variant="price">{formatMoney(orderTotalCents(order))}</AppText>
           </View>
         </View>
 
@@ -92,7 +113,7 @@ function OrderDetailContent() {
         <View style={styles.actionsSection}>
           {["PAID", "SHIPPED", "DELIVERED"].includes(order.status) && (
             <AppButton
-              title="Track Order"
+              title={t("orders.trackPackage")}
               variant="primary"
               fullWidth
               icon="local-shipping"
@@ -102,7 +123,7 @@ function OrderDetailContent() {
           )}
           {order.status === "PAID" && (
             <AppButton
-              title="Cancel Items"
+              title={t("orders.cancelItems")}
               variant="danger"
               fullWidth
               icon="close-circle"
@@ -113,7 +134,7 @@ function OrderDetailContent() {
           {order.status === "DELIVERED" && (
             <>
               <AppButton
-                title="Return Items"
+                title={t("orders.returnItems")}
                 variant="outline"
                 fullWidth
                 icon="package-variant"
@@ -121,7 +142,7 @@ function OrderDetailContent() {
                 style={styles.actionBtn}
               />
               <AppButton
-                title="Write a Review"
+                title={t("orders.writeReview")}
                 variant="outline"
                 fullWidth
                 icon="star"
@@ -132,7 +153,7 @@ function OrderDetailContent() {
           )}
           {["PAID", "SHIPPED", "DELIVERED"].includes(order.status) && (
             <AppButton
-              title="Report Missing Package"
+              title={t("orders.missingPackage")}
               variant="ghost"
               fullWidth
               icon="package-variant-closed-remove"
@@ -140,8 +161,31 @@ function OrderDetailContent() {
               style={styles.actionBtn}
             />
           )}
+          {orderHasAnyCase(order.items) && (
+            <AppButton
+              title={t("orders.viewCase")}
+              variant="outline"
+              fullWidth
+              icon="policy"
+              onPress={() => {
+                const caseNumber = firstCaseNumberFromOrder(order.items);
+                if (caseNumber) router.push(ROUTES.orderCase(id, caseNumber));
+              }}
+              style={styles.actionBtn}
+            />
+          )}
+          {order.status === "DELIVERED" && !orderHasAnyCase(order.items) && (
+            <AppButton
+              title={t("orders.reportProblem")}
+              variant="outline"
+              fullWidth
+              icon="report-problem"
+              onPress={() => router.push(ROUTES.supportTicket)}
+              style={styles.actionBtn}
+            />
+          )}
           <AppButton
-            title="Message Seller"
+            title={t("orders.messageSeller")}
             variant="ghost"
             fullWidth
             icon="message-text"

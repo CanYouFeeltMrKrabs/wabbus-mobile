@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { View, FlatList, StyleSheet } from "react-native";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import ProductCard from "@/components/ui/ProductCard";
 import { colors, spacing, borderRadius } from "@/lib/theme";
@@ -42,13 +43,15 @@ export default function RecentlyViewedSlider({ onAddToCart }: RecentlyViewedSlid
     [recentlyViewed]
   );
 
+  const { t } = useTranslation();
+
   if (recentProducts.length === 0) return null;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.accent} />
-        <AppText variant="subtitle" weight="bold">Recently Viewed</AppText>
+        <AppText variant="subtitle" weight="bold">{t("common.recentlyViewed")}</AppText>
       </View>
       
       <FlatList

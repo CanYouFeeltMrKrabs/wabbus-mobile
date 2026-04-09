@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import { publicFetch } from "@/lib/api";
@@ -12,6 +13,7 @@ import { ROUTES } from "@/lib/routes";
 import { colors, spacing } from "@/lib/theme";
 
 export default function ProductRedirectScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [error, setError] = useState(false);
@@ -43,8 +45,8 @@ export default function ProductRedirectScreen() {
   if (error) {
     return (
       <View style={styles.center}>
-        <AppText variant="subtitle" color={colors.muted}>Product not found</AppText>
-        <AppButton title="Go Home" variant="outline" onPress={() => router.replace(ROUTES.homeFeed)} style={{ marginTop: spacing[4] }} />
+        <AppText variant="subtitle" color={colors.muted}>{t("errors.productNotFound")}</AppText>
+        <AppButton title={t("errors.global.goHome")} variant="outline" onPress={() => router.replace(ROUTES.homeFeed)} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }

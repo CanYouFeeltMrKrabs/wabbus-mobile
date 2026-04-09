@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   FlatList,
@@ -14,11 +14,14 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import { useQuery } from "@tanstack/react-query";
 import { customerFetch, FetchError } from "@/lib/api";
+import { queryKeys } from "@/lib/queryKeys";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import type { Address } from "@/lib/types";
 
@@ -66,29 +69,21 @@ export default function AddressesScreen() {
 }
 
 function AddressesContent() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: addresses = [], isLoading: loading, refetch: refetchAddresses } = useQuery({
+    queryKey: queryKeys.addresses.list(),
+    queryFn: async () => {
+      const data = await customerFetch<Address[]>("/customer-addresses");
+      return Array.isArray(data) ? data : [];
+    },
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const data = await customerFetch<Address[]>("/customer-addresses");
-      setAddresses(Array.isArray(data) ? data : []);
-    } catch {
-      setAddresses([]);
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -117,7 +112,7 @@ function AddressesContent() {
 
   const handleSave = async () => {
     if (!form.line1.trim() || !form.city.trim() || !form.postalCode.trim()) {
-      Alert.alert("Missing fields", "Address line 1, city, and postal code are required.");
+      Alert.alert(t("account.addresses.missingFields"), t("account.addresses.requiredFieldsError"));
       return;
     }
 
@@ -144,9 +139,9 @@ function AddressesContent() {
       setShowForm(false);
       setEditingId(null);
       setForm(EMPTY_FORM);
-      await load();
+      await refetchAddresses();
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to save address.");
+      Alert.alert(t("common.error"), e.message || t("account.addresses.errorSave"));
     } finally {
       setSaving(false);
     }
@@ -159,27 +154,27 @@ function AddressesContent() {
         method: "PATCH",
         body: JSON.stringify({ isDefault: true }),
       });
-      await load();
+      await refetchAddresses();
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to set default.");
+      Alert.alert(t("common.error"), e.message || t("account.addresses.errorSetDefault"));
     } finally {
       setBusyId(null);
     }
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert("Remove Address", "Are you sure? This cannot be undone.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("account.addresses.removeTitle"), t("account.addresses.removeConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Remove",
+        text: t("common.remove"),
         style: "destructive",
         onPress: async () => {
           setBusyId(id);
           try {
             await customerFetch(`/customer-addresses/${id}`, { method: "DELETE" });
-            await load();
+            await refetchAddresses();
           } catch (e: any) {
-            Alert.alert("Error", e.message || "Unable to remove address.");
+            Alert.alert(t("common.error"), e.message || t("account.addresses.errorRemove"));
           } finally {
             setBusyId(null);
           }
@@ -206,43 +201,43 @@ function AddressesContent() {
             style={{ width: 44 }}
           />
           <AppText variant="title">
-            {editingId ? "Edit Address" : "New Address"}
+            {editingId ? t("account.addresses.editAddress") : t("account.addresses.newAddress")}
           </AppText>
           <View style={{ width: 44 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
-          <FormField label="Label (optional)" value={form.label} onChangeText={(v) => setForm((f) => ({ ...f, label: v }))} placeholder="Home, Work..." />
+          <FormField t={t} label={t("account.addresses.labelOptional")} value={form.label} onChangeText={(v) => setForm((f) => ({ ...f, label: v }))} placeholder={t("account.addresses.labelPlaceholder")} />
           <View style={styles.row}>
             <View style={styles.halfField}>
-              <FormField label="First Name" value={form.firstName} onChangeText={(v) => setForm((f) => ({ ...f, firstName: v }))} placeholder="Jane" />
+              <FormField t={t} label={t("account.addresses.firstName")} value={form.firstName} onChangeText={(v) => setForm((f) => ({ ...f, firstName: v }))} placeholder={t("account.addresses.firstNamePlaceholder")} />
             </View>
             <View style={styles.halfField}>
-              <FormField label="Last Name" value={form.lastName} onChangeText={(v) => setForm((f) => ({ ...f, lastName: v }))} placeholder="Doe" />
+              <FormField t={t} label={t("account.addresses.lastName")} value={form.lastName} onChangeText={(v) => setForm((f) => ({ ...f, lastName: v }))} placeholder={t("account.addresses.lastNamePlaceholder")} />
             </View>
           </View>
-          <FormField label="Address Line 1" value={form.line1} onChangeText={(v) => setForm((f) => ({ ...f, line1: v }))} placeholder="123 Main St" required />
-          <FormField label="Address Line 2 (optional)" value={form.line2} onChangeText={(v) => setForm((f) => ({ ...f, line2: v }))} placeholder="Apt 4B" />
+          <FormField t={t} label={t("account.addresses.addressLine1")} value={form.line1} onChangeText={(v) => setForm((f) => ({ ...f, line1: v }))} placeholder={t("account.addresses.addressLine1Placeholder")} required />
+          <FormField t={t} label={t("account.addresses.addressLine2Optional")} value={form.line2} onChangeText={(v) => setForm((f) => ({ ...f, line2: v }))} placeholder={t("account.addresses.addressLine2Placeholder")} />
           <View style={styles.row}>
             <View style={styles.halfField}>
-              <FormField label="City" value={form.city} onChangeText={(v) => setForm((f) => ({ ...f, city: v }))} required />
+              <FormField t={t} label={t("account.addresses.city")} value={form.city} onChangeText={(v) => setForm((f) => ({ ...f, city: v }))} required />
             </View>
             <View style={styles.halfField}>
-              <FormField label="State" value={form.state} onChangeText={(v) => setForm((f) => ({ ...f, state: v }))} placeholder="CA" />
+              <FormField t={t} label={t("account.addresses.state")} value={form.state} onChangeText={(v) => setForm((f) => ({ ...f, state: v }))} placeholder={t("account.addresses.statePlaceholder")} />
             </View>
           </View>
           <View style={styles.row}>
             <View style={styles.halfField}>
-              <FormField label="Postal Code" value={form.postalCode} onChangeText={(v) => setForm((f) => ({ ...f, postalCode: v }))} keyboardType="number-pad" required />
+              <FormField t={t} label={t("account.addresses.postalCode")} value={form.postalCode} onChangeText={(v) => setForm((f) => ({ ...f, postalCode: v }))} keyboardType="number-pad" required />
             </View>
             <View style={styles.halfField}>
-              <FormField label="Country" value={form.country} editable={false} />
+              <FormField t={t} label={t("account.addresses.country")} value={form.country} editable={false} />
             </View>
           </View>
-          <FormField label="Phone (optional)" value={form.phone} onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))} keyboardType="phone-pad" placeholder="+1 555 123 4567" />
+          <FormField t={t} label={t("account.addresses.phoneOptional")} value={form.phone} onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))} keyboardType="phone-pad" placeholder={t("account.addresses.phonePlaceholder")} />
 
           <View style={styles.switchRow}>
-            <AppText variant="body">Make default address</AppText>
+            <AppText variant="body">{t("account.addresses.makeDefault")}</AppText>
             <Switch
               value={form.isDefault}
               onValueChange={(v) => setForm((f) => ({ ...f, isDefault: v }))}
@@ -253,7 +248,7 @@ function AddressesContent() {
 
           <View style={styles.formActions}>
             <AppButton
-              title="Cancel"
+              title={t("common.cancel")}
               variant="outline"
               onPress={() => {
                 setShowForm(false);
@@ -262,7 +257,7 @@ function AddressesContent() {
               style={{ flex: 1 }}
             />
             <AppButton
-              title={saving ? "Saving..." : editingId ? "Save Changes" : "Save Address"}
+              title={saving ? t("account.addresses.saving") : editingId ? t("account.addresses.saveChanges") : t("account.addresses.saveAddress")}
               variant="primary"
               loading={saving}
               onPress={handleSave}
@@ -280,7 +275,7 @@ function AddressesContent() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Addresses</AppText>
+        <AppText variant="title">{t("account.addresses.heading")}</AppText>
         <Pressable onPress={openCreate} hitSlop={8}>
           <Icon name="plus" size={24} color={colors.brandBlue} />
         </Pressable>
@@ -292,9 +287,9 @@ function AddressesContent() {
         <View style={styles.empty}>
           <Icon name="map-marker-off" size={48} color={colors.gray300} />
           <AppText variant="subtitle" color={colors.muted}>
-            No saved addresses
+            {t("account.addresses.noSavedAddresses")}
           </AppText>
-          <AppButton title="Add Address" variant="primary" icon="plus" onPress={openCreate} />
+          <AppButton title={t("account.addresses.addAddress")} variant="primary" icon="plus" onPress={openCreate} />
         </View>
       ) : (
         <FlatList
@@ -303,7 +298,7 @@ function AddressesContent() {
           contentContainerStyle={styles.list}
           ListFooterComponent={
             <AppButton
-              title="Add New Address"
+              title={t("account.addresses.addNewAddress")}
               variant="outline"
               fullWidth
               icon="plus"
@@ -318,7 +313,7 @@ function AddressesContent() {
                 {item.isDefault && (
                   <View style={styles.defaultBadge}>
                     <AppText variant="tiny" color={colors.brandBlue} weight="bold">
-                      DEFAULT
+                      {t("account.addresses.default")}
                     </AppText>
                   </View>
                 )}
@@ -338,7 +333,7 @@ function AddressesContent() {
 
                 <View style={styles.cardActions}>
                   <AppButton
-                    title="Edit"
+                    title={t("account.addresses.edit")}
                     variant="primary"
                     size="sm"
                     icon="pencil"
@@ -348,7 +343,7 @@ function AddressesContent() {
                   />
                   {!item.isDefault && (
                     <AppButton
-                      title="Default"
+                      title={t("account.addresses.setDefault")}
                       variant="outline"
                       size="sm"
                       icon="check-circle"
@@ -359,7 +354,7 @@ function AddressesContent() {
                     />
                   )}
                   <AppButton
-                    title="Remove"
+                    title={t("common.remove")}
                     variant="danger"
                     size="sm"
                     icon="trash-can-outline"
@@ -378,6 +373,7 @@ function AddressesContent() {
 }
 
 function FormField({
+  t,
   label,
   value,
   onChangeText,
@@ -386,6 +382,7 @@ function FormField({
   editable = true,
   required,
 }: {
+  t: (key: string) => string;
   label: string;
   value: string;
   onChangeText?: (v: string) => void;

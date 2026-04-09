@@ -3,11 +3,14 @@
  * Uses a listener pattern instead of window events for React Native.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { trackEvent } from "./tracker";
+import { trackCustomerEvent } from "./customerTracker";
 
 export type WishlistItem = {
   productId: string;
   variantPublicId: string;
   title: string;
+  variantLabel?: string;
   price: number;
   image: string;
   slug: string;
@@ -58,13 +61,28 @@ export async function addToWishlist(
   if (items.some((i) => i.productId === item.productId)) return items;
   items.push({ ...item, addedAt: Date.now() });
   await saveWishlist(items);
+  void trackEvent("wishlist_add", {
+    productId: item.productId,
+    categoryId: item.categoryId ?? undefined,
+    metadata: { price: item.price, title: item.title },
+  });
   return items;
 }
 
 export async function removeFromWishlist(productId: string): Promise<WishlistItem[]> {
-  const items = (await loadWishlist()).filter((i) => i.productId !== productId);
-  await saveWishlist(items);
-  return items;
+  const items = await loadWishlist();
+  const removed = items.find((i) => i.productId === productId);
+  const updated = items.filter((i) => i.productId !== productId);
+  await saveWishlist(updated);
+
+  if (removed) {
+    trackCustomerEvent("customer.wishlist.removed", {
+      productId,
+      productVariantId: removed.variantPublicId ?? null,
+    });
+  }
+
+  return updated;
 }
 
 export async function isInWishlist(productId: string): Promise<boolean> {

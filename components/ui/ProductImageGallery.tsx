@@ -16,8 +16,8 @@ export default function ProductImageGallery({ images, inWishlist, onToggleWishli
   return (
     <View style={styles.imageCard}>
       <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.gallery}>
-        {images.map((uri, i) => (
-          <Image key={i} source={{ uri: productImageUrl(uri, "full") }} style={styles.galleryImage} resizeMode="cover" />
+        {images.filter((u): u is string => typeof u === "string" && u.length > 0).map((uri, i) => (
+          <Image key={i} source={{ uri: productImageUrl(uri, "full") }} style={styles.galleryImage} resizeMode="contain" />
         ))}
       </ScrollView>
 

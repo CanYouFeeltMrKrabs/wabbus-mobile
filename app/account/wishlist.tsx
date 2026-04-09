@@ -2,9 +2,11 @@ import React, { useEffect, useState, useCallback } from "react";
 import { View, FlatList, Image, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import RequireAuth from "@/components/ui/RequireAuth";
 import { useCart } from "@/lib/cart";
 import { loadWishlist, removeFromWishlist, onWishlistUpdate, type WishlistItem } from "@/lib/wishlist";
 import { productImageUrl } from "@/lib/image";
@@ -13,6 +15,11 @@ import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 export default function WishlistScreen() {
+  return <RequireAuth><WishlistContent /></RequireAuth>;
+}
+
+function WishlistContent() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { addToCart } = useCart();
@@ -67,7 +74,7 @@ export default function WishlistScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Wishlist</AppText>
+        <AppText variant="title">{t("account.wishlist.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
@@ -76,18 +83,18 @@ export default function WishlistScreen() {
       ) : items.length === 0 ? (
         <View style={styles.empty}>
           <Icon name="favorite-border" size={48} color={colors.gray300} />
-          <AppText variant="subtitle" color={colors.muted}>Your wishlist is empty</AppText>
+          <AppText variant="subtitle" color={colors.muted}>{t("account.wishlist.emptyHeading")}</AppText>
           <AppText variant="body" color={colors.mutedLight} align="center">
-            Save items you love by tapping the heart icon on products
+            {t("account.wishlist.emptyDesc")}
           </AppText>
-          <AppButton title="Start Shopping" variant="primary" onPress={() => router.replace(ROUTES.homeFeed)} style={styles.shopBtn} />
+          <AppButton title={t("account.wishlist.startShopping")} variant="primary" onPress={() => router.replace(ROUTES.homeFeed)} style={styles.shopBtn} />
         </View>
       ) : (
         <>
           {items.length > 1 && (
             <View style={styles.topAction}>
-              <AppText variant="caption">{items.length} items saved</AppText>
-              <AppButton title="Add All to Cart" variant="primary" size="sm" onPress={handleAddAllToCart} />
+              <AppText variant="caption">{t("account.wishlist.itemsSaved", { count: items.length })}</AppText>
+              <AppButton title={t("account.wishlist.addAllToCart")} variant="primary" size="sm" onPress={handleAddAllToCart} />
             </View>
           )}
           <FlatList
@@ -109,7 +116,7 @@ export default function WishlistScreen() {
                       <AppText variant="price">{formatMoney(item.price)}</AppText>
                     </View>
                   </Pressable>
-                  <AppButton title="Add to Cart" variant="primary" size="sm" fullWidth onPress={() => handleAddToCart(item)} style={styles.cartBtn} />
+                  <AppButton title={t("account.wishlist.addToCart")} variant="primary" size="sm" fullWidth onPress={() => handleAddToCart(item)} style={styles.cartBtn} />
                 </View>
               </View>
             )}

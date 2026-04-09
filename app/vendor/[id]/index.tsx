@@ -1,16 +1,20 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { View, FlatList, Image, StyleSheet, ActivityIndicator, Pressable, ScrollView } from "react-native";
 import { SkeletonGrid } from "@/components/ui/Skeleton";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import ProductCard from "@/components/ui/ProductCard";
 import Icon from "@/components/ui/Icon";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 import { publicFetch } from "@/lib/api";
 import { vendorLogoUrl } from "@/lib/image";
 import { formatDate } from "@/lib/orderHelpers";
 import { useCart } from "@/lib/cart";
+import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import type { PublicProduct } from "@/lib/types";
 
@@ -38,11 +42,11 @@ function buildLocation(v: VendorProfile): string | null {
 type SortOption = { key: string; label: string };
 
 const SORT_OPTIONS: SortOption[] = [
-  { key: "newest", label: "Newest" },
-  { key: "priceAsc", label: "Price: Low" },
-  { key: "priceDesc", label: "Price: High" },
-  { key: "rating", label: "Top Rated" },
-  { key: "reviews", label: "Most Reviews" },
+  { key: "newest", label: "vendor.sort.newest" },
+  { key: "priceAsc", label: "vendor.sort.priceLow" },
+  { key: "priceDesc", label: "vendor.sort.priceHigh" },
+  { key: "rating", label: "vendor.sort.topRated" },
+  { key: "reviews", label: "vendor.sort.mostReviews" },
 ];
 
 function normalizeProducts(data: unknown): PublicProduct[] {
@@ -54,40 +58,49 @@ function normalizeProducts(data: unknown): PublicProduct[] {
 }
 
 export default function VendorScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { addToCart } = useCart();
 
-  const [vendor, setVendor] = useState<VendorProfile | null>(null);
-  const [products, setProducts] = useState<PublicProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [sort, setSort] = useState("newest");
+
+  const { data: vendor, isLoading: vendorLoading } = useQuery({
+    queryKey: queryKeys.vendors.detail(id!),
+    queryFn: () => publicFetch<VendorProfile>(`/public/vendors/${id}`),
+    enabled: !!id,
+  });
+
+  const { data: productsRaw, isLoading: productsLoading } = useQuery({
+    queryKey: queryKeys.vendors.products(id!, { sort }),
+    queryFn: () =>
+      publicFetch<any>(`/products/public?vendorPublicId=${id}&take=${PAGE_SIZE}&skip=0&sortBy=${sort}`),
+    enabled: !!id,
+    placeholderData: keepPreviousData,
+  });
+
+  const baseProducts = useMemo(() => normalizeProducts(productsRaw), [productsRaw]);
+  const totalCount =
+    typeof productsRaw?.total === "number"
+      ? productsRaw.total
+      : typeof productsRaw?.totalCount === "number"
+        ? productsRaw.totalCount
+        : null;
+
+  const [extraProducts, setExtraProducts] = useState<PublicProduct[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [totalCount, setTotalCount] = useState<number | null>(null);
   const skipRef = useRef(0);
 
   useEffect(() => {
-    if (!id) return;
-    setLoading(true);
+    skipRef.current = baseProducts.length;
+    setHasMore(baseProducts.length >= PAGE_SIZE);
+    setExtraProducts([]);
+  }, [baseProducts]);
 
-    Promise.all([
-      publicFetch<VendorProfile>(`/public/vendors/${id}`),
-      publicFetch<any>(`/products/public?vendorPublicId=${id}&take=${PAGE_SIZE}&skip=0&sortBy=newest`),
-    ])
-      .then(([vendorData, productsData]) => {
-        setVendor(vendorData);
-        const items = normalizeProducts(productsData);
-        setProducts(items);
-        skipRef.current = items.length;
-        setHasMore(items.length >= PAGE_SIZE);
-        if (typeof productsData?.total === "number") setTotalCount(productsData.total);
-        else if (typeof productsData?.totalCount === "number") setTotalCount(productsData.totalCount);
-      })
-      .catch(() => setVendor(null))
-      .finally(() => setLoading(false));
-  }, [id]);
+  const products = useMemo(() => [...baseProducts, ...extraProducts], [baseProducts, extraProducts]);
+  const loading = vendorLoading || productsLoading;
 
   const fetchMore = useCallback(async () => {
     if (loadingMore || !hasMore || !id) return;
@@ -97,41 +110,19 @@ export default function VendorScreen() {
         `/products/public?vendorPublicId=${id}&take=${PAGE_SIZE}&skip=${skipRef.current}&sortBy=${sort}`,
       );
       const items = normalizeProducts(data);
-      setProducts((prev) => [...prev, ...items]);
+      setExtraProducts((prev) => [...prev, ...items]);
       skipRef.current += items.length;
       setHasMore(items.length >= PAGE_SIZE);
     } catch {}
     setLoadingMore(false);
   }, [loadingMore, hasMore, id, sort]);
 
-  const refetchProducts = useCallback(
-    async (sortBy: string) => {
-      if (!id) return;
-      setLoading(true);
-      skipRef.current = 0;
-      try {
-        const data = await publicFetch<unknown>(
-          `/products/public?vendorPublicId=${id}&take=${PAGE_SIZE}&skip=0&sortBy=${sortBy}`,
-        );
-        const items = normalizeProducts(data);
-        setProducts(items);
-        skipRef.current = items.length;
-        setHasMore(items.length >= PAGE_SIZE);
-      } catch {
-        setProducts([]);
-      }
-      setLoading(false);
-    },
-    [id],
-  );
-
   const handleSortChange = useCallback(
     (newSort: string) => {
       if (newSort === sort) return;
       setSort(newSort);
-      refetchProducts(newSort);
     },
-    [sort, refetchProducts],
+    [sort],
   );
 
   const handleAddToCart = useCallback(
@@ -148,6 +139,10 @@ export default function VendorScreen() {
     },
     [addToCart],
   );
+
+  const goToReviews = useCallback(() => {
+    if (id) router.push(ROUTES.vendorReviews(id));
+  }, [id, router]);
 
   if (loading && !vendor) {
     return (
@@ -166,8 +161,8 @@ export default function VendorScreen() {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="store" size={48} color={colors.gray300} />
-        <AppText variant="subtitle" color={colors.muted}>Vendor not found</AppText>
-        <AppButton title="Go Back" variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
+        <AppText variant="subtitle" color={colors.muted}>{t("vendor.notFound")}</AppText>
+        <AppButton title={t("vendor.goBack")} variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -225,7 +220,7 @@ export default function VendorScreen() {
                   <View style={styles.metaItem}>
                     <Icon name="calendar-today" size={14} color={colors.muted} />
                     <AppText variant="tiny" color={colors.slate600}>
-                      Joined {formatDate(vendor.createdAt)}
+                      {t("vendor.joined", { date: formatDate(vendor.createdAt) })}
                     </AppText>
                   </View>
                 )}
@@ -233,11 +228,20 @@ export default function VendorScreen() {
                   <View style={styles.metaItem}>
                     <Icon name="inventory-2" size={14} color={colors.muted} />
                     <AppText variant="tiny" color={colors.slate600}>
-                      {totalCount} product{totalCount !== 1 ? "s" : ""}
+                      {totalCount === 1 ? t("vendor.productCount", { count: totalCount }) : t("vendor.productCountPlural", { count: totalCount })}
                     </AppText>
                   </View>
                 )}
               </View>
+
+              <AppButton
+                title={t("vendor.seeAllReviews")}
+                variant="ghost"
+                icon="rate-review"
+                onPress={goToReviews}
+                style={styles.reviewsLink}
+                textStyle={styles.reviewsLinkText}
+              />
             </View>
 
             {/* Sort pills */}
@@ -251,9 +255,9 @@ export default function VendorScreen() {
                       onPress={() => handleSortChange(opt.key)}
                       style={[styles.sortPill, active && styles.sortPillActive]}
                     >
-                      <AppText style={[styles.sortText, active && styles.sortTextActive]}>
-                        {opt.label}
-                      </AppText>
+                    <AppText style={[styles.sortText, active && styles.sortTextActive]}>
+                      {t(opt.label)}
+                    </AppText>
                     </Pressable>
                   );
                 })}
@@ -265,7 +269,7 @@ export default function VendorScreen() {
           !loading ? (
             <View style={styles.empty}>
               <Icon name="inventory" size={48} color={colors.gray300} />
-              <AppText variant="subtitle" color={colors.muted}>No products yet</AppText>
+              <AppText variant="subtitle" color={colors.muted}>{t("vendor.noProducts")}</AppText>
             </View>
           ) : null
         }
@@ -314,6 +318,16 @@ const styles = StyleSheet.create({
   },
   metaItem: {
     flexDirection: "row", alignItems: "center", gap: spacing[1],
+  },
+  reviewsLink: {
+    marginTop: spacing[2],
+    alignSelf: "flex-start",
+    paddingHorizontal: 0,
+    paddingVertical: spacing[1],
+  },
+  reviewsLinkText: {
+    color: colors.brandBlue,
+    fontWeight: "600",
   },
   sortContainer: { paddingBottom: spacing[2], marginBottom: spacing[2] },
   sortScroll: { paddingHorizontal: spacing[4], gap: spacing[2] },

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   FlatList,
@@ -12,12 +12,16 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 import { customerFetch } from "@/lib/api";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
+import i18n from "@/i18n";
 
 type Message = {
   publicId?: string;
@@ -35,6 +39,18 @@ type Ticket = {
   messages: Message[];
 };
 
+function getTicketStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    OPEN: "support.ticketDetail.statusOpen",
+    IN_PROGRESS: "support.ticketDetail.statusInProgress",
+    CLOSED: "support.ticketDetail.statusClosed",
+    ARCHIVED: "support.ticketDetail.statusArchived",
+    RESOLVED: "support.ticketDetail.statusResolved",
+  };
+  const key = map[status.toUpperCase()];
+  return key ? i18n.t(key) : status.replace(/_/g, " ");
+}
+
 export default function TicketDetailScreen() {
   return (
     <RequireAuth>
@@ -44,35 +60,22 @@ export default function TicketDetailScreen() {
 }
 
 function TicketDetailContent() {
+  const { t } = useTranslation();
   const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList>(null);
+  const queryClient = useQueryClient();
 
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: ticket, isLoading: loading, refetch } = useQuery({
+    queryKey: queryKeys.messages.tickets.detail(ticketId!),
+    queryFn: () => customerFetch<Ticket>(`/support/tickets/${ticketId}`),
+    enabled: !!ticketId,
+    refetchInterval: 30_000,
+  });
+
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!ticketId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const data = await customerFetch<Ticket>(`/support/tickets/${ticketId}`);
-      setTicket(data);
-    } catch {
-      setTicket(null);
-    }
-    setLoading(false);
-  }, [ticketId]);
-
-  useEffect(() => {
-    load();
-    const interval = setInterval(load, 30_000);
-    return () => clearInterval(interval);
-  }, [load]);
 
   const handleSend = async () => {
     if (!reply.trim() || !ticketId) return;
@@ -83,10 +86,12 @@ function TicketDetailContent() {
         body: JSON.stringify({ body: reply.trim() }),
       });
       setReply("");
-      await load();
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.unread() });
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 200);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to send message.");
+      Alert.alert(t("common.error"), e.message || t("support.ticketDetail.errorSend"));
     } finally {
       setSending(false);
     }
@@ -96,9 +101,10 @@ function TicketDetailContent() {
     if (!ticketId) return;
     try {
       await customerFetch(`/support/tickets/${ticketId}/close`, { method: "POST" });
-      await load();
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to close ticket.");
+      Alert.alert(t("common.error"), e.message || t("support.ticketDetail.errorClose"));
     }
   };
 
@@ -108,9 +114,10 @@ function TicketDetailContent() {
     const action = isArchived ? "unarchive" : "archive";
     try {
       await customerFetch(`/support/tickets/${ticketId}/${action}`, { method: "POST" });
-      await load();
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
     } catch (e: any) {
-      Alert.alert("Error", e.message || `Failed to ${action} ticket.`);
+      Alert.alert(t("common.error"), e.message || t("support.ticketDetail.errorArchive", { action }));
     }
   };
 
@@ -126,8 +133,8 @@ function TicketDetailContent() {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="error-outline" size={48} color={colors.gray300} />
-        <AppText variant="subtitle" color={colors.muted}>Ticket not found</AppText>
-        <AppButton title="Go Back" variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
+        <AppText variant="subtitle" color={colors.muted}>{t("support.ticketDetail.notFound")}</AppText>
+        <AppButton title={t("support.ticketDetail.goBack")} variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -146,10 +153,10 @@ function TicketDetailContent() {
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
         <View style={{ flex: 1, alignItems: "center" }}>
           <AppText variant="label" numberOfLines={1}>
-            {ticket.subject || ticket.category || "Ticket"}
+            {ticket.subject || ticket.category || t("support.ticketDetail.ticketFallback")}
           </AppText>
           <AppText variant="caption" color={isClosed ? colors.muted : colors.success}>
-            {ticket.status.replace(/_/g, " ")}
+            {getTicketStatusLabel(ticket.status)}
           </AppText>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[2] }}>
@@ -188,7 +195,7 @@ function TicketDetailContent() {
             <View style={[styles.bubbleRow, isCustomer ? styles.bubbleRight : styles.bubbleLeft]}>
               <View style={[styles.bubble, isCustomer ? styles.bubbleCustomer : styles.bubbleAdmin]}>
                 <AppText variant="caption" weight="semibold" color={isCustomer ? colors.white : colors.foreground} style={styles.senderLabel}>
-                  {isCustomer ? "You" : "Support"}
+                  {isCustomer ? t("support.ticketDetail.you") : t("support.ticketDetail.supportLabel")}
                 </AppText>
                 <AppText variant="bodySmall" color={isCustomer ? colors.white : colors.foreground}>
                   {m.body}
@@ -208,7 +215,7 @@ function TicketDetailContent() {
             style={styles.composerInput}
             value={reply}
             onChangeText={setReply}
-            placeholder="Type a message..."
+            placeholder={t("support.ticketDetail.placeholder")}
             placeholderTextColor={colors.mutedLight}
             multiline
             maxLength={2000}

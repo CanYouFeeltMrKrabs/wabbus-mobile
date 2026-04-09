@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -33,6 +34,7 @@ export default function ChangeEmailScreen() {
 }
 
 function ChangeEmailContent() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, refresh } = useAuth();
@@ -76,7 +78,7 @@ function ChangeEmailContent() {
       startCooldown();
       setTimeout(() => codeRefs.current[0]?.focus(), 100);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to send verification code.");
+      Alert.alert(t("common.error"), e.message || t("account.verify.errorSendCode"));
     } finally {
       setLoading(false);
     }
@@ -91,7 +93,7 @@ function ChangeEmailContent() {
       setCode(Array(CODE_LENGTH).fill(""));
       setTimeout(() => codeRefs.current[0]?.focus(), 100);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to resend code.");
+      Alert.alert(t("common.error"), e.message || t("account.verify.errorResendCode"));
     } finally {
       setLoading(false);
     }
@@ -122,7 +124,7 @@ function ChangeEmailContent() {
   const handleVerifyCode = async () => {
     const fullCode = code.join("");
     if (fullCode.length !== CODE_LENGTH) {
-      Alert.alert("Error", "Please enter the full 6-digit code.");
+      Alert.alert(t("common.error"), t("account.verify.errorFullCode"));
       return;
     }
 
@@ -135,7 +137,7 @@ function ChangeEmailContent() {
       setSessionToken(data.sessionToken);
       setStep("change");
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Invalid or expired code.");
+      Alert.alert(t("common.error"), e.message || t("account.verify.errorInvalidCode"));
     } finally {
       setLoading(false);
     }
@@ -144,7 +146,7 @@ function ChangeEmailContent() {
   const handleChangeEmail = async () => {
     const trimmed = newEmail.trim();
     if (!trimmed || !trimmed.includes("@")) {
-      Alert.alert("Error", "Please enter a valid email address.");
+      Alert.alert(t("common.error"), t("account.email.errorInvalidEmail"));
       return;
     }
 
@@ -158,7 +160,7 @@ function ChangeEmailContent() {
       await refresh();
       setTimeout(() => router.back(), 2000);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to update email.");
+      Alert.alert(t("common.error"), e.message || t("account.email.errorUpdateEmail"));
     } finally {
       setLoading(false);
     }
@@ -170,10 +172,10 @@ function ChangeEmailContent() {
         <View style={styles.center}>
           <Icon name="check-circle" size={48} color={colors.success} />
           <AppText variant="heading" style={styles.successTitle}>
-            Email Updated
+            {t("account.email.successHeading")}
           </AppText>
           <AppText variant="body" color={colors.muted} align="center">
-            Your email has been changed successfully.
+            {t("account.email.successMessage")}
           </AppText>
         </View>
       </View>
@@ -187,7 +189,7 @@ function ChangeEmailContent() {
     >
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Change Email</AppText>
+        <AppText variant="title">{t("account.email.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
@@ -197,19 +199,19 @@ function ChangeEmailContent() {
           <View style={styles.stepCard}>
             <Icon name="shield-lock" size={40} color={colors.brandBlue} />
             <AppText variant="subtitle" style={styles.stepTitle}>
-              Verify Your Identity
+              {t("account.verify.verifyIdentity")}
             </AppText>
             <AppText variant="body" color={colors.muted} align="center" style={styles.stepDesc}>
-              We'll send a 6-digit code to{" "}
+              {t("account.verify.sendCodeTo")}{" "}
               {user?.email ? (
                 <AppText variant="body" weight="semibold">{user.email}</AppText>
               ) : (
-                "your current email"
+                t("account.verify.yourCurrentEmail")
               )}
               .
             </AppText>
             <AppButton
-              title={loading ? "Sending..." : "Send Verification Code"}
+              title={loading ? t("account.verify.sending") : t("account.verify.sendVerificationCode")}
               variant="primary"
               fullWidth
               size="lg"
@@ -217,7 +219,7 @@ function ChangeEmailContent() {
               onPress={handleRequestCode}
             />
             <AppButton
-              title="Cancel"
+              title={t("common.cancel")}
               variant="ghost"
               onPress={() => router.back()}
               style={styles.cancelBtn}
@@ -230,10 +232,10 @@ function ChangeEmailContent() {
           <View style={styles.stepCard}>
             <Icon name="dialpad" size={40} color={colors.brandBlue} />
             <AppText variant="subtitle" style={styles.stepTitle}>
-              Enter Verification Code
+              {t("account.verify.enterVerificationCode")}
             </AppText>
             <AppText variant="body" color={colors.muted} align="center" style={styles.stepDesc}>
-              Enter the 6-digit code sent to your email. Expires in 6 minutes.
+              {t("account.verify.codeExpiresDesc")}
             </AppText>
 
             <View style={styles.codeRow}>
@@ -255,7 +257,7 @@ function ChangeEmailContent() {
             </View>
 
             <AppButton
-              title={loading ? "Verifying..." : "Verify"}
+              title={loading ? t("account.verify.verifying") : t("account.verify.verify")}
               variant="primary"
               fullWidth
               size="lg"
@@ -273,7 +275,7 @@ function ChangeEmailContent() {
                 color={cooldown > 0 ? colors.muted : colors.brandBlue}
                 weight="semibold"
               >
-                {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
+                {cooldown > 0 ? t("account.verify.resendCodeIn", { cooldown }) : t("account.verify.resendCode")}
               </AppText>
             </Pressable>
           </View>
@@ -284,18 +286,18 @@ function ChangeEmailContent() {
           <View style={styles.stepCard}>
             <Icon name="email-edit" size={40} color={colors.brandBlue} />
             <AppText variant="subtitle" style={styles.stepTitle}>
-              Enter New Email
+              {t("account.email.enterNewEmail")}
             </AppText>
 
             <View style={styles.field}>
               <AppText variant="label" style={styles.fieldLabel}>
-                New email address
+                {t("account.email.newEmailLabel")}
               </AppText>
               <TextInput
                 style={styles.input}
                 value={newEmail}
                 onChangeText={setNewEmail}
-                placeholder="you@example.com"
+                placeholder={t("account.email.emailPlaceholder")}
                 placeholderTextColor={colors.mutedLight}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -304,7 +306,7 @@ function ChangeEmailContent() {
             </View>
 
             <AppButton
-              title={loading ? "Updating..." : "Update Email"}
+              title={loading ? t("account.email.updating") : t("account.email.updateEmail")}
               variant="primary"
               fullWidth
               size="lg"

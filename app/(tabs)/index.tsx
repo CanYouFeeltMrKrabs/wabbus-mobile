@@ -13,7 +13,7 @@
  * - Recently Viewed slider
  * - Top Rated grid
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useCallback } from "react";
 import {
   View,
   ScrollView,
@@ -32,6 +32,7 @@ import Icon from "@/components/ui/Icon";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
 import { SkeletonGrid, SkeletonSlider } from "@/components/ui/Skeleton";
 import RecentlyViewedSlider from "@/components/ui/RecentlyViewedSlider";
+import { useTranslation } from "@/hooks/useT";
 import { colors, spacing, borderRadius } from "@/lib/theme";
 import { API_BASE } from "@/lib/config";
 import { customerFetch } from "@/lib/api";
@@ -40,6 +41,8 @@ import { getCategoryIcon, CATEGORY_SHORT_NAMES } from "@/lib/categories";
 import { ROUTES } from "@/lib/routes";
 import type { PublicProduct } from "@/lib/types";
 import { PAGE_SIZE } from "@/lib/constants";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PRODUCTS_HOME = PAGE_SIZE.PRODUCTS_HOME;
@@ -63,53 +66,60 @@ async function fetchJSON(url: string) {
 }
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { addToCart } = useCart();
 
-  const [recommended, setRecommended] = useState<PublicProduct[]>([]);
-  const [recoLabel, setRecoLabel] = useState("Recommended for You");
-  const [bestsellers, setBestsellers] = useState<PublicProduct[]>([]);
-  const [topRated, setTopRated] = useState<PublicProduct[]>([]);
-  const [trendingCats, setTrendingCats] = useState<Array<{ name: string; slug: string }>>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: bestsellers = [] } = useQuery({
+    queryKey: queryKeys.products.list({ sortBy: "bestselling", take: 12 }),
+    queryFn: async () => {
+      const data = await fetchJSON(`${API_BASE}/products/public?take=12&sortBy=bestselling`);
+      return normalizeProducts(data);
+    },
+  });
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const { data: topRated = [] } = useQuery({
+    queryKey: queryKeys.products.list({ sortBy: "rating", take: 12 }),
+    queryFn: async () => {
+      const data = await fetchJSON(`${API_BASE}/products/public?take=12&sortBy=rating`);
+      return normalizeProducts(data);
+    },
+  });
 
-    const [bestData, topData, trendData] = await Promise.all([
-      fetchJSON(`${API_BASE}/products/public?take=12&sortBy=bestselling`),
-      fetchJSON(`${API_BASE}/products/public?take=12&sortBy=rating`),
-      fetchJSON(`${API_BASE}/recommendations/trending-categories?limit=8&days=14`),
-    ]);
+  const { data: trendingCats = [] } = useQuery<Array<{ name: string; slug: string }>>({
+    queryKey: queryKeys.recommendations.strategy("trending-categories"),
+    queryFn: async () => {
+      const data = await fetchJSON(`${API_BASE}/recommendations/trending-categories?limit=8&days=14`);
+      if (data?.categories && Array.isArray(data.categories)) return data.categories;
+      if (Array.isArray(data)) return data;
+      return [];
+    },
+  });
 
-    setBestsellers(normalizeProducts(bestData));
-    setTopRated(normalizeProducts(topData));
-    if (trendData?.categories && Array.isArray(trendData.categories)) {
-      setTrendingCats(trendData.categories);
-    } else if (Array.isArray(trendData)) {
-      setTrendingCats(trendData);
-    }
+  const { data: recoData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.recommendations.home(),
+    queryFn: async () => {
+      try {
+        const recoResult = await customerFetch<{ products?: PublicProduct[]; personalized?: boolean }>(
+          `/recommendations?context=home&take=${PRODUCTS_HOME}`,
+        );
+        return {
+          products: recoResult?.products ?? ([] as PublicProduct[]),
+          personalized: !!recoResult?.personalized,
+        };
+      } catch {
+        const fallback = await fetchJSON(`${API_BASE}/products/public?take=${PRODUCTS_HOME}&skip=0`);
+        return {
+          products: normalizeProducts(fallback),
+          personalized: false,
+        };
+      }
+    },
+  });
 
-    try {
-      const recoData = await customerFetch<{ products?: PublicProduct[]; personalized?: boolean }>(
-        `/recommendations?context=home&take=${PRODUCTS_HOME}`,
-      );
-      const products = recoData?.products ?? [];
-      setRecommended(products);
-      setRecoLabel(recoData?.personalized ? "Picked for You" : "Recommended for You");
-    } catch {
-      const fallback = await fetchJSON(`${API_BASE}/products/public?take=${PRODUCTS_HOME}&skip=0`);
-      setRecommended(normalizeProducts(fallback));
-      setRecoLabel("Recommended for You");
-    }
-
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const recommended = recoData?.products ?? [];
+  const recoLabel = recoData?.personalized ? t("home.pickedForYou") : t("home.recommendedForYou");
 
   const handleAddToCart = useCallback(
     (product: PublicProduct) => {
@@ -142,7 +152,7 @@ export default function HomeScreen() {
 
         {/* Suggestions — newest products (web: sidebar next to hero, mobile: slider after hero) */}
         <ProductRecommendationSlider
-          title="Suggestions for you"
+          title={t("home.suggestionsForYou")}
           apiUrl="/products/public?take=10&sortBy=newest"
           accentColor={colors.brandBlue}
           onAddToCart={handleAddToCart}
@@ -152,9 +162,9 @@ export default function HomeScreen() {
         {bestsellers.length > 0 && (
           <>
             <SectionHeader
-              title="Bestsellers"
+              title={t("home.bestsellers")}
               accentColor={colors.warning}
-              actionLabel="VIEW ALL"
+              actionLabel={t("home.viewAll")}
               onActionPress={() => router.push(ROUTES.searchWithSort("bestselling"))}
             />
             <View style={styles.gridPad}>
@@ -167,8 +177,8 @@ export default function HomeScreen() {
         <SectionHeader
           title={recoLabel}
           accentColor={colors.brandBlue}
-          actionLabel="BROWSE MORE"
-          onActionPress={() => router.push(ROUTES.searchWithSort("recommended"))}
+          actionLabel={t("home.browseMore")}
+          onActionPress={() => router.push(ROUTES.recommended as any)}
         />
         {loading ? (
           <View>
@@ -185,16 +195,18 @@ export default function HomeScreen() {
 
         {/* Trending Now — 48h velocity */}
         <ProductRecommendationSlider
-          title="Trending Now"
+          title={t("home.trendingNow")}
           apiUrl="/recommendations?context=home&strategy=trending&take=10"
+          queryKey={queryKeys.recommendations.strategy("trending")}
           accentColor={colors.rose500}
           onAddToCart={handleAddToCart}
         />
 
         {/* New Arrivals — 14-day window */}
         <ProductRecommendationSlider
-          title="New Arrivals"
+          title={t("home.newArrivals")}
           apiUrl="/recommendations?context=home&strategy=new_arrivals&take=10"
+          queryKey={queryKeys.recommendations.strategy("new_arrivals")}
           accentColor={colors.violet500}
           onAddToCart={handleAddToCart}
         />
@@ -203,9 +215,9 @@ export default function HomeScreen() {
         {trendingCats.length > 0 && (
           <>
             <SectionHeader
-              title="Trending Categories"
+              title={t("home.trendingCategories")}
               accentColor={colors.brandOrange}
-              actionLabel="ALL"
+              actionLabel={t("home.all")}
               onActionPress={() => router.push(ROUTES.categories)}
             />
             <View style={styles.catGrid}>
@@ -234,7 +246,7 @@ export default function HomeScreen() {
                 onPress={() => router.push(ROUTES.categories)}
               >
                 <Icon name="grid-view" size={18} color={colors.brandBlue} />
-                <AppText style={styles.browseAllText}>Browse All Categories</AppText>
+                <AppText style={styles.browseAllText}>{t("home.browseAllCategories")}</AppText>
                 <Icon name="chevron-right" size={16} color={colors.brandBlue} />
               </Pressable>
             </View>
@@ -243,7 +255,7 @@ export default function HomeScreen() {
 
         {/* Today's Deals — discount-sorted */}
         <ProductRecommendationSlider
-          title="Today's Deals"
+          title={t("home.todaysDeals")}
           apiUrl="/recommendations?context=home&strategy=deals&take=10"
           accentColor={colors.warning}
           onAddToCart={handleAddToCart}
@@ -256,9 +268,9 @@ export default function HomeScreen() {
         {topRated.length > 0 && (
           <>
             <SectionHeader
-              title="Top Rated"
+              title={t("home.topRated")}
               accentColor={colors.success}
-              actionLabel="VIEW ALL"
+              actionLabel={t("home.viewAll")}
               onActionPress={() => router.push(ROUTES.searchWithSort("rating"))}
             />
             <View style={styles.gridPad}>

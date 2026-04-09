@@ -1,5 +1,6 @@
 import React from "react";
 import { View, TextInput, Pressable, StyleSheet } from "react-native";
+import { useTranslation } from "@/hooks/useT";
 import Icon from "./Icon";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
 
@@ -18,10 +19,12 @@ export default function SearchBar({
   onChangeText,
   onSubmit,
   onPress,
-  placeholder = "Search products...",
+  placeholder,
   editable = true,
   autoFocus = false,
 }: Props) {
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder ?? t("common.searchPlaceholder");
   const Wrapper = onPress && !editable ? Pressable : View;
 
   return (
@@ -32,7 +35,7 @@ export default function SearchBar({
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         placeholderTextColor={colors.mutedLight}
         editable={editable}
         autoFocus={autoFocus}

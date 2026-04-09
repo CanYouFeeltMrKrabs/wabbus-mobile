@@ -3,10 +3,12 @@ import { Animated, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "./AppText";
 import Icon from "./Icon";
+import { useTranslation } from "@/hooks/useT";
 import { useNetwork } from "@/lib/network";
 import { colors, spacing } from "@/lib/theme";
 
 export default function OfflineBanner() {
+  const { t } = useTranslation();
   const { isConnected, isInternetReachable } = useNetwork();
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(-80)).current;
@@ -32,7 +34,7 @@ export default function OfflineBanner() {
     >
       <Icon name="wifi-off" size={16} color={colors.white} />
       <AppText variant="caption" color={colors.white} weight="semibold" style={styles.text}>
-        No internet connection
+        {t("common.noInternetConnection")}
       </AppText>
     </Animated.View>
   );

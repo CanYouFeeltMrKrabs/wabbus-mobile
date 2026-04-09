@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useQueryClient } from "@tanstack/react-query";
 import { initPaymentSheet, presentPaymentSheet } from "@stripe/stripe-react-native";
 import { customerFetch, publicFetch, AuthError } from "./api";
 import { API_BASE } from "./config";
 import { useAuth } from "./auth";
 import { useCart } from "./cart";
 import { mergeGuestCart } from "./mergeGuestCart";
+import { trackCustomerEvent } from "./customerTracker";
+import { queryKeys } from "@/lib/queryKeys";
 import { ROUTES } from "@/lib/routes";
 import type {
   CheckoutAddress,
@@ -67,9 +70,12 @@ function normalizeAddresses(payload: unknown): CheckoutAddress[] {
 
 export type CheckoutStep = "address" | "payment" | "review" | "placing";
 
+const IDEMPOTENCY_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+
 export function useCheckout() {
   const router = useRouter();
-  const { user, authStatus, isLoggedIn } = useAuth();
+  const queryClient = useQueryClient();
+  const { user, authStatus, isLoggedIn, refresh: refreshAuth } = useAuth();
   const { items: cartItems, subtotalCents, clearCart, refreshCart } = useCart();
   const isGuest = authStatus === "unauthenticated";
   const mountedRef = useRef(true);
@@ -102,6 +108,16 @@ export function useCheckout() {
   const [guestState, setGuestState] = useState("");
   const [guestPostcode, setGuestPostcode] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
+
+  // ── Guest billing address (separate from shipping) ──
+  const [gBillFirstName, setGBillFirstName] = useState("");
+  const [gBillLastName, setGBillLastName] = useState("");
+  const [gBillLine1, setGBillLine1] = useState("");
+  const [gBillLine2, setGBillLine2] = useState("");
+  const [gBillCity, setGBillCity] = useState("");
+  const [gBillState, setGBillState] = useState("");
+  const [gBillPostcode, setGBillPostcode] = useState("");
+  const [gBillPhone, setGBillPhone] = useState("");
 
   // ── Store credit ──
   const [creditBalanceCents, setCreditBalanceCents] = useState(0);
@@ -155,28 +171,40 @@ export function useCheckout() {
     guestCity.trim() && guestState.trim() && guestPostcode.trim()
   );
 
+  const guestBillingComplete = billingSameAsShipping || !!(
+    gBillFirstName.trim() && gBillLastName.trim() && gBillLine1.trim() &&
+    gBillCity.trim() && gBillState.trim() && gBillPostcode.trim()
+  );
+
   const addressComplete = isGuest
-    ? guestShippingComplete
-    : !!shippingAddressId;
+    ? guestShippingComplete && guestBillingComplete
+    : !!shippingAddressId && (billingSameAsShipping || !!billingAddressId);
 
   const canProceedToPayment = addressComplete && (!isGuest || !!guestEmail.trim());
   const canPlaceOrder = cartItems.length > 0 && addressComplete && !placingOrder
     && (!isGuest || (!!guestEmail.trim()));
 
-  // ── Load idempotency key from storage ──
+  // ── Load idempotency key from storage (with TTL guard) ──
   useEffect(() => {
     (async () => {
       let key = await AsyncStorage.getItem(IDEMPOTENCY_KEY).catch(() => null);
-      if (!key) {
+      const pendingRaw = await AsyncStorage.getItem(PENDING_ORDER_KEY).catch(() => null);
+      let pending: PendingOrder | null = null;
+      if (pendingRaw) {
+        try { pending = JSON.parse(pendingRaw); } catch { /* ignore */ }
+      }
+
+      // Expire stale keys: the timestamp is embedded in the key (prefix before '-')
+      const keyAge = key ? Date.now() - parseInt(key.split("-")[0], 10) : Infinity;
+      if (!key || (keyAge > IDEMPOTENCY_MAX_AGE_MS && !pending)) {
         key = makeIdempotencyKey();
         await AsyncStorage.setItem(IDEMPOTENCY_KEY, key).catch(() => {});
+        await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+        pending = null;
       }
-      idempotencyKeyRef.current = key;
 
-      const pendingRaw = await AsyncStorage.getItem(PENDING_ORDER_KEY).catch(() => null);
-      if (pendingRaw) {
-        try { pendingOrderRef.current = JSON.parse(pendingRaw); } catch { /* ignore */ }
-      }
+      idempotencyKeyRef.current = key;
+      pendingOrderRef.current = pending;
     })();
   }, []);
 
@@ -288,13 +316,28 @@ export function useCheckout() {
         country: "US",
         phone: guestPhone.trim() || undefined,
       },
+      billingAddress: billingSameAsShipping ? undefined : {
+        firstName: gBillFirstName.trim(),
+        lastName: gBillLastName.trim(),
+        line1: gBillLine1.trim(),
+        line2: gBillLine2.trim() || undefined,
+        city: gBillCity.trim(),
+        state: gBillState.trim(),
+        postalCode: gBillPostcode.trim(),
+        country: "US",
+        phone: gBillPhone.trim() || undefined,
+      },
       items: cartItems.map((it) => ({
         variantPublicId: it.variantPublicId,
         quantity: it.quantity,
       })),
     };
   }, [isGuest, guestEmail, guestShippingComplete, guestFirstName, guestLastName,
-      guestLine1, guestLine2, guestCity, guestState, guestPostcode, guestPhone, cartItems]);
+      guestLine1, guestLine2, guestCity, guestState, guestPostcode, guestPhone,
+      billingSameAsShipping,
+      gBillFirstName, gBillLastName, gBillLine1, gBillLine2,
+      gBillCity, gBillState, gBillPostcode, gBillPhone,
+      cartItems]);
 
   // ── Place order ──
   const handlePay = useCallback(async () => {
@@ -305,6 +348,11 @@ export function useCheckout() {
     setPlacingOrder(true);
     setStep("placing");
     setError(null);
+
+    trackCustomerEvent("customer.checkout.step.completed", {
+      step: "payment_submitted",
+      isGuest,
+    });
 
     try {
       const billingPublicId = billingSameAsShipping ? shippingAddressId : billingAddressId;
@@ -365,6 +413,9 @@ export function useCheckout() {
           })();
 
           data = await raceTimeout(guestPromise, TIMEOUT_CHECKOUT_MS, "Checkout");
+
+          // Backend may establish a session for the guest — pick it up
+          await refreshAuth().catch(() => {});
         } else {
           data = await raceTimeout(
             customerFetch<CheckoutResponse>("/checkout", {
@@ -480,7 +531,7 @@ export function useCheckout() {
   }, [
     shippingAddressId, billingAddressId, billingSameAsShipping,
     requirePaymentMethod, useStoreCredit, cartFingerprint,
-    isGuest, guestData, router, clearCart,
+    isGuest, guestData, router, clearCart, refreshAuth,
   ]);
 
   async function cleanupAfterOrder() {
@@ -490,6 +541,10 @@ export function useCheckout() {
     await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
     await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
     await clearCart();
+    queryClient.invalidateQueries({ queryKey: queryKeys.cart() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.orders.all() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.addresses.all() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.storeCredit() });
   }
 
   return {
@@ -532,6 +587,16 @@ export function useCheckout() {
     guestState, setGuestState,
     guestPostcode, setGuestPostcode,
     guestPhone, setGuestPhone,
+
+    // Guest billing address
+    gBillFirstName, setGBillFirstName,
+    gBillLastName, setGBillLastName,
+    gBillLine1, setGBillLine1,
+    gBillLine2, setGBillLine2,
+    gBillCity, setGBillCity,
+    gBillState, setGBillState,
+    gBillPostcode, setGBillPostcode,
+    gBillPhone, setGBillPhone,
 
     // Store credit
     creditBalanceCents, useStoreCredit, setUseStoreCredit,

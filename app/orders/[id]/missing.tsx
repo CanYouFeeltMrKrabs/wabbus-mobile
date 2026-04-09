@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   ScrollView,
@@ -11,24 +11,37 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
+import { useQuery } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
+import { pickItemTitle, pickItemImage } from "@/lib/orderHelpers";
 import { FALLBACK_IMAGE } from "@/lib/config";
+import { queryKeys } from "@/lib/queryKeys";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import type { Order, MissingIssueReason, ReturnResolution } from "@/lib/types";
 
 type MissingOrderItem = {
-  publicId: string;
-  title: string;
-  image: string | null;
-  quantity: number;
-  unitPriceCents: number;
-  status: string;
+  publicId?: string | null;
+  title?: string | null;
+  image?: string | null;
+  quantity?: number | null;
+  unitPrice?: string | number | null;
+  status?: string | null;
   quantityReturned?: number;
-  vendor?: { name: string; publicId?: string | null } | null;
+  productVariant?: {
+    publicId?: string | null;
+    title?: string | null;
+    product?: {
+      title?: string | null;
+      imageUrl?: string | null;
+      images?: Array<{ key?: string; url?: string }> | null;
+    } | null;
+  } | null;
+  vendor?: { name?: string | null; publicId?: string | null } | null;
   shipmentItems?: Array<{
     quantity: number;
     shipment: { publicId?: string | null; direction?: string | null };
@@ -38,18 +51,21 @@ type MissingOrderItem = {
 
 type EligibilityResult = { orderItemPublicId: string; blocked: boolean; reason?: string };
 
-const ISSUE_REASONS: { code: MissingIssueReason; label: string }[] = [
-  { code: "NEVER_SHIPPED", label: "Never shipped" },
-  { code: "TRACKING_STOPPED", label: "Tracking stopped updating" },
-  { code: "LOST_IN_TRANSIT", label: "Lost in transit" },
-  { code: "DELIVERED_NOT_RECEIVED", label: "Marked delivered but not received" },
-  { code: "OTHER", label: "Other" },
+type IssueReasonOption = { code: MissingIssueReason; labelKey: string };
+type ResolutionOption = { code: ReturnResolution; labelKey: string };
+
+const ISSUE_REASON_OPTIONS: IssueReasonOption[] = [
+  { code: "NEVER_SHIPPED", labelKey: "accountOrders.missing.reasonNeverShipped" },
+  { code: "TRACKING_STOPPED", labelKey: "accountOrders.missing.reasonTrackingStopped" },
+  { code: "LOST_IN_TRANSIT", labelKey: "accountOrders.missing.reasonLostInTransit" },
+  { code: "DELIVERED_NOT_RECEIVED", labelKey: "accountOrders.missing.reasonDeliveredNotReceived" },
+  { code: "OTHER", labelKey: "accountOrders.missing.reasonOther" },
 ];
 
-const RESOLUTIONS: { code: ReturnResolution; label: string }[] = [
-  { code: "REFUND", label: "Refund" },
-  { code: "STORE_CREDIT", label: "Store credit" },
-  { code: "REPLACEMENT", label: "Send replacement" },
+const RESOLUTION_OPTIONS: ResolutionOption[] = [
+  { code: "REFUND", labelKey: "accountOrders.missing.resolutionRefund" },
+  { code: "STORE_CREDIT", labelKey: "accountOrders.missing.resolutionStoreCredit" },
+  { code: "REPLACEMENT", labelKey: "accountOrders.missing.resolutionReplacement" },
 ];
 
 export default function MissingPackageScreen() {
@@ -61,11 +77,43 @@ export default function MissingPackageScreen() {
 }
 
 function MissingContent() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: orderData, isLoading: orderLoading } = useQuery({
+    queryKey: queryKeys.orders.detail(id!),
+    queryFn: () => customerFetch<any>(`/orders/${id}`),
+    enabled: !!id,
+  });
+
+  const { data: casesRaw, isLoading: casesLoading } = useQuery({
+    queryKey: ["cases", "mine", id],
+    queryFn: () => customerFetch<any>("/cases/mine"),
+    enabled: !!id,
+  });
+
+  const order = (orderData?.order ?? orderData ?? null) as Order | null;
+  const loading = orderLoading || casesLoading;
+
+  const pendingCaseItems = useMemo(() => {
+    const cases: any[] = Array.isArray(casesRaw?.data)
+      ? casesRaw.data
+      : Array.isArray(casesRaw)
+        ? casesRaw
+        : [];
+    const pending = new Set<string>();
+    for (const c of cases) {
+      if (c.order?.publicId !== id) continue;
+      if (c.status === "CLOSED") continue;
+      for (const ci of c.items ?? []) {
+        const pubId = ci.orderItem?.publicId ?? ci.orderItemPublicId;
+        if (pubId) pending.add(pubId);
+      }
+    }
+    return pending;
+  }, [casesRaw, id]);
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [issueReason, setIssueReason] = useState<MissingIssueReason | null>(null);
   const [resolution, setResolution] = useState<ReturnResolution>("REFUND");
@@ -77,47 +125,9 @@ function MissingContent() {
   const [checkingEligibility, setCheckingEligibility] = useState(false);
   const [availableCompensation, setAvailableCompensation] = useState<string[] | null>(null);
   const eligibilityLoadId = useRef(0);
-  const [pendingCaseItems, setPendingCaseItems] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await customerFetch<any>(`/orders/${id}`);
-        if (!cancelled) setOrder(data.order ?? data);
-      } catch {
-        if (!cancelled) setOrder(null);
-      }
-
-      try {
-        const raw = await customerFetch<any>("/cases/mine");
-        const cases: any[] = Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
-        if (!cancelled) {
-          const pending = new Set<string>();
-          for (const c of cases) {
-            if (c.order?.publicId !== id) continue;
-            if (c.status === "CLOSED") continue;
-            for (const ci of c.items ?? []) {
-              const pubId = ci.orderItem?.publicId ?? ci.orderItemPublicId;
-              if (pubId) pending.add(pubId);
-            }
-          }
-          setPendingCaseItems(pending);
-        }
-      } catch {
-        // non-critical
-      }
-
-      if (!cancelled) setLoading(false);
-    })();
-
-    return () => { cancelled = true; };
-  }, [id]);
 
   const eligibleItems = (order?.items || []).filter(
-    (item: any) => !["CANCELLED", "REFUNDED"].includes(item.status),
+    (item: any) => !["CANCELLED", "REFUNDED"].includes(item.status ?? ""),
   ) as MissingOrderItem[];
 
   useEffect(() => {
@@ -128,11 +138,11 @@ function MissingContent() {
 
     const loadId = ++eligibilityLoadId.current;
     const itemsPayload = eligibleItems
-      .filter((i) => selected.has(i.publicId))
+      .filter((i) => selected.has(i.publicId ?? ""))
       .map((i) => ({
         orderItemPublicId: i.publicId,
         shipmentPublicId: i.shipmentItems?.[0]?.shipment?.publicId ?? undefined,
-        qtyRequested: i.quantity,
+        qtyRequested: i.quantity ?? 0,
       }));
 
     setCheckingEligibility(true);
@@ -193,16 +203,16 @@ function MissingContent() {
     setSubmitting(true);
     try {
       const items = eligibleItems
-        .filter((i) => selected.has(i.publicId) && !blockedItems.has(i.publicId))
+        .filter((i) => selected.has(i.publicId ?? "") && !blockedItems.has(i.publicId ?? ""))
         .map((i) => ({
           orderItemPublicId: i.publicId,
           shipmentPublicId: i.shipmentItems?.[0]?.shipment?.publicId ?? null,
-          qtyRequested: i.quantity,
+          qtyRequested: i.quantity ?? 0,
           _vendorKey: i.vendor?.publicId ?? i.vendor?.name ?? "__default__",
         }));
 
       if (items.length === 0) {
-        Alert.alert("Ineligible", "All selected items are ineligible for a missing package claim.");
+        Alert.alert(t("accountOrders.missing.errorIneligibleTitle"), t("accountOrders.missing.errorIneligible"));
         setSubmitting(false);
         return;
       }
@@ -234,23 +244,23 @@ function MissingContent() {
             }),
           });
         } catch (e: any) {
-          failures.push(e.message || "Failed for a vendor group");
+          failures.push(e.message || t("accountOrders.missing.errorSubmit"));
         }
       }
 
       if (failures.length === vendorGroups.size) {
-        Alert.alert("Error", failures[0] || "Unable to submit missing package report.");
+        Alert.alert(t("common.error"), failures[0] || t("accountOrders.missing.errorSubmit"));
       } else if (failures.length > 0) {
         Alert.alert(
-          "Partial Success",
-          `Report submitted for ${vendorGroups.size - failures.length} of ${vendorGroups.size} vendor group(s). Some submissions failed.`,
+          t("accountOrders.missing.partialSuccessTitle"),
+          t("accountOrders.missing.partialSuccessBody", { success: vendorGroups.size - failures.length, total: vendorGroups.size }),
         );
         setDone(true);
       } else {
         setDone(true);
       }
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to submit missing package report.");
+      Alert.alert(t("common.error"), e.message || t("accountOrders.missing.errorSubmit"));
     } finally {
       setSubmitting(false);
     }
@@ -271,9 +281,9 @@ function MissingContent() {
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="package-variant-closed" size={48} color={colors.gray300} />
         <AppText variant="subtitle" color={colors.muted} align="center" style={{ marginTop: spacing[3] }}>
-          {!order ? "Order not found" : "Missing package reports are not available for this order."}
+          {!order ? t("orders.notFound") : t("accountOrders.missing.notAvailable")}
         </AppText>
-        <AppButton title="Go Back" variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
+        <AppButton title={t("orders.goBack")} variant="outline" onPress={() => router.back()} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -283,12 +293,12 @@ function MissingContent() {
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="check-circle" size={48} color={colors.success} />
         <AppText variant="heading" style={{ marginTop: spacing[4] }}>
-          Report Submitted
+          {t("accountOrders.missing.successHeading")}
         </AppText>
         <AppText variant="body" color={colors.muted} align="center" style={{ marginTop: spacing[2], maxWidth: 280 }}>
-          We've opened a case for your missing package. You'll receive updates via email and in your messages.
+          {t("accountOrders.missing.successBody")}
         </AppText>
-        <AppButton title="Back to Order" variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[6] }} />
+        <AppButton title={t("accountOrders.missing.backToOrder")} variant="primary" onPress={() => router.back()} style={{ marginTop: spacing[6] }} />
       </View>
     );
   }
@@ -297,35 +307,36 @@ function MissingContent() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Missing Package</AppText>
+        <AppText variant="title">{t("accountOrders.missing.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppText variant="body" color={colors.muted} style={styles.desc}>
-          Tell us which items are missing and what happened.
+          {t("accountOrders.missing.subtitle")}
         </AppText>
 
-        {eligibleItems.map((item) => {
-          const hasPendingCase = pendingCaseItems.has(item.publicId);
-          const isSelected = selected.has(item.publicId);
-          const blockReason = blockedItems.get(item.publicId);
+        {eligibleItems.map((item, idx) => {
+          const pid = item.publicId ?? "";
+          const hasPendingCase = pendingCaseItems.has(pid);
+          const isSelected = selected.has(pid);
+          const blockReason = blockedItems.get(pid);
           return (
             <Pressable
-              key={item.publicId}
-              onPress={() => { if (!hasPendingCase) toggleItem(item.publicId); }}
+              key={pid || idx}
+              onPress={() => { if (!hasPendingCase) toggleItem(pid); }}
               style={[styles.itemCard, isSelected && styles.itemSelected, hasPendingCase && { opacity: 0.5 }]}
             >
               <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
                 {isSelected && <Icon name="check" size={14} color={colors.white} />}
               </View>
-              <Image source={{ uri: item.image || FALLBACK_IMAGE }} style={styles.itemImg} resizeMode="cover" />
+              <Image source={{ uri: pickItemImage(item) || FALLBACK_IMAGE }} style={styles.itemImg} resizeMode="cover" />
               <View style={styles.itemInfo}>
-                <AppText variant="label" numberOfLines={2}>{item.title}</AppText>
-                <AppText variant="caption">Qty: {item.quantity}</AppText>
+                <AppText variant="label" numberOfLines={2}>{pickItemTitle(item)}</AppText>
+                <AppText variant="caption">{t("orders.qtyLabel", { count: item.quantity ?? 0 })}</AppText>
                 {hasPendingCase && (
                   <AppText variant="caption" color={colors.warning}>
-                    Already has an open case
+                    {t("accountOrders.missing.alreadyHasCase")}
                   </AppText>
                 )}
                 {isSelected && blockReason && (
@@ -341,15 +352,15 @@ function MissingContent() {
         {checkingEligibility && selected.size > 0 && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[2], marginBottom: spacing[2] }}>
             <ActivityIndicator size="small" color={colors.brandBlue} />
-            <AppText variant="caption" color={colors.muted}>Checking eligibility...</AppText>
+            <AppText variant="caption" color={colors.muted}>{t("accountOrders.missing.checkingEligibility")}</AppText>
           </View>
         )}
 
-        <AppText variant="subtitle" style={styles.sectionTitle}>What happened?</AppText>
-        {ISSUE_REASONS.map((r) => (
+        <AppText variant="subtitle" style={styles.sectionTitle}>{t("accountOrders.missing.reasonHeading")}</AppText>
+        {ISSUE_REASON_OPTIONS.map((r) => (
           <Pressable key={r.code} onPress={() => setIssueReason(r.code)} style={[styles.reasonRow, issueReason === r.code && styles.reasonSelected]}>
             <View style={[styles.radio, issueReason === r.code && styles.radioChecked]} />
-            <AppText variant="body">{r.label}</AppText>
+            <AppText variant="body">{t(r.labelKey)}</AppText>
           </Pressable>
         ))}
 
@@ -357,25 +368,25 @@ function MissingContent() {
           style={styles.noteInput}
           value={note}
           onChangeText={setNote}
-          placeholder="Additional details (optional)"
+          placeholder={t("accountOrders.missing.notePlaceholder")}
           placeholderTextColor={colors.mutedLight}
           multiline
           maxLength={500}
         />
 
-        <AppText variant="subtitle" style={styles.sectionTitle}>Preferred Resolution</AppText>
+        <AppText variant="subtitle" style={styles.sectionTitle}>{t("accountOrders.missing.resolutionHeading")}</AppText>
         {(availableCompensation
-          ? RESOLUTIONS.filter((r) => availableCompensation.includes(r.code))
-          : RESOLUTIONS
+          ? RESOLUTION_OPTIONS.filter((r) => availableCompensation.includes(r.code))
+          : RESOLUTION_OPTIONS
         ).map((r) => (
           <Pressable key={r.code} onPress={() => setResolution(r.code)} style={[styles.reasonRow, resolution === r.code && styles.reasonSelected]}>
             <View style={[styles.radio, resolution === r.code && styles.radioChecked]} />
-            <AppText variant="body">{r.label}</AppText>
+            <AppText variant="body">{t(r.labelKey)}</AppText>
           </Pressable>
         ))}
 
         <AppButton
-          title={submitting ? "Submitting..." : allSelectedBlocked ? "Selected items ineligible" : "Submit Report"}
+          title={submitting ? t("accountOrders.missing.submitting") : allSelectedBlocked ? t("accountOrders.missing.selectedIneligible") : t("accountOrders.missing.submitReport")}
           variant="primary"
           fullWidth
           size="lg"

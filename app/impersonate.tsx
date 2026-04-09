@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
+import i18n from "@/i18n";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -11,6 +13,7 @@ import { ROUTES } from "@/lib/routes";
 import { colors, spacing } from "@/lib/theme";
 
 export default function ImpersonateScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { token } = useLocalSearchParams<{ token: string }>();
@@ -19,7 +22,7 @@ export default function ImpersonateScreen() {
 
   useEffect(() => {
     if (!token) {
-      setError("Missing impersonation token.");
+      setError(i18n.t("common.impersonate.missingToken"));
       return;
     }
 
@@ -39,9 +42,7 @@ export default function ImpersonateScreen() {
 
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          throw new Error(
-            body?.message || `Exchange failed (${res.status})`,
-          );
+          throw new Error(body?.message || `Exchange failed (${res.status})`);
         }
 
         if (cancelled) return;
@@ -53,7 +54,7 @@ export default function ImpersonateScreen() {
         setError(
           err instanceof Error
             ? err.message
-            : "Failed to start impersonation session.",
+            : i18n.t("common.impersonate.defaultError"),
         );
       }
     })();
@@ -69,7 +70,7 @@ export default function ImpersonateScreen() {
         <View style={styles.card}>
           <Icon name="alert-circle" size={48} color={colors.error} />
           <AppText variant="title" style={styles.heading}>
-            Impersonation Failed
+            {t("common.impersonate.heading")}
           </AppText>
           <AppText
             variant="body"
@@ -80,7 +81,7 @@ export default function ImpersonateScreen() {
             {error}
           </AppText>
           <AppButton
-            title="Go Home"
+            title={t("common.impersonate.goHome")}
             variant="primary"
             onPress={() => router.replace(ROUTES.home)}
           />
@@ -93,7 +94,7 @@ export default function ImpersonateScreen() {
             color={colors.muted}
             style={styles.message}
           >
-            Starting impersonation session...
+            {t("common.impersonate.starting")}
           </AppText>
         </View>
       )}

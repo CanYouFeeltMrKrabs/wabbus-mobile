@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Image, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import Icon from "@/components/ui/Icon";
 import { formatMoney } from "@/lib/money";
@@ -19,6 +20,7 @@ interface CartItemCardProps {
 }
 
 export default function CartItemCard({ item, onUpdateQty, onRemove, onSaveForLater }: CartItemCardProps) {
+  const { t } = useTranslation();
   const [saved, setSaved] = useState(false);
   const router = useRouter();
   const lineTotal = item.unitPriceCents * item.quantity;
@@ -58,12 +60,12 @@ export default function CartItemCard({ item, onUpdateQty, onRemove, onSaveForLat
 
           {item.vendorName && (
             <AppText variant="caption" color={colors.slate400} style={{ marginTop: spacing[0.5] }} numberOfLines={1}>
-              Sold by <AppText variant="caption" color={colors.slate500} weight="medium">{item.vendorName}</AppText>
+              {t("common.soldBy")} <AppText variant="caption" color={colors.slate500} weight="medium">{item.vendorName}</AppText>
             </AppText>
           )}
 
           <View style={styles.qtyRow}>
-            <AppText variant="caption" color={colors.muted}>Qty:</AppText>
+            <AppText variant="caption" color={colors.muted}>{t("common.qty")}</AppText>
             <View style={styles.qtyBox}>
               <Pressable
                 style={[styles.qtyBtn, item.quantity <= 1 && styles.qtyBtnDisabled]}
@@ -93,13 +95,13 @@ export default function CartItemCard({ item, onUpdateQty, onRemove, onSaveForLat
             >
               <Icon name={saved ? "favorite" : "favorite-border"} size={14} color={saved ? colors.brandBlueDark : colors.muted} />
               <AppText variant="caption" color={saved ? colors.brandBlueDark : colors.muted}>
-                {saved ? "Saved" : "Save for later"}
+                {saved ? t("common.saved") : t("common.saveForLater")}
               </AppText>
             </Pressable>
 
             <Pressable style={styles.removeBtn} onPress={() => onRemove(item.publicId)}>
                <Icon name="delete-outline" size={14} color={colors.error} />
-               <AppText variant="caption" color={colors.error} weight="medium">Remove</AppText>
+               <AppText variant="caption" color={colors.error} weight="medium">{t("common.remove")}</AppText>
             </Pressable>
           </View>
         </View>

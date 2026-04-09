@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -23,6 +24,7 @@ import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 type BreadcrumbItem = { id: number; name: string };
 
 export default function CategoriesScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [categories, setCategories] = useState<CategoryLink[]>([]);
@@ -75,7 +77,7 @@ export default function CategoriesScreen() {
           <View style={{ width: 44 }} />
         )}
         <AppText variant="title">
-          {breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].name : "All Categories"}
+          {breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].name : t("category.allCategories")}
         </AppText>
         <View style={{ width: 44 }} />
       </View>
@@ -83,7 +85,7 @@ export default function CategoriesScreen() {
       {breadcrumbs.length > 0 && (
         <View style={styles.breadcrumbBar}>
           <Pressable onPress={loadRoot}>
-            <AppText variant="caption" color={colors.brandBlue}>All</AppText>
+            <AppText variant="caption" color={colors.brandBlue}>{t("category.all")}</AppText>
           </Pressable>
           {breadcrumbs.map((b, i) => (
             <React.Fragment key={b.id}>
@@ -105,7 +107,7 @@ export default function CategoriesScreen() {
       ) : categories.length === 0 ? (
         <View style={styles.empty}>
           <Icon name="folder-open" size={48} color={colors.gray300} />
-          <AppText variant="subtitle" color={colors.muted}>No categories found</AppText>
+          <AppText variant="subtitle" color={colors.muted}>{t("category.noCategoriesFound")}</AppText>
         </View>
       ) : (
         <FlatList

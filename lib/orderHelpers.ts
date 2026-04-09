@@ -136,11 +136,36 @@ export function pickItemImage(item: {
   return url;
 }
 
-export function pickUnitPrice(item: {
-  unitPriceCents?: number | null;
+/**
+ * Extract the unit price in CENTS from an order item.
+ * The backend sends unitPrice as a Decimal string (e.g. "14.99").
+ * Returns 0 if no price can be resolved.
+ */
+export function pickUnitPriceCents(item: {
   unitPrice?: string | number | null;
   price?: string | number | null;
-}): number | null {
-  if (item.unitPriceCents != null) return item.unitPriceCents;
-  return normalizeNumber(item.unitPrice) ?? normalizeNumber(item.price) ?? null;
+}): number {
+  const dollars = normalizeNumber(item.unitPrice) ?? normalizeNumber(item.price) ?? 0;
+  return Math.round(dollars * 100);
+}
+
+/**
+ * Extract the order total in CENTS.
+ * The backend sends totalAmount as a Decimal string (e.g. "29.99").
+ * Returns 0 if no amount can be resolved.
+ */
+export function orderTotalCents(order: {
+  totalAmount?: string | number | null;
+}): number {
+  const dollars = normalizeNumber(order.totalAmount) ?? 0;
+  return Math.round(dollars * 100);
+}
+
+/**
+ * Item count from an order (derive from items array).
+ */
+export function orderItemCount(order: {
+  items?: unknown[] | null;
+}): number {
+  return order.items?.length ?? 0;
 }

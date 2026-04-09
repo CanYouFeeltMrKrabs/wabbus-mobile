@@ -2,6 +2,7 @@ import React from "react";
 import { View, Pressable, StyleSheet, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -11,29 +12,34 @@ import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 type MenuItem = {
   icon: string;
-  label: string;
+  labelKey: string;
   route: string;
-  color?: string;
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { icon: "receipt-long", label: "Orders", route: ROUTES.orders },
-  { icon: "location-on", label: "Addresses", route: ROUTES.accountAddresses },
-  { icon: "credit-card", label: "Payment Methods", route: ROUTES.accountPaymentMethods },
-  { icon: "person", label: "Account Details", route: ROUTES.accountDetails },
-  { icon: "favorite", label: "Wishlist", route: ROUTES.accountWishlist },
-  { icon: "chat", label: "Messages", route: ROUTES.accountMessages },
-  { icon: "help-outline", label: "Support", route: ROUTES.support },
+  { icon: "receipt-long", labelKey: "account.menu.orders", route: ROUTES.orders },
+  { icon: "location-on", labelKey: "account.menu.addresses", route: ROUTES.accountAddresses },
+  { icon: "credit-card", labelKey: "account.menu.paymentMethods", route: ROUTES.accountPaymentMethods },
+  { icon: "person", labelKey: "account.menu.accountDetails", route: ROUTES.accountDetails },
+  { icon: "favorite", labelKey: "account.menu.wishlist", route: ROUTES.accountWishlist },
+  { icon: "chat", labelKey: "account.menu.messages", route: ROUTES.accountMessages },
+  { icon: "help-outline", labelKey: "account.menu.support", route: ROUTES.support },
 ];
 
-function MenuRow({ item, onPress }: { item: MenuItem; onPress: () => void }) {
+const LEGAL_ITEMS: MenuItem[] = [
+  { icon: "description", labelKey: "account.legal.termsOfService", route: ROUTES.terms },
+  { icon: "privacy-tip", labelKey: "account.legal.privacyPolicy", route: ROUTES.privacy },
+  { icon: "mail-outline", labelKey: "account.legal.contactUs", route: ROUTES.contact },
+];
+
+function MenuRow({ item, t, onPress }: { item: MenuItem; t: (key: string) => string; onPress: () => void }) {
   return (
     <Pressable style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]} onPress={onPress}>
       <View style={styles.menuIcon}>
         <Icon name={item.icon} size={22} color={colors.brandBlue} />
       </View>
       <AppText variant="body" weight="medium" style={styles.menuLabel}>
-        {item.label}
+        {t(item.labelKey)}
       </AppText>
       <Icon name="chevron-right" size={20} color={colors.gray400} />
     </Pressable>
@@ -41,6 +47,7 @@ function MenuRow({ item, onPress }: { item: MenuItem; onPress: () => void }) {
 }
 
 export default function AccountScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, isLoggedIn, logout } = useAuth();
@@ -59,14 +66,14 @@ export default function AccountScreen() {
         {isLoggedIn ? (
           <View>
             <AppText variant="title">
-              {user?.firstName} {user?.lastName}
+              {user?.name || t("account.hub.yourAccount")}
             </AppText>
             <AppText variant="caption">{user?.email}</AppText>
           </View>
         ) : (
           <View>
-            <AppText variant="title">Welcome to Wabbus</AppText>
-            <AppText variant="caption">Sign in for the best experience</AppText>
+            <AppText variant="title">{t("account.hub.welcomeToWabbus")}</AppText>
+            <AppText variant="caption">{t("account.hub.signInForBest")}</AppText>
           </View>
         )}
       </View>
@@ -74,13 +81,13 @@ export default function AccountScreen() {
       {!isLoggedIn && (
         <View style={styles.authRow}>
           <AppButton
-            title="Sign In"
+            title={t("account.hub.signIn")}
             variant="primary"
             fullWidth
             onPress={() => router.push(ROUTES.login)}
           />
           <AppButton
-            title="Create Account"
+            title={t("account.hub.createAccount")}
             variant="outline"
             fullWidth
             onPress={() => router.push(ROUTES.register)}
@@ -94,6 +101,19 @@ export default function AccountScreen() {
           <MenuRow
             key={item.route}
             item={item}
+            t={t}
+            onPress={() => router.push(item.route as any)}
+          />
+        ))}
+      </View>
+
+      {/* Legal */}
+      <View style={styles.menuCard}>
+        {LEGAL_ITEMS.map((item) => (
+          <MenuRow
+            key={item.route}
+            item={item}
+            t={t}
             onPress={() => router.push(item.route as any)}
           />
         ))}
@@ -101,7 +121,7 @@ export default function AccountScreen() {
 
       {isLoggedIn && (
         <AppButton
-          title="Sign Out"
+          title={t("account.hub.signOut")}
           variant="ghost"
           icon="logout"
           onPress={logout}

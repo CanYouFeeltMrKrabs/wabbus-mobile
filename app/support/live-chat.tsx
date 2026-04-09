@@ -21,6 +21,7 @@ import { customerFetch } from "@/lib/api";
 import { API_BASE } from "@/lib/config";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
 import { pickDocument, uploadFileAuth, uploadFileGuest } from "@/lib/fileUpload";
+import { useTranslation } from "@/hooks/useT";
 
 type ChatMessage = {
   id: string;
@@ -32,6 +33,7 @@ type ChatMessage = {
 const baseUrl = API_BASE.replace("/api", "");
 
 export default function LiveChatScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isLoggedIn } = useAuth();
@@ -44,13 +46,20 @@ export default function LiveChatScreen() {
   const [loading, setLoading] = useState(true);
   const [ended, setEnded] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [isAgentTyping, setIsAgentTyping] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [rating, setRating] = useState<number | null>(null);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const conversationIdRef = useRef<string | null>(null);
+  const agentTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingPingRef = useRef(0);
+  const lastSendRef = useRef(0);
+  const seenIdsRef = useRef(new Set<string>());
 
   const addMessage = useCallback((msg: ChatMessage) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
-      return [...prev, msg];
-    });
+    if (seenIdsRef.current.has(msg.id)) return;
+    seenIdsRef.current.add(msg.id);
+    setMessages((prev) => [...prev, msg]);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }, []);
 
@@ -145,6 +154,24 @@ export default function LiveChatScreen() {
         if (!cancelled) setEnded(true);
       });
 
+      socket.on("agent:typing", () => {
+        if (cancelled) return;
+        setIsAgentTyping(true);
+        if (agentTypingTimeoutRef.current) clearTimeout(agentTypingTimeoutRef.current);
+        agentTypingTimeoutRef.current = setTimeout(() => setIsAgentTyping(false), 3000);
+      });
+
+      socket.on("reconnect_attempt", () => {
+        if (!cancelled) setReconnecting(true);
+      });
+
+      socket.on("reconnect", () => {
+        if (!cancelled) {
+          setReconnecting(false);
+          setConnected(true);
+        }
+      });
+
       socket.on("connect_error", () => {
         if (!cancelled) setLoading(false);
       });
@@ -152,6 +179,7 @@ export default function LiveChatScreen() {
 
     return () => {
       cancelled = true;
+      if (agentTypingTimeoutRef.current) clearTimeout(agentTypingTimeoutRef.current);
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -160,6 +188,10 @@ export default function LiveChatScreen() {
   }, [isLoggedIn, addMessage]);
 
   const handleSend = () => {
+    const now = Date.now();
+    if (now - lastSendRef.current < 500) return;
+    lastSendRef.current = now;
+
     if (!text.trim() || !socketRef.current) return;
 
     const body = text.trim();
@@ -207,12 +239,12 @@ export default function LiveChatScreen() {
 
       addMessage({
         id: `local-attach-${Date.now()}`,
-        body: `[Attachment: ${file.name}]`,
+        body: t("chat.attachmentLabel", { name: file.name }),
         senderType: "CUSTOMER",
         createdAt: new Date().toISOString(),
       });
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to upload attachment.");
+      Alert.alert(t("common.error"), e.message || t("chat.errorUpload"));
     } finally {
       setUploading(false);
     }
@@ -227,9 +259,9 @@ export default function LiveChatScreen() {
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
         <View style={{ flex: 1, alignItems: "center" }}>
-          <AppText variant="label">Live Chat</AppText>
+          <AppText variant="label">{t("chat.heading")}</AppText>
           <AppText variant="caption" color={connected ? colors.success : colors.muted}>
-            {loading ? "Connecting..." : connected ? "Connected" : "Disconnected"}
+            {loading ? t("chat.connecting") : reconnecting ? t("chat.reconnecting") : connected ? t("chat.connected") : t("chat.disconnected")}
           </AppText>
         </View>
         {!ended && connected && (
@@ -244,7 +276,7 @@ export default function LiveChatScreen() {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.brandBlue} />
           <AppText variant="body" color={colors.muted} style={{ marginTop: spacing[3] }}>
-            Connecting to support...
+            {t("chat.connectingToSupport")}
           </AppText>
         </View>
       ) : (
@@ -259,7 +291,7 @@ export default function LiveChatScreen() {
               <View style={styles.center}>
                 <Icon name="chat" size={40} color={colors.gray300} />
                 <AppText variant="body" color={colors.muted} style={{ marginTop: spacing[2] }}>
-                  Start a conversation with our support team.
+                  {t("chat.emptyPrompt")}
                 </AppText>
               </View>
             }
@@ -290,11 +322,44 @@ export default function LiveChatScreen() {
             }}
           />
 
+          {isAgentTyping && !ended && (
+            <View style={styles.typingRow}>
+              <AppText variant="caption" color={colors.muted} style={{ fontStyle: "italic" }}>
+                {t("chat.agentTyping")}
+              </AppText>
+            </View>
+          )}
+
           {ended ? (
             <View style={[styles.endedBar, { paddingBottom: Math.max(insets.bottom, spacing[3]) }]}>
-              <AppText variant="body" color={colors.muted} align="center">
-                Chat ended. Thank you!
-              </AppText>
+              {!ratingSubmitted ? (
+                <View style={{ alignItems: "center" }}>
+                  <AppText variant="body" color={colors.muted}>{t("chat.chatEnded")}</AppText>
+                  <View style={{ flexDirection: "row", gap: spacing[2], marginTop: spacing[2] }}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Pressable
+                        key={n}
+                        onPress={() => {
+                          setRating(n);
+                          setRatingSubmitted(true);
+                          if (conversationIdRef.current && socketRef.current) {
+                            socketRef.current.emit("chat:rate", {
+                              rating: n,
+                              conversationPublicId: conversationIdRef.current,
+                            });
+                          }
+                        }}
+                      >
+                        <Icon name={n <= (rating ?? 0) ? "star" : "star-outline"} size={32} color="#facc15" />
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <AppText variant="body" color={colors.muted} align="center">
+                  {t("chat.thanksFeedback")}
+                </AppText>
+              )}
             </View>
           ) : (
             <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, spacing[2]) }]}>
@@ -313,8 +378,15 @@ export default function LiveChatScreen() {
               <TextInput
                 style={styles.composerInput}
                 value={text}
-                onChangeText={setText}
-                placeholder="Type a message..."
+                onChangeText={(val) => {
+                  setText(val);
+                  const now = Date.now();
+                  if (now - lastTypingPingRef.current > 2000 && socketRef.current) {
+                    socketRef.current.emit(isLoggedIn ? "customer:typing" : "guest:typing");
+                    lastTypingPingRef.current = now;
+                  }
+                }}
+                placeholder={t("chat.placeholder")}
                 placeholderTextColor={colors.mutedLight}
                 multiline
                 maxLength={2000}
@@ -390,5 +462,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
     backgroundColor: colors.white,
+  },
+  typingRow: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[1],
   },
 });

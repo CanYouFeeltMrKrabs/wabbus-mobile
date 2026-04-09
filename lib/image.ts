@@ -33,7 +33,7 @@ export function resolveImageUrl(
   key: string | null | undefined,
   size: ImageSize = "full",
 ): string {
-  if (!key) return FALLBACK_IMAGE;
+  if (!key || typeof key !== "string") return FALLBACK_IMAGE;
 
   if (key.startsWith("http://") || key.startsWith("https://")) return key;
 

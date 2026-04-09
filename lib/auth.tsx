@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState, type AppStateStatus } from "react-native";
+import i18n from "@/i18n";
 import { customerFetch, onAuthLogout, NetworkError, AuthError } from "./api";
 import { runPostAuthActions } from "./postAuthActions";
 import { sendTokenToBackend, deregisterToken } from "./notifications";
@@ -11,6 +14,7 @@ type AuthState = {
   user: Customer | null;
   authStatus: AuthStatus;
   isLoggedIn: boolean;
+  impersonatedBy: number | null;
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
@@ -26,6 +30,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   authStatus: "loading",
   isLoggedIn: false,
+  impersonatedBy: null,
   login: async () => {},
   register: async () => {},
   logout: async () => {},
@@ -36,34 +41,114 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+const GUEST_CART_KEY = "guest_cart";
+const CHECKOUT_IDEMPOTENCY_KEY = "wabbus_checkout_idempotency";
+const CHECKOUT_PENDING_KEY = "wabbus_checkout_pending";
+
+/**
+ * Scrub account-sensitive AsyncStorage data on logout.
+ * Preserves low-sensitivity product preferences (recently viewed, wishlist).
+ */
+async function scrubUserData(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(GUEST_CART_KEY);
+  } catch { /* best effort */ }
+  try {
+    await AsyncStorage.removeItem(CHECKOUT_IDEMPOTENCY_KEY);
+  } catch { /* best effort */ }
+  try {
+    await AsyncStorage.removeItem(CHECKOUT_PENDING_KEY);
+  } catch { /* best effort */ }
+}
+
+const RETRY_DELAY_MS = 3_000;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Customer | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
+  const [impersonatedBy, setImpersonatedBy] = useState<number | null>(null);
   const statusRef = useRef(authStatus);
   statusRef.current = authStatus;
 
+  /**
+   * Re-check auth via /customer-auth/me using customerFetch.
+   *
+   * customerFetch handles 401 → refresh → retry, so an expired access
+   * token with a valid refresh token is silently renewed.
+   *
+   * Error handling mirrors web:
+   * - NetworkError: keep current state (offline / flaky connection)
+   * - AuthError: truly unauthenticated (refresh also failed 401)
+   * - Other (e.g. 500): server hiccup — preserve current state unless
+   *   still in initial "loading", in which case fall to unauthenticated
+   *   so RequireAuth can redirect instead of infinite spinner.
+   */
   const fetchMe = useCallback(async () => {
     try {
       const data = await customerFetch<Customer>("/customer-auth/me");
       setUser(data);
       setAuthStatus("authenticated");
+      setImpersonatedBy(data?.impersonatedBy ?? null);
     } catch (e) {
       if (e instanceof NetworkError) {
-        // Offline — don't change state, preserve current status
         return;
       }
-      setUser(null);
-      setAuthStatus("unauthenticated");
+      if (e instanceof AuthError) {
+        setUser(null);
+        setAuthStatus("unauthenticated");
+        setImpersonatedBy(null);
+        return;
+      }
+      if (statusRef.current === "loading") {
+        setUser(null);
+        setAuthStatus("unauthenticated");
+        setImpersonatedBy(null);
+      }
     }
   }, []);
 
   useEffect(() => {
-    fetchMe();
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    (async () => {
+      await fetchMe();
+
+      if (cancelled) return;
+      if (statusRef.current !== "loading") return;
+
+      retryTimer = setTimeout(async () => {
+        if (cancelled) return;
+        await fetchMe();
+
+        if (cancelled) return;
+        if (statusRef.current === "loading") {
+          setUser(null);
+          setAuthStatus("unauthenticated");
+        }
+      }, RETRY_DELAY_MS);
+    })();
+
     const unsub = onAuthLogout(() => {
+      scrubUserData().catch(() => {});
       setUser(null);
       setAuthStatus("unauthenticated");
+      setImpersonatedBy(null);
     });
-    return unsub;
+
+    const handleAppState = (state: AppStateStatus) => {
+      if (state === "active") {
+        fetchMe();
+      }
+    };
+    const appStateSub = AppState.addEventListener("change", handleAppState);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      unsub();
+      appStateSub.remove();
+    };
   }, [fetchMe]);
 
   /**
@@ -83,23 +168,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json().catch(() => null);
 
       if (data?.code === "EMAIL_NOT_VERIFIED") {
-        throw new Error("Please verify your email address before signing in. Check your inbox for a verification link.");
+        throw new Error(i18n.t("auth.login.errorNotVerified"));
       }
       if (res.status === 429) {
         const serverMsg = typeof data?.message === "string" && data.message.trim() ? data.message : null;
-        throw new Error(serverMsg || "Too many login attempts. Please wait a moment and try again.");
+        throw new Error(serverMsg || i18n.t("auth.login.errorRateLimit"));
       }
       if (res.status === 423) {
-        throw new Error("Your account has been temporarily locked. Please try again later or contact support.");
+        throw new Error(i18n.t("auth.login.errorLocked"));
       }
       if (res.status === 401 || res.status === 403) {
-        throw new Error("Invalid email or password.");
+        throw new Error(i18n.t("auth.login.errorBadCredentials"));
       }
       if (res.status >= 500) {
-        throw new Error("Our servers are temporarily unavailable. Please try again shortly.");
+        throw new Error(i18n.t("auth.login.errorServerDown"));
       }
 
-      const msg = typeof data?.message === "string" && data.message.trim() ? data.message : "Login failed. Please try again.";
+      const msg = typeof data?.message === "string" && data.message.trim() ? data.message : i18n.t("auth.login.errorGeneric");
       throw new Error(msg);
     }
 
@@ -119,11 +204,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       const serverMsg = typeof body?.message === "string" && body.message.trim() ? body.message : null;
-      let msg = "Registration failed. Please try again.";
+      let msg = i18n.t("auth.register.errorRegistrationFailed");
       if (res.status === 409) {
-        msg = "An account with this email already exists.";
+        msg = i18n.t("auth.register.errorConflict");
       } else if (res.status === 422) {
-        msg = serverMsg || "Please check your email and password.";
+        msg = serverMsg || i18n.t("auth.register.errorValidation");
       } else if (serverMsg) {
         msg = serverMsg;
       }
@@ -137,6 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     deregisterToken().catch(() => {});
+    scrubUserData().catch(() => {});
     try {
       await customerFetch("/customer-auth/logout", { method: "POST" });
     } catch {
@@ -144,6 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setUser(null);
     setAuthStatus("unauthenticated");
+    setImpersonatedBy(null);
   }, []);
 
   const value = useMemo<AuthState>(
@@ -151,12 +238,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       authStatus,
       isLoggedIn: authStatus === "authenticated" && !!user,
+      impersonatedBy,
       login,
       register,
       logout,
       refresh: fetchMe,
     }),
-    [user, authStatus, login, register, logout, fetchMe],
+    [user, authStatus, impersonatedBy, login, register, logout, fetchMe],
   );
 
   return (

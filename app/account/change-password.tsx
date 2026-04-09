@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -35,6 +36,7 @@ export default function ChangePasswordScreen() {
 }
 
 function ChangePasswordContent() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { logout } = useAuth();
@@ -83,7 +85,7 @@ function ChangePasswordContent() {
       startCooldown();
       setTimeout(() => codeRefs.current[0]?.focus(), 100);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to send verification code.");
+      Alert.alert(t("common.error"), e.message || t("account.verify.errorSendCode"));
     } finally {
       setLoading(false);
     }
@@ -98,7 +100,7 @@ function ChangePasswordContent() {
       setCode(Array(CODE_LENGTH).fill(""));
       setTimeout(() => codeRefs.current[0]?.focus(), 100);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to resend code.");
+      Alert.alert(t("common.error"), e.message || t("account.verify.errorResendCode"));
     } finally {
       setLoading(false);
     }
@@ -129,7 +131,7 @@ function ChangePasswordContent() {
   const handleVerifyCode = async () => {
     const fullCode = code.join("");
     if (fullCode.length !== CODE_LENGTH) {
-      Alert.alert("Error", "Please enter the full 6-digit code.");
+      Alert.alert(t("common.error"), t("account.verify.errorFullCode"));
       return;
     }
 
@@ -142,7 +144,7 @@ function ChangePasswordContent() {
       setSessionToken(data.sessionToken);
       setStep("change");
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Invalid or expired code.");
+      Alert.alert(t("common.error"), e.message || t("account.verify.errorInvalidCode"));
     } finally {
       setLoading(false);
     }
@@ -150,15 +152,15 @@ function ChangePasswordContent() {
 
   const handleChangePassword = async () => {
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      Alert.alert("Error", `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      Alert.alert(t("common.error"), t("account.password.errorMinPassword", { min: MIN_PASSWORD_LENGTH }));
       return;
     }
     if (newPassword.length > MAX_PASSWORD_LENGTH) {
-      Alert.alert("Error", `Password must be at most ${MAX_PASSWORD_LENGTH} characters.`);
+      Alert.alert(t("common.error"), t("account.password.errorMaxPassword", { max: MAX_PASSWORD_LENGTH }));
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match.");
+      Alert.alert(t("common.error"), t("account.password.errorMismatch"));
       return;
     }
 
@@ -172,7 +174,7 @@ function ChangePasswordContent() {
       await logout();
       setTimeout(() => router.replace(ROUTES.login), 2000);
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to change password.");
+      Alert.alert(t("common.error"), e.message || t("account.password.errorChangePassword"));
     } finally {
       setLoading(false);
     }
@@ -184,10 +186,10 @@ function ChangePasswordContent() {
         <View style={styles.center}>
           <Icon name="check-circle" size={48} color={colors.success} />
           <AppText variant="heading" style={styles.successTitle}>
-            Password Changed
+            {t("account.password.successHeading")}
           </AppText>
           <AppText variant="body" color={colors.muted} align="center">
-            Redirecting to sign in...
+            {t("account.password.successRedirecting")}
           </AppText>
         </View>
       </View>
@@ -201,7 +203,7 @@ function ChangePasswordContent() {
     >
       <View style={styles.header}>
         <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
-        <AppText variant="title">Change Password</AppText>
+        <AppText variant="title">{t("account.password.heading")}</AppText>
         <View style={{ width: 44 }} />
       </View>
 
@@ -211,13 +213,13 @@ function ChangePasswordContent() {
           <View style={styles.stepCard}>
             <Icon name="shield-lock" size={40} color={colors.brandBlue} />
             <AppText variant="subtitle" style={styles.stepTitle}>
-              Verify Your Identity
+              {t("account.verify.verifyIdentity")}
             </AppText>
             <AppText variant="body" color={colors.muted} align="center" style={styles.stepDesc}>
-              We'll send a 6-digit code to your email address.
+              {t("account.verify.sendCodeToEmail")}
             </AppText>
             <AppButton
-              title={loading ? "Sending..." : "Send Verification Code"}
+              title={loading ? t("account.verify.sending") : t("account.verify.sendVerificationCode")}
               variant="primary"
               fullWidth
               size="lg"
@@ -225,7 +227,7 @@ function ChangePasswordContent() {
               onPress={handleRequestCode}
             />
             <AppButton
-              title="Cancel"
+              title={t("common.cancel")}
               variant="ghost"
               onPress={() => router.back()}
               style={styles.cancelBtn}
@@ -238,10 +240,10 @@ function ChangePasswordContent() {
           <View style={styles.stepCard}>
             <Icon name="dialpad" size={40} color={colors.brandBlue} />
             <AppText variant="subtitle" style={styles.stepTitle}>
-              Enter Verification Code
+              {t("account.verify.enterVerificationCode")}
             </AppText>
             <AppText variant="body" color={colors.muted} align="center" style={styles.stepDesc}>
-              Enter the 6-digit code sent to your email. Expires in 6 minutes.
+              {t("account.verify.codeExpiresDesc")}
             </AppText>
 
             <View style={styles.codeRow}>
@@ -263,7 +265,7 @@ function ChangePasswordContent() {
             </View>
 
             <AppButton
-              title={loading ? "Verifying..." : "Verify"}
+              title={loading ? t("account.verify.verifying") : t("account.verify.verify")}
               variant="primary"
               fullWidth
               size="lg"
@@ -281,7 +283,7 @@ function ChangePasswordContent() {
                 color={cooldown > 0 ? colors.muted : colors.brandBlue}
                 weight="semibold"
               >
-                {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
+                {cooldown > 0 ? t("account.verify.resendCodeIn", { cooldown }) : t("account.verify.resendCode")}
               </AppText>
             </Pressable>
           </View>
@@ -292,12 +294,12 @@ function ChangePasswordContent() {
           <View style={styles.stepCard}>
             <Icon name="lock" size={40} color={colors.brandBlue} />
             <AppText variant="subtitle" style={styles.stepTitle}>
-              Set New Password
+              {t("account.password.setNewPassword")}
             </AppText>
 
             <View style={styles.field}>
               <AppText variant="label" style={styles.fieldLabel}>
-                Current password
+                {t("account.password.currentPassword")}
               </AppText>
               <View style={styles.passwordWrap}>
                 <TextInput
@@ -316,14 +318,14 @@ function ChangePasswordContent() {
 
             <View style={styles.field}>
               <AppText variant="label" style={styles.fieldLabel}>
-                New password
+                {t("account.password.newPassword")}
               </AppText>
               <View style={styles.passwordWrap}>
                 <TextInput
                   style={[styles.input, styles.passwordInput]}
                   value={newPassword}
                   onChangeText={setNewPassword}
-                  placeholder={`Min. ${MIN_PASSWORD_LENGTH} characters`}
+                  placeholder={t("account.password.newPasswordPlaceholder", { min: MIN_PASSWORD_LENGTH })}
                   placeholderTextColor={colors.mutedLight}
                   secureTextEntry={!showNew}
                   autoCapitalize="none"
@@ -338,14 +340,14 @@ function ChangePasswordContent() {
 
             <View style={styles.field}>
               <AppText variant="label" style={styles.fieldLabel}>
-                Confirm new password
+                {t("account.password.confirmNewPassword")}
               </AppText>
               <View style={styles.passwordWrap}>
                 <TextInput
                   style={[styles.input, styles.passwordInput]}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  placeholder="Re-enter your password"
+                  placeholder={t("account.password.confirmPlaceholder")}
                   placeholderTextColor={colors.mutedLight}
                   secureTextEntry={!showConfirm}
                   autoCapitalize="none"
@@ -359,7 +361,7 @@ function ChangePasswordContent() {
             </View>
 
             <AppButton
-              title={loading ? "Changing..." : "Change Password"}
+              title={loading ? t("account.password.changing") : t("account.password.changePassword")}
               variant="primary"
               fullWidth
               size="lg"

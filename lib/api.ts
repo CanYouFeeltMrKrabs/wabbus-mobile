@@ -6,10 +6,18 @@
  * them on every request.
  *
  * On 401: attempts one silent refresh, retries, then dispatches logout.
+ *
+ * Parity with web customerFetch:
+ * - Auto-appends `limit=` on GET requests missing one
+ * - Origin guard for absolute URLs
+ * - Richer error parsing (text fallback, statusText)
+ * - Surfaces `warning` field from response JSON via toast
  */
 
 import { API_BASE } from "./config";
+import { PAGE_SIZE } from "./constants";
 import { getLocale } from "./locale";
+import { showToast } from "./toast";
 
 export class AuthError extends Error {
   status: number;
@@ -23,7 +31,7 @@ export class AuthError extends Error {
 }
 
 export class NetworkError extends Error {
-  constructor(message = "Network error — please check your connection.") {
+  constructor(message = "Network error — please check your connection and try again.") {
     super(message);
     this.name = "NetworkError";
   }
@@ -71,7 +79,7 @@ async function attemptRefresh(): Promise<boolean> {
         return true;
       }
       if (res.status === 401 || res.status === 403) return false;
-      throw new Error(`Refresh returned ${res.status}`);
+      throw new Error(`Refresh endpoint returned ${res.status}`);
     } finally {
       refreshPromise = null;
     }
@@ -84,7 +92,23 @@ export async function customerFetch<T = unknown>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const isGet = !options.method || options.method.toUpperCase() === "GET";
+
+  let url: string;
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    const apiOrigin = API_BASE ? new URL(API_BASE).origin : null;
+    const pathOrigin = new URL(path).origin;
+    if (!apiOrigin || pathOrigin !== apiOrigin) {
+      throw new Error(`customerFetch: refusing to send credentials to external origin ${pathOrigin}`);
+    }
+    url = path;
+  } else {
+    url = `${API_BASE}${path}`;
+  }
+
+  if (isGet && !url.includes("limit=")) {
+    url += (url.includes("?") ? "&" : "?") + `limit=${PAGE_SIZE.DEFAULT}`;
+  }
 
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
@@ -115,6 +139,9 @@ export async function customerFetch<T = unknown>(
         res = await doFetch();
       } catch {
         throw new NetworkError();
+      }
+      if (res.status !== 401) {
+        // Grace retry succeeded — fall through to normal response handling
       }
     }
 
@@ -147,14 +174,21 @@ export async function customerFetch<T = unknown>(
 
   if (!res.ok) {
     let body: unknown;
-    let message = `Request failed: ${res.status}`;
+    let message = `Request failed: ${res.status} ${res.statusText ?? ""}`.trim();
     try {
       body = await res.json();
       if (body && typeof body === "object" && "message" in body) {
         message = String((body as { message: string }).message).slice(0, 300);
       }
     } catch {
-      /* keep default message */
+      try {
+        const raw = await res.text();
+        if (raw.length <= 200 && !raw.includes("<")) {
+          message = raw;
+        }
+      } catch {
+        // keep default
+      }
     }
     if (res.status === 429) {
       throw new FetchError(429, message, body);
@@ -165,7 +199,13 @@ export async function customerFetch<T = unknown>(
 
   if (res.status === 204) return undefined as unknown as T;
 
-  return (await res.json()) as T;
+  const data = await res.json();
+
+  if (data && typeof data === "object" && "warning" in data) {
+    showToast(String((data as Record<string, unknown>).warning), "error");
+  }
+
+  return data as T;
 }
 
 /** Unauthenticated fetch for public endpoints */

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
@@ -19,6 +20,7 @@ import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "@/lib/constants";
 import { ROUTES } from "@/lib/routes";
 
 export default function RegisterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { register } = useAuth();
@@ -32,15 +34,15 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     setError(null);
     if (!email.trim() || !password) {
-      setError("Please fill in all fields.");
+      setError(t("auth.register.errorEmptyFields"));
       return;
     }
     if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      setError(t("auth.register.errorMinPassword", { min: MIN_PASSWORD_LENGTH }));
       return;
     }
     if (password.length > MAX_PASSWORD_LENGTH) {
-      setError(`Password must be at most ${MAX_PASSWORD_LENGTH} characters.`);
+      setError(t("auth.register.errorMaxPassword", { max: MAX_PASSWORD_LENGTH }));
       return;
     }
     setLoading(true);
@@ -48,7 +50,7 @@ export default function RegisterScreen() {
       await register({ email: email.trim(), password });
       router.back();
     } catch (e: any) {
-      setError(e.message || "Could not create account.");
+      setError(e.message || t("auth.register.errorGeneric"));
     } finally {
       setLoading(false);
     }
@@ -77,10 +79,10 @@ export default function RegisterScreen() {
         </View>
 
         <AppText variant="heading" align="center">
-          Create Account
+          {t("auth.register.heading")}
         </AppText>
         <AppText variant="body" color={colors.muted} align="center" style={styles.sub}>
-          Join Wabbus to start shopping
+          {t("auth.register.subtitle")}
         </AppText>
 
         {error && (
@@ -91,14 +93,14 @@ export default function RegisterScreen() {
         )}
 
         <View style={styles.field}>
-          <AppText variant="label" style={styles.fieldLabel}>Email</AppText>
-          <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor={colors.mutedLight} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+          <AppText variant="label" style={styles.fieldLabel}>{t("auth.register.emailLabel")}</AppText>
+          <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder={t("auth.register.emailPlaceholder")} placeholderTextColor={colors.mutedLight} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
         </View>
 
         <View style={styles.field}>
-          <AppText variant="label" style={styles.fieldLabel}>Password</AppText>
+          <AppText variant="label" style={styles.fieldLabel}>{t("auth.register.passwordLabel")}</AppText>
           <View style={styles.passwordRow}>
-            <TextInput style={[styles.input, styles.passwordInput]} value={password} onChangeText={setPassword} placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`} placeholderTextColor={colors.mutedLight} secureTextEntry={!showPassword} autoComplete="new-password" maxLength={MAX_PASSWORD_LENGTH} />
+            <TextInput style={[styles.input, styles.passwordInput]} value={password} onChangeText={setPassword} placeholder={t("auth.register.passwordPlaceholder", { min: MIN_PASSWORD_LENGTH })} placeholderTextColor={colors.mutedLight} secureTextEntry={!showPassword} autoComplete="new-password" maxLength={MAX_PASSWORD_LENGTH} />
             <Pressable style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
               <Icon name={showPassword ? "visibility-off" : "visibility"} size={20} color={colors.muted} />
             </Pressable>
@@ -106,7 +108,7 @@ export default function RegisterScreen() {
         </View>
 
         <AppButton
-          title="Create Account"
+          title={t("auth.register.createAccount")}
           variant="primary"
           fullWidth
           size="lg"
@@ -116,9 +118,9 @@ export default function RegisterScreen() {
         />
 
         <View style={styles.loginRow}>
-          <AppText variant="body" color={colors.muted}>Already have an account? </AppText>
+          <AppText variant="body" color={colors.muted}>{t("auth.register.alreadyHaveAccount")} </AppText>
           <Pressable onPress={() => router.replace(ROUTES.login)}>
-            <AppText variant="body" color={colors.brandOrange} weight="bold">Sign in</AppText>
+            <AppText variant="body" color={colors.brandOrange} weight="bold">{t("auth.register.signIn")}</AppText>
           </Pressable>
         </View>
       </ScrollView>

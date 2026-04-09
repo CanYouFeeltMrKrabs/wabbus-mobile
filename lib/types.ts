@@ -65,23 +65,165 @@ export type Address = {
   isDefault: boolean;
 };
 
+// ─── Order types (match actual backend API response) ──────────────────────
+
 export type Order = {
-  id: number;
-  publicId: string;
+  publicId?: string | null;
   orderNumber?: string | null;
   status: string;
-  totalCents: number;
   totalAmount?: string | number | null;
-  itemCount: number;
+  currency?: string | null;
   createdAt: string;
-  items: OrderItem[];
+  paidAt?: string | null;
+  items?: OrderItem[] | null;
+
+  paymentStatus?: string | null;
+  paymentMethodType?: string | null;
+  cardBrand?: string | null;
+  cardLast4?: string | null;
 };
 
+/**
+ * OrderItem — wide union matching the backend's nested include response.
+ *
+ * The backend sends `unitPrice` as a Decimal string (e.g. "14.99") and nests
+ * title/image under productVariant.product. Consumers should use the helpers
+ * in orderHelpers.ts (pickItemTitle, pickItemImage, pickUnitPriceCents) rather
+ * than accessing fields directly.
+ */
+export type OrderItem = {
+  publicId?: string | null;
+  quantity?: number | null;
+
+  unitPrice?: string | number | null;
+  currency?: string | null;
+
+  title?: string | null;
+  name?: string | null;
+  image?: string | null;
+  imageUrl?: string | null;
+
+  status?: string | null;
+  cancelledAt?: string | null;
+
+  productVariant?: {
+    publicId?: string | null;
+    title?: string | null;
+    sku?: string | null;
+    imageUrl?: string | null;
+    images?: Array<{ key?: string; url?: string }> | null;
+    product?: {
+      title?: string | null;
+      name?: string | null;
+      productId?: string | null;
+      slug?: string | null;
+      imageUrl?: string | null;
+      image?: string | null;
+      images?: Array<{ key?: string; url?: string }> | null;
+    } | null;
+  } | null;
+
+  vendor?: {
+    name?: string | null;
+    publicId?: string | null;
+    slug?: string | null;
+  } | null;
+  vendorName?: string | null;
+
+  caseItems?: Array<{
+    caseNumber: string;
+    case?: { resolutionFinal?: string | null } | null;
+  }> | null;
+  shipmentItems?: Array<{
+    shipment?: {
+      publicId?: string | null;
+      direction?: string | null;
+      status?: string | null;
+      carrier?: string | null;
+      trackingNumber?: string | null;
+      trackingUrl?: string | null;
+      shippedAt?: string | null;
+      estimatedDelivery?: string | null;
+      deliveredAt?: string | null;
+      signedBy?: string | null;
+    } | null;
+  }> | null;
+
+  quantityReturned?: number;
+  quantityCancelled?: number;
+};
+
+// ─── Return types (match CUSTOMER_RETURN_LIST_SELECT) ─────────────────────
+
 export type ReturnRequest = {
-  id: number;
-  publicId?: string;
+  caseNumber?: string;
   status: string;
+  itemCount?: number;
+  totalValueCents?: number;
+  requestedLabelCount?: number;
+  shipByDeadlineAt?: string | null;
   createdAt: string;
+  updatedAt?: string | null;
+
+  case?: {
+    caseNumber?: string;
+    status?: string;
+    resolutionIntent?: string | null;
+    resolutionFinal?: string | null;
+    resolvedAt?: string | null;
+    closedAt?: string | null;
+    order?: { publicId?: string; orderNumber?: string | null };
+    items?: Array<{
+      qtyAffected?: number;
+      reasonCode?: string;
+      notes?: string | null;
+      orderItem?: {
+        publicId?: string;
+        quantity?: number;
+        unitPrice?: string | number | null;
+        productVariant?: {
+          title?: string | null;
+          sku?: string | null;
+          publicId?: string | null;
+          product?: {
+            title?: string | null;
+            productId?: string | null;
+            images?: Array<{ key?: string }> | null;
+          } | null;
+        } | null;
+      };
+    }>;
+  } | null;
+
+  refund?: {
+    status: string;
+    amountCents: number;
+    createdAt: string;
+  } | null;
+
+  returnShipment?: {
+    status?: string;
+    carrier?: string | null;
+    trackingNumber?: string | null;
+    trackingUrl?: string | null;
+    labelUrl?: string | null;
+    shippedAt?: string | null;
+    estimatedDelivery?: string | null;
+    deliveredAt?: string | null;
+  } | null;
+
+  returnShipments?: Array<{
+    status?: string;
+    carrier?: string | null;
+    trackingNumber?: string | null;
+    trackingUrl?: string | null;
+    labelUrl?: string | null;
+    shippedAt?: string | null;
+    estimatedDelivery?: string | null;
+    deliveredAt?: string | null;
+  }>;
+
+  // Legacy flat fields for backwards compatibility
   reason?: string | null;
   resolution?: string | null;
   returnLabelUrl?: string | null;
@@ -92,27 +234,21 @@ export type ReturnRequest = {
     title?: string | null;
     image?: string | null;
     quantity?: number | null;
-    unitPriceCents?: number | null;
+    unitPrice?: string | number | null;
     order?: { publicId?: string; orderNumber?: string | null };
   } | null;
 };
 
-export type OrderItem = {
-  id: number;
-  publicId: string;
-  title: string;
-  image: string | null;
-  quantity: number;
-  unitPriceCents: number;
-  status: string;
-};
+// ─── Customer (matches GET /customer-auth/me) ─────────────────────────────
 
 export type Customer = {
   email: string;
-  firstName: string;
-  lastName: string;
+  name?: string | null;
   createdAt: string;
+  impersonatedBy?: number | null;
 };
+
+// ─── Checkout / Cart ──────────────────────────────────────────────────────
 
 export type CheckoutAddress = {
   publicId: string;
@@ -182,6 +318,8 @@ export type GuestCheckoutData = {
   items: { variantPublicId: string; quantity: number }[];
 };
 
+// ─── Enums ────────────────────────────────────────────────────────────────
+
 export type CancelReasonCode =
   | "CHANGED_MIND"
   | "FOUND_CHEAPER"
@@ -212,6 +350,8 @@ export type ReviewImageUpload = {
   uploadUrl: string;
 };
 
+// ─── Search ───────────────────────────────────────────────────────────────
+
 export type TypesenseHit = {
   document: {
     id: string;
@@ -232,6 +372,7 @@ export type TypesenseHit = {
     soldCount: number;
     vendorName: string;
     defaultVariantPublicId: string;
+    defaultVariantTitle?: string;
     keyFeatures: string[];
     createdAt: number;
   };
