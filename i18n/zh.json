@@ -1117,5 +1117,12 @@
       "goHome": "返回首页"
     },
     "productNotFound": "未找到商品"
+  },
+  "updates": {
+    "title": "有可用更新",
+    "message": "新版本已下载完毕，可以立即安装。",
+    "restart": "立即重启",
+    "restarting": "正在重启…",
+    "dismiss": "稍后"
   }
 }

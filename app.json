@@ -20,8 +20,6 @@
       "buildNumber": "1",
       "associatedDomains": [
         "applinks:wabbus.com",
-        "applinks:www.wabbus.com",
-        "applinks:wabbus.com",
         "applinks:www.wabbus.com"
       ],
       "infoPlist": {

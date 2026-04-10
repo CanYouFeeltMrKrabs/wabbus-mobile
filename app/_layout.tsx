@@ -25,6 +25,7 @@ import CustomerTrackingProvider from "@/components/CustomerTrackingProvider";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import ToastProvider from "@/components/ui/ToastProvider";
+import OTAUpdatePrompt from "@/components/OTAUpdatePrompt";
 
 function NotificationHandler() {
   const router = useRouter();
@@ -78,6 +79,7 @@ export default function RootLayout() {
                   <Stack.Screen name="order-complete" />
                   <Stack.Screen name="impersonate" options={{ headerShown: false }} />
                 </Stack>
+                <OTAUpdatePrompt />
                 <ToastProvider />
                 <OfflineBanner />
                 </CartProvider>

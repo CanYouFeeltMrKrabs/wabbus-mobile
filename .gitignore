@@ -34,7 +34,11 @@ yarn-error.*
 .playwright-mcp/
 
 # local env files
+.env
 .env*.local
+
+# Google Play service account (contains private key)
+google-play-service-account.json
 
 # typescript
 *.tsbuildinfo
