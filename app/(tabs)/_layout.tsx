@@ -1,5 +1,5 @@
 /**
- * Tab bar layout — 4 tabs: Home, Search, Cart, Account.
+ * Tab bar layout — 4 tabs: Home, Chat, Cart, Account.
  * Active tab: flat orange background filling entire tab area, white icon, no labels.
  *
  * A sticky "Add to Cart" bar slides up above the tab bar when the PDP emits
@@ -18,9 +18,9 @@ import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
 const TAB_CONFIG = [
   { name: "index", label: "Home", icon: "home" },
-  { name: "search", label: "Search", icon: "search" },
-  { name: "cart", label: "Cart", icon: "shopping-cart" },
   { name: "account", label: "Account", icon: "person" },
+  { name: "cart", label: "Cart", icon: "shopping-cart" },
+  { name: "chat", label: "Chat", icon: "chat" },
 ] as const;
 
 type StickyPayload = {
@@ -237,9 +237,9 @@ export default function TabLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" />
-      <Tabs.Screen name="search" />
-      <Tabs.Screen name="cart" />
       <Tabs.Screen name="account" />
+      <Tabs.Screen name="cart" />
+      <Tabs.Screen name="chat" />
       <Tabs.Screen name="product/[id]" options={{ href: null }} />
       <Tabs.Screen name="category/[slug]" options={{ href: null }} />
       <Tabs.Screen name="categories" options={{ href: null }} />

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { useAuth } from "@/lib/auth";
 import { formatDate } from "@/lib/orderHelpers";
@@ -24,9 +25,9 @@ function AccountDetailsContent() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <AppText variant="title">{t("account.details.heading")}</AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -37,7 +38,11 @@ function AccountDetailsContent() {
         </View>
 
         <AppButton title={t("account.details.changePassword")} variant="outline" fullWidth icon="lock" onPress={() => router.push(ROUTES.accountChangePassword)} style={styles.actionBtn} />
-        <AppButton title={t("account.details.changeEmail")} variant="outline" fullWidth icon="email" onPress={() => router.push(ROUTES.accountChangeEmail)} />
+        <AppButton title={t("account.details.changeEmail")} variant="outline" fullWidth icon="email" onPress={() => router.push(ROUTES.accountChangeEmail)} style={styles.actionBtn} />
+
+        <View style={styles.dangerSection}>
+          <AppButton title={t("account.details.deleteAccount")} variant="danger" fullWidth icon="delete-forever" onPress={() => router.push(ROUTES.accountDeleteAccount)} />
+        </View>
       </ScrollView>
     </View>
   );
@@ -59,4 +64,5 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderRadius: borderRadius.xl, padding: spacing[4], marginBottom: spacing[4], ...shadows.sm },
   detailRow: { paddingVertical: spacing[3], borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   actionBtn: { marginBottom: spacing[3] },
+  dangerSection: { marginTop: spacing[6], paddingTop: spacing[4], borderTopWidth: 1, borderTopColor: colors.borderLight },
 });

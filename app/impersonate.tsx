@@ -68,7 +68,7 @@ export default function ImpersonateScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {error ? (
         <View style={styles.card}>
-          <Icon name="alert-circle" size={48} color={colors.error} />
+          <Icon name="error" size={48} color={colors.error} />
           <AppText variant="title" style={styles.heading}>
             {t("common.impersonate.heading")}
           </AppText>

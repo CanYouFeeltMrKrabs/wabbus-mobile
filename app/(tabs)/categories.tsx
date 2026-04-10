@@ -10,7 +10,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
-import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import {
   fetchRootCategories,
@@ -72,14 +72,14 @@ export default function CategoriesScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         {breadcrumbs.length > 0 ? (
-          <AppButton title="" variant="ghost" icon="arrow-back" onPress={navigateBack} style={{ width: 44 }} />
+          <BackButton onPress={navigateBack} />
         ) : (
-          <View style={{ width: 44 }} />
+          <View style={{ width: 40 }} />
         )}
         <AppText variant="title">
           {breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].name : t("category.allCategories")}
         </AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       {breadcrumbs.length > 0 && (

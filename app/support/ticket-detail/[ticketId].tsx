@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -150,7 +151,7 @@ function TicketDetailContent() {
       keyboardVerticalOffset={0}
     >
       <View style={styles.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <View style={{ flex: 1, alignItems: "center" }}>
           <AppText variant="label" numberOfLines={1}>
             {ticket.subject || ticket.category || t("support.ticketDetail.ticketFallback")}
@@ -167,7 +168,7 @@ function TicketDetailContent() {
           )}
           {!isClosed && (
             <Pressable onPress={handleClose} hitSlop={8}>
-              <Icon name="close-circle-outline" size={24} color={colors.muted} />
+              <Icon name="highlight-off" size={24} color={colors.muted} />
             </Pressable>
           )}
         </View>

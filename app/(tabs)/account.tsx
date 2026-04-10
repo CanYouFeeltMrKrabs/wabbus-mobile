@@ -60,20 +60,23 @@ export default function AccountScreen() {
     >
       {/* Profile header */}
       <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Icon name="person" size={32} color={colors.white} />
-        </View>
         {isLoggedIn ? (
-          <View>
-            <AppText variant="title">
+          <View style={styles.profileTextBlock}>
+            <AppText variant="heading" style={styles.profileHeadline}>
               {user?.name || t("account.hub.yourAccount")}
             </AppText>
-            <AppText variant="caption">{user?.email}</AppText>
+            <AppText variant="bodySmall" color={colors.muted} style={styles.profileSubline}>
+              {user?.email}
+            </AppText>
           </View>
         ) : (
-          <View>
-            <AppText variant="title">{t("account.hub.welcomeToWabbus")}</AppText>
-            <AppText variant="caption">{t("account.hub.signInForBest")}</AppText>
+          <View style={styles.profileTextBlock}>
+            <AppText variant="heading" style={styles.profileHeadline}>
+              {t("account.hub.welcomeToWabbus")}
+            </AppText>
+            <AppText variant="bodySmall" color={colors.muted} style={styles.profileSubline}>
+              {t("account.hub.signInForBest")}
+            </AppText>
           </View>
         )}
       </View>
@@ -88,7 +91,7 @@ export default function AccountScreen() {
           />
           <AppButton
             title={t("account.hub.createAccount")}
-            variant="outline"
+            variant="accent"
             fullWidth
             onPress={() => router.push(ROUTES.register)}
           />
@@ -139,22 +142,25 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing[4] },
 
   profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[4],
     backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
-    padding: spacing[4],
+    paddingVertical: spacing[5],
+    paddingHorizontal: spacing[4],
     marginTop: spacing[4],
     ...shadows.sm,
   },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.brandBlue,
-    alignItems: "center",
-    justifyContent: "center",
+  profileTextBlock: {
+    width: "100%",
+  },
+  profileHeadline: {
+    fontSize: 26,
+    lineHeight: 32,
+    letterSpacing: -0.4,
+  },
+  profileSubline: {
+    marginTop: spacing[1.5],
+    fontSize: 15,
+    lineHeight: 22,
   },
 
   authRow: { marginTop: spacing[3], gap: spacing[2] },

@@ -15,6 +15,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -200,7 +201,7 @@ function ReviewContent() {
   if (done) {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
-        <Icon name="star-check" size={48} color={colors.starGold} />
+        <Icon name="stars" size={48} color={colors.starGold} />
         <AppText variant="heading" style={{ marginTop: spacing[4] }}>
           {t("accountOrders.review.successHeading")}
         </AppText>
@@ -231,9 +232,9 @@ function ReviewContent() {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+          <BackButton />
           <AppText variant="title">{t("accountOrders.review.heading")}</AppText>
-          <View style={{ width: 44 }} />
+          <View style={{ width: 40 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
@@ -243,7 +244,7 @@ function ReviewContent() {
 
           {reviewableItems.length === 0 ? (
             <View style={styles.emptyState}>
-              <Icon name="star-check" size={48} color={colors.gray300} />
+              <Icon name="stars" size={48} color={colors.gray300} />
               <AppText variant="subtitle" color={colors.muted} style={{ marginTop: spacing[3] }}>
                 {t("accountOrders.review.allReviewed")}
               </AppText>
@@ -268,9 +269,9 @@ function ReviewContent() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => setSelectedItem(null)} style={{ width: 44 }} />
+        <BackButton onPress={() => setSelectedItem(null)} />
           <AppText variant="title">{t("accountOrders.review.reviewHeading")}</AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -312,13 +313,13 @@ function ReviewContent() {
             <View key={i} style={styles.thumbWrap}>
               <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
               <Pressable onPress={() => removeImage(i)} style={styles.removeThumb} hitSlop={6}>
-                <Icon name="close-circle" size={20} color={colors.error} />
+                <Icon name="cancel" size={20} color={colors.error} />
               </Pressable>
             </View>
           ))}
           {images.length < MAX_IMAGES && (
             <Pressable onPress={pickImages} style={styles.addThumb}>
-              <Icon name="camera-plus" size={24} color={colors.muted} />
+              <Icon name="add-a-photo" size={24} color={colors.muted} />
             </Pressable>
           )}
         </View>

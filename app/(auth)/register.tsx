@@ -1,28 +1,23 @@
-import React, { useState } from "react";
-import {
-  View,
-  TextInput,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
+import React, { useCallback, useState } from "react";
+import { View, TextInput, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import { useAuth } from "@/lib/auth";
-import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
+import { colors, shadows } from "@/lib/theme";
 import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from "@/lib/constants";
 import { ROUTES } from "@/lib/routes";
+import AuthScreenLayout, { AuthHeader } from "@/components/auth/AuthScreenLayout";
+import AppleSignInButton from "@/components/auth/AppleSignInButton";
+import { authStyles } from "@/components/auth/authStyles";
+
+const PLACEHOLDER_MUTED = "#94a3b8";
 
 export default function RegisterScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { register } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -30,6 +25,12 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const clearAndGoBack = useCallback(() => {
+    setEmail("");
+    setPassword("");
+    requestAnimationFrame(() => router.back());
+  }, [router]);
 
   const handleRegister = async () => {
     setError(null);
@@ -49,106 +50,102 @@ export default function RegisterScreen() {
     try {
       await register({ email: email.trim(), password });
       router.back();
-    } catch (e: any) {
-      setError(e.message || t("auth.register.errorGeneric"));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : t("auth.register.errorGeneric"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.screen, { paddingTop: insets.top }]}
-    >
-      <Pressable style={styles.close} onPress={() => router.back()} hitSlop={12}>
-        <Icon name="close" size={24} color={colors.foreground} />
-      </Pressable>
+    <AuthScreenLayout onClose={clearAndGoBack}>
+      <AuthHeader title={t("auth.register.heading")} subtitle={t("auth.register.subtitle")} />
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.logoWrap}>
-          <View style={styles.logo}>
-            <AppText variant="heading" color={colors.white} weight="extrabold">
-              W
-            </AppText>
-          </View>
+      {error && (
+        <View style={authStyles.errorBanner}>
+          <Icon name="error" size={24} color="#f87171" />
+          <AppText style={authStyles.errorText}>{error}</AppText>
         </View>
+      )}
 
-        <AppText variant="heading" align="center">
-          {t("auth.register.heading")}
-        </AppText>
-        <AppText variant="body" color={colors.muted} align="center" style={styles.sub}>
-          {t("auth.register.subtitle")}
-        </AppText>
-
-        {error && (
-          <View style={styles.errorBanner}>
-            <Icon name="error-outline" size={18} color={colors.error} />
-            <AppText variant="caption" color={colors.error} style={{ flex: 1 }}>{error}</AppText>
+      <View style={authStyles.fieldBlock}>
+        <AppText style={authStyles.label}>{t("auth.register.emailLabel")}</AppText>
+        <View style={authStyles.inputWrap}>
+          <View style={authStyles.inputIcon}>
+            <Icon name="email" size={24} color={colors.brandBlue} />
           </View>
-        )}
-
-        <View style={styles.field}>
-          <AppText variant="label" style={styles.fieldLabel}>{t("auth.register.emailLabel")}</AppText>
-          <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder={t("auth.register.emailPlaceholder")} placeholderTextColor={colors.mutedLight} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+          <TextInput
+            style={authStyles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder={t("auth.register.emailPlaceholder")}
+            placeholderTextColor={PLACEHOLDER_MUTED}
+            keyboardType="email-address"
+            textContentType="username"
+            autoCapitalize="none"
+            autoComplete="email"
+          />
         </View>
+      </View>
 
-        <View style={styles.field}>
-          <AppText variant="label" style={styles.fieldLabel}>{t("auth.register.passwordLabel")}</AppText>
-          <View style={styles.passwordRow}>
-            <TextInput style={[styles.input, styles.passwordInput]} value={password} onChangeText={setPassword} placeholder={t("auth.register.passwordPlaceholder", { min: MIN_PASSWORD_LENGTH })} placeholderTextColor={colors.mutedLight} secureTextEntry={!showPassword} autoComplete="new-password" maxLength={MAX_PASSWORD_LENGTH} />
-            <Pressable style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
-              <Icon name={showPassword ? "visibility-off" : "visibility"} size={20} color={colors.muted} />
-            </Pressable>
+      <View style={authStyles.fieldBlock}>
+        <AppText style={authStyles.label}>{t("auth.register.passwordLabel")}</AppText>
+        <View style={authStyles.inputWrap}>
+          <View style={authStyles.inputIcon}>
+            <Icon name="lock" size={24} color={colors.brandBlue} />
           </View>
-        </View>
-
-        <AppButton
-          title={t("auth.register.createAccount")}
-          variant="primary"
-          fullWidth
-          size="lg"
-          loading={loading}
-          onPress={handleRegister}
-          style={styles.submitBtn}
-        />
-
-        <View style={styles.loginRow}>
-          <AppText variant="body" color={colors.muted}>{t("auth.register.alreadyHaveAccount")} </AppText>
-          <Pressable onPress={() => router.replace(ROUTES.login)}>
-            <AppText variant="body" color={colors.brandOrange} weight="bold">{t("auth.register.signIn")}</AppText>
+          <TextInput
+            style={[authStyles.input, authStyles.inputWithToggle]}
+            value={password}
+            onChangeText={setPassword}
+            placeholder={t("auth.register.passwordPlaceholder", { min: MIN_PASSWORD_LENGTH })}
+            placeholderTextColor={PLACEHOLDER_MUTED}
+            secureTextEntry={!showPassword}
+            textContentType="none"
+            autoComplete="off"
+            maxLength={MAX_PASSWORD_LENGTH}
+          />
+          <Pressable
+            style={authStyles.togglePassword}
+            onPress={() => setShowPassword((v) => !v)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? t("auth.login.hidePassword") : t("auth.login.showPassword")}
+          >
+            <Icon
+              name={showPassword ? "visibility-off" : "visibility"}
+              size={24}
+              color={colors.slate400}
+            />
           </Pressable>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+
+      <AppButton
+        title={t("auth.register.createAccount")}
+        accessibilityHint={loading ? t("auth.register.creatingAccount") : undefined}
+        variant="primary"
+        fullWidth
+        size="lg"
+        textStyle={{ fontSize: 17 }}
+        loading={loading}
+        onPress={handleRegister}
+        style={[authStyles.submitBtn, shadows.authCta]}
+      />
+
+      <AppleSignInButton />
+
+      <View style={authStyles.altRow}>
+        <AppText style={authStyles.altMuted}>{t("auth.register.alreadyHaveAccount")} </AppText>
+        <Pressable
+          onPress={() => router.replace(ROUTES.login)}
+          style={authStyles.altLink}
+          hitSlop={4}
+        >
+          <AppText style={authStyles.altLinkText}>{t("auth.register.signIn")}</AppText>
+          <Icon name="arrow-forward" size={20} color={colors.brandOrange} />
+        </Pressable>
+      </View>
+    </AuthScreenLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.white },
-  close: { position: "absolute", top: 56, left: spacing[4], zIndex: 10 },
-  body: { flexGrow: 1, paddingHorizontal: spacing[6], justifyContent: "center", paddingBottom: spacing[10] },
-  logoWrap: { alignItems: "center", marginBottom: spacing[6] },
-  logo: { width: 64, height: 64, borderRadius: 20, backgroundColor: colors.brandOrange, alignItems: "center", justifyContent: "center" },
-  sub: { marginTop: spacing[1], marginBottom: spacing[6] },
-  errorBanner: {
-    flexDirection: "row", alignItems: "center", gap: spacing[2],
-    backgroundColor: "#fee2e2", borderRadius: borderRadius.lg,
-    padding: spacing[3], marginBottom: spacing[4],
-  },
-  field: { marginBottom: spacing[4] },
-  fieldLabel: { marginBottom: spacing[1.5] },
-  input: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg,
-    padding: spacing[3], fontSize: fontSize.base, color: colors.foreground, backgroundColor: colors.gray50,
-  },
-  passwordRow: { position: "relative" },
-  passwordInput: { paddingRight: spacing[12] },
-  eyeBtn: { position: "absolute", right: spacing[3], top: spacing[3] },
-  submitBtn: { marginTop: spacing[2] },
-  loginRow: { flexDirection: "row", justifyContent: "center", marginTop: spacing[6] },
-});

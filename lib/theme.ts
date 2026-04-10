@@ -171,6 +171,14 @@ export const shadows = {
     shadowRadius: 8,
     elevation: 5,
   },
+  /** Primary CTA on auth screens — matches web `.auth-btn` */
+  authCta: {
+    shadowColor: "#2d4ecf",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
 } as const;
 
 export const hitSlop = { top: 8, right: 8, bottom: 8, left: 8 };

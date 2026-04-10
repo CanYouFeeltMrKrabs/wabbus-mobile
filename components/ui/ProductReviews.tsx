@@ -82,7 +82,11 @@ export default function ProductReviews({ productId }: { productId: string }) {
     setLoadingMore(true);
     try {
       const res = await publicFetch(`/reviews/${encodeURIComponent(productId)}?limit=${PAGE_SIZE}&cursor=${encodeURIComponent(nextCursor)}`);
-      setReviews((prev) => [...prev, ...((res as any).data ?? [])]);
+      setReviews((prev) => {
+        const incoming: PublicReview[] = (res as any).data ?? [];
+        const seen = new Set(prev.map((r) => r.id));
+        return [...prev, ...incoming.filter((r) => !seen.has(r.id))];
+      });
       setNextCursor((res as any).nextCursor ?? null);
     } catch {
       // silent
@@ -161,8 +165,8 @@ export default function ProductReviews({ productId }: { productId: string }) {
       {/* Reviews List */}
       {reviews.length > 0 && (
         <View style={styles.listContainer}>
-          {reviews.map((rv) => (
-            <View key={rv.id} style={styles.reviewCard}>
+          {reviews.map((rv, idx) => (
+            <View key={rv.id != null ? String(rv.id) : `rv-${idx}`} style={styles.reviewCard}>
               <View style={styles.reviewHeader}>
                 <View style={styles.reviewMeta}>
                   <View style={styles.reviewStarsRow}>

@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
@@ -188,16 +189,16 @@ function ChangeEmailContent() {
       style={[styles.screen, { paddingTop: insets.top }]}
     >
       <View style={styles.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <AppText variant="title">{t("account.email.heading")}</AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Step 1: Request */}
         {step === "request" && (
           <View style={styles.stepCard}>
-            <Icon name="shield-lock" size={40} color={colors.brandBlue} />
+            <Icon name="verified-user" size={40} color={colors.brandBlue} />
             <AppText variant="subtitle" style={styles.stepTitle}>
               {t("account.verify.verifyIdentity")}
             </AppText>
@@ -284,7 +285,7 @@ function ChangeEmailContent() {
         {/* Step 3: Enter new email */}
         {step === "change" && (
           <View style={styles.stepCard}>
-            <Icon name="email-edit" size={40} color={colors.brandBlue} />
+            <Icon name="email" size={40} color={colors.brandBlue} />
             <AppText variant="subtitle" style={styles.stepTitle}>
               {t("account.email.enterNewEmail")}
             </AppText>

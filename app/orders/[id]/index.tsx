@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
@@ -75,9 +76,9 @@ function OrderDetailContent() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <AppText variant="title">{t("orders.orderHeading", { id: (order.publicId ?? "").slice(0, 8) })}</AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

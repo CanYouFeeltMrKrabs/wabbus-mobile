@@ -7,6 +7,7 @@
  */
 
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import { customerFetch } from "./api";
 import { ROUTES } from "./routes";
 
@@ -65,7 +66,13 @@ export async function registerForPushNotifications(): Promise<string | null> {
     });
   }
 
-  const tokenData = await Notifications.getExpoPushTokenAsync();
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+  if (!projectId) {
+    if (__DEV__) console.warn("EAS projectId not configured — push tokens will not work in production builds");
+  }
+  const tokenData = await Notifications.getExpoPushTokenAsync({
+    projectId: projectId ?? undefined,
+  });
   cachedToken = tokenData.data;
   return cachedToken;
 }

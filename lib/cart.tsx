@@ -2,11 +2,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useTranslation } from "@/hooks/useT";
 import { customerFetch } from "./api";
 import { useAuth } from "./auth";
-import type { CartItem, ServerCartItem } from "./types";
+import type { CartItem, ServerCartItem, ServerCartResponse } from "./types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_BASE } from "./config";
+import { API_BASE, R2_BASE } from "./config";
 import { showToast } from "./toast";
 import { trackEvent } from "./tracker";
+import { toCents } from "./money";
 
 function truncateTitle(title: string): string {
   return title.length > 30 ? title.substring(0, 30) + "…" : title;
@@ -69,26 +70,37 @@ export function useCart() {
 
 const GUEST_CART_KEY = "guest_cart";
 
+function resolveImageKey(key: string | undefined | null): string {
+  if (!key) return "";
+  if (/^https?:\/\//i.test(key)) return key;
+  return R2_BASE ? `${R2_BASE}/${key}` : "";
+}
+
 function serverToCartItem(s: ServerCartItem): CartItem {
-  const variantTitle = s.productVariant?.title;
+  const pv = s.productVariant;
+  const product = pv?.product;
+
+  const variantTitle = pv?.title;
   const variantLabel =
     variantTitle && variantTitle !== "Default" ? variantTitle : undefined;
 
-  const vendor = s.productVariant?.product?.vendor;
+  const vendor = product?.vendor;
   const vendorName =
     vendor?.storeDisplayName?.trim() || vendor?.name?.trim() || undefined;
 
+  const imageKey = product?.images?.[0]?.key ?? product?.image ?? null;
+
   return {
     publicId: s.publicId,
-    variantPublicId: s.productVariant.publicId,
+    variantPublicId: pv?.publicId ?? "",
     quantity: s.quantity,
-    unitPriceCents: s.unitPriceCents,
-    title: s.productVariant.product.title,
+    unitPriceCents: toCents(pv?.price),
+    title: product?.title ?? "Unknown product",
     variantLabel,
     vendorName,
-    image: s.productVariant.product.image || "",
-    productId: s.productVariant.product.productId,
-    slug: s.productVariant.product.slug,
+    image: resolveImageKey(imageKey),
+    productId: product?.productId,
+    slug: product?.slug,
   };
 }
 
@@ -97,6 +109,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const { isLoggedIn } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [serverSubtotalCents, setServerSubtotalCents] = useState<number | null>(null);
 
   const loadGuestCart = useCallback(async () => {
     try {
@@ -115,10 +128,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const loadServerCart = useCallback(async () => {
     try {
-      const data = await customerFetch<{ items: ServerCartItem[] }>("/cart");
-      setItems((data.items || []).map(serverToCartItem));
+      const data = await customerFetch<ServerCartResponse>("/cart");
+      const rawItems = Array.isArray(data.items) ? data.items : [];
+      const sorted = [...rawItems].sort((a, b) =>
+        (a.publicId || "").localeCompare(b.publicId || ""),
+      );
+      setItems(sorted.map(serverToCartItem));
+      setServerSubtotalCents(data.subtotalCents ?? null);
     } catch {
       setItems([]);
+      setServerSubtotalCents(null);
     }
     setLoading(false);
   }, []);
@@ -228,7 +247,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [isLoggedIn]);
 
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
-  const subtotalCents = items.reduce((sum, i) => sum + i.unitPriceCents * i.quantity, 0);
+  const localSubtotal = items.reduce((sum, i) => sum + i.unitPriceCents * i.quantity, 0);
+  const subtotalCents = isLoggedIn && serverSubtotalCents != null ? serverSubtotalCents : localSubtotal;
 
   return (
     <CartContext.Provider

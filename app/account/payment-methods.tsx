@@ -9,7 +9,7 @@ import { initPaymentSheet, presentPaymentSheet } from "@stripe/stripe-react-nati
 import i18n from "@/i18n";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
-import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { useQuery } from "@tanstack/react-query";
@@ -163,7 +163,7 @@ function PaymentMethodsContent() {
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
       <View style={s.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <AppText variant="title">{t("account.paymentMethods.heading")}</AppText>
         <Pressable onPress={handleAddCard} disabled={addingCard} hitSlop={8} style={{ width: 44, alignItems: "center", justifyContent: "center" }}>
           {addingCard ? (

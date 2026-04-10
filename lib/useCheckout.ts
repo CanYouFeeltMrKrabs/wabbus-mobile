@@ -24,6 +24,7 @@ const PENDING_ORDER_KEY = "wabbus_checkout_pending";
 
 const TIMEOUT_CHECKOUT_MS = 30_000;
 const TIMEOUT_CONFIRM_MS = 120_000;
+const TIMEOUT_INIT_SHEET_MS = 15_000;
 
 function raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -69,6 +70,31 @@ function normalizeAddresses(payload: unknown): CheckoutAddress[] {
 }
 
 export type CheckoutStep = "address" | "payment" | "review" | "placing";
+
+const GENERIC_ERROR = "Something went wrong. Please try again.";
+
+const CUSTOMER_SAFE_PATTERNS: [RegExp, string][] = [
+  [/timed?\s*out/i, "The request took too long. Please try again."],
+  [/network|connection|offline/i, "Please check your internet connection and try again."],
+  [/already exists|409/i, "An account with that email already exists. Please sign in instead."],
+  [/session expired|log\s*in again/i, "Your session has expired. Please log in again."],
+  [/card.*(declined|rejected)/i, "Your card was declined. Please try a different payment method."],
+  [/insufficient.*(funds|balance)/i, "Insufficient funds. Please try a different payment method."],
+  [/invalid.*(card|number|expir|cvc|cvv)/i, "Invalid card details. Please check and try again."],
+  [/store credit.*changed/i, "Your store credit balance has changed. Please review your payment and try again."],
+  [/cancel/i, "Payment was cancelled. You can try again when ready."],
+];
+
+function sanitizeCheckoutError(raw: string): string {
+  if (!raw) return GENERIC_ERROR;
+  for (const [pattern, friendly] of CUSTOMER_SAFE_PATTERNS) {
+    if (pattern.test(raw)) return friendly;
+  }
+  if (/^[\w\s,.'!?-]{5,120}$/.test(raw) && !/[_{}()\[\]<>]/.test(raw)) {
+    return raw;
+  }
+  return GENERIC_ERROR;
+}
 
 const IDEMPOTENCY_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -122,17 +148,6 @@ export function useCheckout() {
   // ── Store credit ──
   const [creditBalanceCents, setCreditBalanceCents] = useState(0);
   const [useStoreCredit, setUseStoreCredit] = useState(false);
-
-  // ── Saved payment methods ──
-  const [savedMethods, setSavedMethods] = useState<Array<{
-    stripePaymentMethodId: string;
-    brand?: string | null;
-    last4?: string | null;
-    expMonth?: number | null;
-    expYear?: number | null;
-    isDefault?: boolean | null;
-  }>>([]);
-  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
 
   // ── Payment state ──
   const [placingOrder, setPlacingOrder] = useState(false);
@@ -218,11 +233,10 @@ export function useCheckout() {
       if (isLoggedIn) {
         try { await mergeGuestCart(); } catch { /* best effort */ }
 
-        const [cartData, addrData, creditData, methodsData] = await Promise.all([
+        const [cartData, addrData, creditData] = await Promise.all([
           customerFetch<ServerCartResponse>("/cart").catch(() => null),
           customerFetch<unknown>("/customer-addresses").catch(() => null),
           customerFetch<{ balanceCents?: number }>("/payments/credit-balance").catch(() => null),
-          customerFetch<any>("/payments/methods").catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -238,13 +252,6 @@ export function useCheckout() {
         }
 
         if (creditData?.balanceCents) setCreditBalanceCents(creditData.balanceCents);
-
-        const methods = Array.isArray(methodsData) ? methodsData : methodsData?.paymentMethods ?? [];
-        setSavedMethods(methods);
-        const defaultMethod = methods.find((m: any) => m.isDefault) ?? methods[0];
-        if (defaultMethod?.stripePaymentMethodId) {
-          setSelectedPaymentMethodId(defaultMethod.stripePaymentMethodId);
-        }
       }
 
       if (cancelled) return;
@@ -361,8 +368,10 @@ export function useCheckout() {
       if (pendingOrderRef.current) {
         const po = pendingOrderRef.current;
         const stale =
+          (po.hasPaymentIntent && !requirePaymentMethod) ||
           (po.usedStoreCredit !== undefined && po.usedStoreCredit !== useStoreCredit) ||
           (po.shippingAddressId !== undefined && po.shippingAddressId !== shippingAddressId) ||
+          (po.billingAddressId !== undefined && po.billingAddressId !== billingPublicId) ||
           (po.cartFingerprint !== undefined && po.cartFingerprint !== cartFingerprint);
 
         if (stale) {
@@ -401,12 +410,10 @@ export function useCheckout() {
             });
 
             if (!res.ok) {
-              const body = await res.json().catch(() => null);
-              const msg = body?.message ||
-                (res.status === 409
-                  ? "Account already exists for that email. Please sign in instead."
-                  : "Checkout failed. Please try again.");
-              throw new Error(msg);
+              if (res.status === 409) {
+                throw new Error("An account with that email already exists. Please sign in instead.");
+              }
+              throw new Error("Checkout failed. Please try again.");
             }
 
             return res.json() as Promise<CheckoutResponse>;
@@ -460,45 +467,88 @@ export function useCheckout() {
           router.replace(ROUTES.orderComplete(orderIdentifier ?? ""));
           return;
         }
+
+        // Credit no longer covers the order — backend created a payment intent
+        if (!requirePaymentMethod && (clientSecret || pendingOrderRef.current?.hasPaymentIntent)) {
+          throw new Error("Your store credit balance has changed. Please review your payment and try again.");
+        }
       }
 
       // Need Stripe payment
       if (requirePaymentMethod && orderIdentifier) {
         if (!clientSecret) {
           const intentData = await raceTimeout(
-            customerFetch<{ clientSecret?: string }>("/payments/create-intent", {
+            customerFetch<{ clientSecret?: string; alreadyPaid?: boolean }>("/payments/create-intent", {
               method: "POST",
               body: JSON.stringify({ orderPublicId: orderIdentifier }),
             }),
             TIMEOUT_CHECKOUT_MS,
             "Payment setup",
           );
+
+          if (intentData?.alreadyPaid) {
+            await cleanupAfterOrder();
+            router.replace(ROUTES.orderComplete(orderIdentifier));
+            return;
+          }
+
           clientSecret = intentData?.clientSecret ?? null;
         }
 
         if (!clientSecret) {
-          throw new Error("We couldn't set up payment for this order. Please try again.");
+          pendingOrderRef.current = null;
+          await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+          const freshKey = makeIdempotencyKey();
+          idempotencyKeyRef.current = freshKey;
+          await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
+          throw new Error("Could not set up payment. Please try again.");
         }
 
-        const { error: initError } = await initPaymentSheet({
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: "Wabbus",
-          allowsDelayedPaymentMethods: false,
-          returnURL: "wabbus://order-complete",
-        });
+        type SheetParams = { customerId?: string; ephemeralKeySecret?: string };
+        let sheetParams: SheetParams = {};
+        if (!isGuest) {
+          try {
+            sheetParams = await raceTimeout(
+              customerFetch<SheetParams>("/payments/mobile-payment-sheet", {
+                method: "POST",
+              }),
+              TIMEOUT_CHECKOUT_MS,
+              "Payment sheet setup",
+            );
+          } catch { /* proceed without saved cards */ }
+        }
+
+        const { error: initError } = await raceTimeout(
+          initPaymentSheet({
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: "Wabbus",
+            allowsDelayedPaymentMethods: false,
+            returnURL: "wabbus://order-complete",
+            ...(sheetParams.customerId && sheetParams.ephemeralKeySecret && {
+              customerId: sheetParams.customerId,
+              customerEphemeralKeySecret: sheetParams.ephemeralKeySecret,
+            }),
+          }),
+          TIMEOUT_INIT_SHEET_MS,
+          "Payment initialization",
+        );
 
         if (initError) {
-          throw new Error(initError.message || "Could not initialize payment.");
+          throw new Error("Could not initialize payment. Please try again.");
         }
 
-        const { error: presentError } = await presentPaymentSheet();
+        const { error: presentError } = await raceTimeout(
+          presentPaymentSheet(),
+          TIMEOUT_CONFIRM_MS,
+          "Payment",
+        );
 
         if (presentError) {
           if (presentError.code === "Canceled") {
             setStep("review");
             return;
           }
-          throw new Error(presentError.message || "Payment failed. Please try again.");
+          throw new Error("Payment could not be completed. Please try again.");
         }
 
         try {
@@ -520,8 +570,19 @@ export function useCheckout() {
         router.replace(ROUTES.login);
         return;
       }
+
+      const raw = e instanceof Error ? e.message : "";
+
+      if (raw.includes("timed out") && pendingOrderRef.current) {
+        pendingOrderRef.current = null;
+        const freshKey = makeIdempotencyKey();
+        idempotencyKeyRef.current = freshKey;
+        await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
+        await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+      }
+
       if (mountedRef.current) {
-        setError(e instanceof Error ? e.message : "Something went wrong placing your order.");
+        setError(sanitizeCheckoutError(raw));
         setStep("review");
       }
     } finally {
@@ -607,8 +668,5 @@ export function useCheckout() {
     placingOrder, handlePay,
     canProceedToPayment, canPlaceOrder,
     addressComplete,
-
-    // Saved payment methods
-    savedMethods, selectedPaymentMethodId, setSelectedPaymentMethodId,
   };
 }

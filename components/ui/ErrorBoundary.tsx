@@ -1,6 +1,7 @@
 import React, { Component, type ErrorInfo, type ReactNode } from "react";
 import { View, StyleSheet, ScrollView } from "react-native";
 import i18n from "@/i18n";
+import { captureException } from "@/lib/sentry";
 import AppText from "./AppText";
 import AppButton from "./AppButton";
 import Icon from "./Icon";
@@ -24,6 +25,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    captureException(error, { componentStack: info.componentStack ?? undefined });
     if (__DEV__) {
       console.error("ErrorBoundary caught:", error, info.componentStack);
     }

@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
-import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import StarRating from "@/components/ui/StarRating";
 import Icon from "@/components/ui/Icon";
 import { useQuery } from "@tanstack/react-query";
@@ -103,9 +103,9 @@ export default function VendorReviewsScreen() {
   return (
     <View style={[st.screen, { paddingTop: insets.top }]}>
       <View style={st.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <AppText variant="title">{t("vendor.reviewsHeading")}</AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       {loading ? (

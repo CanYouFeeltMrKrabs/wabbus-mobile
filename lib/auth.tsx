@@ -5,10 +5,17 @@ import i18n from "@/i18n";
 import { customerFetch, onAuthLogout, NetworkError, AuthError } from "./api";
 import { runPostAuthActions } from "./postAuthActions";
 import { sendTokenToBackend, deregisterToken } from "./notifications";
+import { setUser as setSentryUser } from "./sentry";
 import { API_BASE } from "./config";
+import { Platform } from "react-native";
 import type { Customer } from "./types";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+
+type AppleSignInData = {
+  identityToken: string;
+  fullName?: { givenName?: string; familyName?: string };
+};
 
 type AuthState = {
   user: Customer | null;
@@ -17,6 +24,7 @@ type AuthState = {
   impersonatedBy: number | null;
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
+  appleSignIn: (data: AppleSignInData) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -33,6 +41,7 @@ const AuthContext = createContext<AuthState>({
   impersonatedBy: null,
   login: async () => {},
   register: async () => {},
+  appleSignIn: async () => {},
   logout: async () => {},
   refresh: async () => {},
 });
@@ -89,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data);
       setAuthStatus("authenticated");
       setImpersonatedBy(data?.impersonatedBy ?? null);
+      setSentryUser(data?.email ?? null, data?.email);
     } catch (e) {
       if (e instanceof NetworkError) {
         return;
@@ -220,6 +230,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendTokenToBackend().catch(() => {});
   }, [fetchMe]);
 
+  const appleSignIn = useCallback(async (data: AppleSignInData) => {
+    const res = await fetch(`${API_BASE}/customer-auth/apple`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        identityToken: data.identityToken,
+        fullName: data.fullName,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const serverMsg = typeof body?.message === "string" && body.message.trim() ? body.message : null;
+      throw new Error(serverMsg || i18n.t("auth.apple.errorGeneric"));
+    }
+
+    await fetchMe();
+    runPostAuthActions().catch(() => {});
+    sendTokenToBackend().catch(() => {});
+  }, [fetchMe]);
+
   const logout = useCallback(async () => {
     deregisterToken().catch(() => {});
     scrubUserData().catch(() => {});
@@ -231,6 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setAuthStatus("unauthenticated");
     setImpersonatedBy(null);
+    setSentryUser(null);
   }, []);
 
   const value = useMemo<AuthState>(
@@ -241,10 +274,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       impersonatedBy,
       login,
       register,
+      appleSignIn,
       logout,
       refresh: fetchMe,
     }),
-    [user, authStatus, impersonatedBy, login, register, logout, fetchMe],
+    [user, authStatus, impersonatedBy, login, register, appleSignIn, logout, fetchMe],
   );
 
   return (

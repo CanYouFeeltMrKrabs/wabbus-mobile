@@ -14,6 +14,7 @@ import { useTranslation } from "@/hooks/useT";
 import i18n from "@/i18n";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { useQuery } from "@tanstack/react-query";
@@ -222,9 +223,9 @@ function TrackingContent() {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+          <BackButton />
           <AppText variant="title">{t("orders.tracking.heading")}</AppText>
-          <View style={{ width: 44 }} />
+          <View style={{ width: 40 }} />
         </View>
         <View style={styles.noShipCard}>
           <Icon name={noShipIcon} size={48} color={colors.slate300} />
@@ -238,9 +239,9 @@ function TrackingContent() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <AppText variant="title">{t("orders.tracking.heading")}</AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

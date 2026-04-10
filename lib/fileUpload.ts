@@ -1,11 +1,11 @@
 /**
  * Shared presign → upload → confirm utility for file attachments.
- * Used by live chat, seller conversations, and case follow-ups.
+ * Used by seller conversations and case follow-ups.
+ * Live chat has its own upload path in useLiveChat (with abort support).
  */
 
 import * as DocumentPicker from "expo-document-picker";
 import { customerFetch } from "./api";
-import { API_BASE } from "./config";
 
 export type PickedFile = {
   uri: string;
@@ -86,72 +86,6 @@ export async function uploadFileAuth(opts: {
       ...opts.extraConfirmBody,
     }),
   });
-
-  return {
-    key:
-      confirmData.cleanKey ??
-      confirmData.key ??
-      confirmData.rawKey ??
-      presignKey,
-    messagePublicId: confirmData.messagePublicId,
-  };
-}
-
-/**
- * Guest upload flow using raw fetch with credentials for presign + confirm.
- */
-export async function uploadFileGuest(opts: {
-  presignUrl: string;
-  confirmUrl: string;
-  file: PickedFile;
-  extraPresignBody?: Record<string, unknown>;
-  extraConfirmBody?: Record<string, unknown>;
-}): Promise<UploadResult> {
-  const presignRes = await fetch(`${API_BASE}${opts.presignUrl}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({
-      mimeType: opts.file.mimeType,
-      fileSize: opts.file.size,
-      fileName: opts.file.name,
-      ...opts.extraPresignBody,
-    }),
-  });
-
-  if (!presignRes.ok) throw new Error("Presign failed.");
-  const presignData: { uploadUrl: string; rawKey?: string; key?: string } =
-    await presignRes.json();
-
-  const presignKey = presignData.rawKey ?? presignData.key;
-  if (!presignKey) throw new Error("Presign did not return a storage key.");
-
-  const blob = await fetch(opts.file.uri).then((r) => r.blob());
-  const uploadRes = await fetch(presignData.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": opts.file.mimeType },
-    body: blob,
-  });
-
-  if (!uploadRes.ok) throw new Error("Upload to storage failed.");
-
-  const confirmRes = await fetch(`${API_BASE}${opts.confirmUrl}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({
-      key: presignKey,
-      ...opts.extraConfirmBody,
-    }),
-  });
-
-  if (!confirmRes.ok) throw new Error("Confirm failed.");
-  const confirmData: {
-    messagePublicId?: string;
-    key?: string;
-    rawKey?: string;
-    cleanKey?: string;
-  } = await confirmRes.json();
 
   return {
     key:

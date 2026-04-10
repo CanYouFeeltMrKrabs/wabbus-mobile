@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import ProductCard from "@/components/ui/ProductCard";
 import Icon from "@/components/ui/Icon";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
@@ -171,11 +172,11 @@ export default function VendorScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <AppText variant="title" numberOfLines={1} style={{ flex: 1, textAlign: "center" }}>
           {vendor.name}
         </AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <FlatList

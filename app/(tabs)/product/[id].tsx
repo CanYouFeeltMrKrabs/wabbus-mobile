@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import BackButton from "@/components/ui/BackButton";
 import StarRating from "@/components/ui/StarRating";
 import { BadgeRow } from "@/components/ui/Badge";
 import ProductImageGallery from "@/components/ui/ProductImageGallery";
@@ -417,13 +418,10 @@ export default function ProductDetailScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <Pressable
-        style={styles.backBtn}
+      <BackButton
         onPress={() => router.canGoBack() ? router.back() : router.replace(ROUTES.homeFeed)}
-        hitSlop={12}
-      >
-        <Icon name="arrow-back" size={24} color={colors.foreground} />
-      </Pressable>
+        style={styles.backBtn}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -666,8 +664,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
   backBtn: {
     position: "absolute", top: 56, left: spacing[4], zIndex: 20,
-    backgroundColor: colors.overlayWhite90, borderRadius: borderRadius.full,
-    padding: spacing[2], ...shadows.md,
   },
   scrollContent: { paddingBottom: spacing[8] },
   body: { paddingHorizontal: spacing[4], paddingTop: spacing[5] },

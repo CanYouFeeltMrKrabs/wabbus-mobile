@@ -33,22 +33,22 @@ export type CartItem = {
 export type ServerCartItem = {
   publicId: string;
   quantity: number;
-  unitPriceCents: number;
-  productVariant: {
-    publicId: string;
+  productVariant?: {
+    publicId?: string | null;
     title?: string | null;
     price?: number | string | null;
-    product: {
-      productId: string;
-      title: string;
-      slug: string;
-      image: string | null;
+    product?: {
+      productId?: string;
+      title?: string | null;
+      slug?: string;
+      image?: string | null;
+      images?: { key: string }[];
       vendor?: {
-        name?: string;
-        storeDisplayName?: string;
+        name?: string | null;
+        storeDisplayName?: string | null;
       } | null;
-    };
-  };
+    } | null;
+  } | null;
 };
 
 export type Address = {
@@ -246,6 +246,8 @@ export type Customer = {
   name?: string | null;
   createdAt: string;
   impersonatedBy?: number | null;
+  accountStatus?: "ACTIVE" | "BANNED" | "PENDING_DELETION";
+  deletionScheduledAt?: string | null;
 };
 
 // ─── Checkout / Cart ──────────────────────────────────────────────────────

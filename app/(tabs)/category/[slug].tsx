@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
-import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import ProductCard from "@/components/ui/ProductCard";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
 import OutageBanner from "@/components/ui/OutageBanner";
@@ -162,9 +162,9 @@ export default function CategoryScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={styles.backBtn} />
+        <BackButton />
         <AppText variant="title" style={styles.headerTitle} numberOfLines={1}>{title}</AppText>
-        <View style={styles.backBtn} />
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Sort pills */}
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2], paddingVertical: spacing[2],
   },
   headerTitle: { flex: 1, textAlign: "center", textTransform: "capitalize" },
-  backBtn: { width: 44 },
+
   sortContainer: { paddingBottom: spacing[2], borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   sortScroll: { paddingHorizontal: spacing[4], gap: spacing[2] },
   sortPill: {

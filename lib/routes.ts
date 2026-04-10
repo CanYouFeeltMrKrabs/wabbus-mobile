@@ -9,10 +9,11 @@ export const ROUTES = {
   // Tabs
   home: "/(tabs)" as const,
   homeFeed: "/" as const,
-  search: "/(tabs)/search" as const,
-  searchWithSort: (sort: string) => `/(tabs)/search?sort=${sort}` as const,
+  chatTab: "/(tabs)/chat" as const,
   cart: "/(tabs)/cart" as const,
   accountTab: "/(tabs)/account" as const,
+  search: "/search" as const,
+  searchWithSort: (sort: string) => `/search?sort=${sort}` as const,
   categories: "/(tabs)/categories" as const,
   category: (slug: string) => `/(tabs)/category/${slug}` as const,
   product: (id: string) => `/(tabs)/product/${id}` as const,
@@ -44,6 +45,7 @@ export const ROUTES = {
   accountChangeEmail: "/account/change-email" as const,
   accountAddresses: "/account/addresses" as const,
   accountPaymentMethods: "/account/payment-methods" as const,
+  accountDeleteAccount: "/account/delete-account" as const,
   accountWishlist: "/account/wishlist" as const,
   accountMessages: "/account/messages" as const,
   accountConversation: (id: string | number) =>
@@ -58,7 +60,7 @@ export const ROUTES = {
   supportTicket: "/support/ticket" as const,
   supportTicketDetail: (ticketId: string) =>
     `/support/ticket-detail/${ticketId}` as const,
-  supportLiveChat: "/support/live-chat" as const,
+  supportLiveChat: "/(tabs)/chat" as const,
   supportMessageSeller: (orderId: string | number) =>
     `/support/message-seller/${orderId}` as const,
   supportMessageSellerAll: "/support/message-seller/all" as const,

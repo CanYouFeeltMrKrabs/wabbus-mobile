@@ -1,8 +1,13 @@
 import "@/i18n";
+import { initSentry } from "@/lib/sentry";
+
+initSentry();
+
 import { useEffect, useRef } from "react";
 import { Stack } from "expo-router";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { AuthProvider } from "@/lib/auth";
@@ -20,7 +25,6 @@ import CustomerTrackingProvider from "@/components/CustomerTrackingProvider";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import ToastProvider from "@/components/ui/ToastProvider";
-import ChatFab from "@/components/ui/ChatFab";
 
 function NotificationHandler() {
   const router = useRouter();
@@ -46,6 +50,7 @@ function NotificationHandler() {
 
 export default function RootLayout() {
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <ErrorBoundary>
       <QueryProvider>
         <NetworkProvider>
@@ -67,12 +72,12 @@ export default function RootLayout() {
                   }}
                 >
                   <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="search" />
                   <Stack.Screen name="(auth)" options={{ presentation: "modal" }} />
                   <Stack.Screen name="checkout" options={{ presentation: "fullScreenModal" }} />
                   <Stack.Screen name="order-complete" />
                   <Stack.Screen name="impersonate" options={{ headerShown: false }} />
                 </Stack>
-                <ChatFab />
                 <ToastProvider />
                 <OfflineBanner />
                 </CartProvider>
@@ -82,5 +87,6 @@ export default function RootLayout() {
         </NetworkProvider>
       </QueryProvider>
     </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }

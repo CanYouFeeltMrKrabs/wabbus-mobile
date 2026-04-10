@@ -5,8 +5,9 @@ import { getLocales } from "expo-localization";
 import en from "./en.json";
 import es from "./es.json";
 import id from "./id.json";
+import zh from "./zh.json";
 
-const SUPPORTED_LANGUAGES = ["en", "es", "id"] as const;
+const SUPPORTED_LANGUAGES = ["en", "es", "id", "zh"] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 function detectDeviceLanguage(): SupportedLanguage {
@@ -28,6 +29,7 @@ const resources = {
   en: { translation: en },
   es: { translation: es },
   id: { translation: id },
+  zh: { translation: zh },
 } as const;
 
 i18n.use(initReactI18next).init({

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
@@ -17,9 +18,9 @@ export default function ContactScreen() {
   return (
     <View style={[st.screen, { paddingTop: insets.top }]}>
       <View style={st.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <AppText variant="title">{t("legal.contact.title")}</AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <View style={st.content}>

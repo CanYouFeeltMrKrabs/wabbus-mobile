@@ -17,9 +17,11 @@ import {
   ActivityIndicator,
   Keyboard,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import SearchBar from "@/components/ui/SearchBar";
+import BackButton from "@/components/ui/BackButton";
 import ProductCard from "@/components/ui/ProductCard";
 import Icon from "@/components/ui/Icon";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
@@ -241,12 +243,17 @@ export default function SearchScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing[2]) + spacing[2] }]}>
-        <SearchBar
-          value={query}
-          onChangeText={setQuery}
-          onSubmit={handleSubmit}
-          autoFocus
-        />
+        <View style={styles.headerRow}>
+          <BackButton color={colors.white} />
+          <View style={styles.searchBarWrap}>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              onSubmit={handleSubmit}
+              autoFocus
+            />
+          </View>
+        </View>
       </View>
 
       {loading && !results.length ? (
@@ -370,6 +377,8 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: spacing[4], paddingBottom: spacing[3], backgroundColor: colors.brandBlue },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: spacing[2] },
+  searchBarWrap: { flex: 1 },
   skeletonScroll: { flexGrow: 1, paddingTop: spacing[2], paddingBottom: spacing[10] },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing[3] },
   emptyText: { textAlign: "center" },

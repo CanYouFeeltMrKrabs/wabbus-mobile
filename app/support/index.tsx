@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
-import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
@@ -13,8 +13,8 @@ const SUPPORT_OPTIONS = [
   { icon: "chat", titleKey: "support.optLiveChat", descKey: "support.optLiveChatDesc", route: ROUTES.supportLiveChat },
   { icon: "email", titleKey: "support.optSubmitTicket", descKey: "support.optSubmitTicketDesc", route: ROUTES.supportTicket },
   { icon: "storefront", titleKey: "support.optSellerMessages", descKey: "support.optSellerMessagesDesc", route: ROUTES.supportMessageSellerAll },
-  { icon: "message-text", titleKey: "support.optMyMessages", descKey: "support.optMyMessagesDesc", route: ROUTES.accountMessages },
-  { icon: "shopping-outline", titleKey: "support.optMyOrders", descKey: "support.optMyOrdersDesc", route: ROUTES.orders },
+  { icon: "forum", titleKey: "support.optMyMessages", descKey: "support.optMyMessagesDesc", route: ROUTES.accountMessages },
+  { icon: "receipt-long", titleKey: "support.optMyOrders", descKey: "support.optMyOrdersDesc", route: ROUTES.orders },
 ];
 
 export default function SupportScreen() {
@@ -25,9 +25,9 @@ export default function SupportScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <AppButton title="" variant="ghost" icon="arrow-back" onPress={() => router.back()} style={{ width: 44 }} />
+        <BackButton />
         <AppText variant="title">{t("support.heading")}</AppText>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

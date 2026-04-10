@@ -7,4 +7,6 @@ export const TYPESENSE_PORT = process.env.EXPO_PUBLIC_TYPESENSE_PORT?.trim() || 
 export const TYPESENSE_PROTOCOL = process.env.EXPO_PUBLIC_TYPESENSE_PROTOCOL?.trim() || "https";
 export const TYPESENSE_SEARCH_KEY = process.env.EXPO_PUBLIC_TYPESENSE_SEARCH_KEY?.trim() || "";
 
+export const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN?.trim() || "";
+
 export const FALLBACK_IMAGE = "https://placehold.co/400x300/f3f4f6/9ca3af?text=No+Image";

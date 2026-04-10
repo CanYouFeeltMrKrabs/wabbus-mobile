@@ -9,15 +9,23 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#2d4ecf"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wabbus.mobile",
+      "buildNumber": "1",
       "associatedDomains": [
         "applinks:wabbus.com",
+        "applinks:www.wabbus.com",
+        "applinks:wabbus.com",
         "applinks:www.wabbus.com"
-      ]
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,36 +35,104 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.wabbus.mobile",
+      "versionCode": 1,
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/product" },
-            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/orders" },
-            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/category" },
-            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/vendors" },
-            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/support" },
-            { "scheme": "https", "host": "wabbus.com", "pathPrefix": "/account" },
-            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/product" },
-            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/orders" },
-            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/category" },
-            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/vendors" },
-            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/support" },
-            { "scheme": "https", "host": "www.wabbus.com", "pathPrefix": "/account" }
+            {
+              "scheme": "https",
+              "host": "wabbus.com",
+              "pathPrefix": "/product"
+            },
+            {
+              "scheme": "https",
+              "host": "wabbus.com",
+              "pathPrefix": "/orders"
+            },
+            {
+              "scheme": "https",
+              "host": "wabbus.com",
+              "pathPrefix": "/category"
+            },
+            {
+              "scheme": "https",
+              "host": "wabbus.com",
+              "pathPrefix": "/vendors"
+            },
+            {
+              "scheme": "https",
+              "host": "wabbus.com",
+              "pathPrefix": "/support"
+            },
+            {
+              "scheme": "https",
+              "host": "wabbus.com",
+              "pathPrefix": "/account"
+            },
+            {
+              "scheme": "https",
+              "host": "www.wabbus.com",
+              "pathPrefix": "/product"
+            },
+            {
+              "scheme": "https",
+              "host": "www.wabbus.com",
+              "pathPrefix": "/orders"
+            },
+            {
+              "scheme": "https",
+              "host": "www.wabbus.com",
+              "pathPrefix": "/category"
+            },
+            {
+              "scheme": "https",
+              "host": "www.wabbus.com",
+              "pathPrefix": "/vendors"
+            },
+            {
+              "scheme": "https",
+              "host": "www.wabbus.com",
+              "pathPrefix": "/support"
+            },
+            {
+              "scheme": "https",
+              "host": "www.wabbus.com",
+              "pathPrefix": "/account"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3a50811c-5e5a-4cd1-abef-ab35513d9ff3",
+      "fallbackToCacheTimeout": 3000,
+      "checkAutomatically": "ON_LOAD"
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
+    "extra": {
+      "eas": {
+        "projectId": "3a50811c-5e5a-4cd1-abef-ab35513d9ff3"
+      },
+      "router": {}
+    },
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "expo-font",
+      "expo-apple-authentication",
+      "@sentry/react-native/expo",
       [
         "expo-notifications",
         {
@@ -71,6 +147,7 @@
           "enableGooglePay": true
         }
       ]
-    ]
+    ],
+    "owner": "jonolesen30"
   }
 }

@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
+import BackButton from "@/components/ui/BackButton";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
@@ -290,9 +291,7 @@ function MessageSellerWizard() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[st.screen, { paddingTop: insets.top }]}>
         <View style={st.header}>
-          <AppButton
-            title=""
-            variant="ghost"
+          <BackButton
             icon={step === "select" || step === "success" ? "close" : "arrow-back"}
             onPress={() => {
               if (step === "success" || step === "select") router.back();
