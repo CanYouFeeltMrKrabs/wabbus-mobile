@@ -50,7 +50,7 @@ function NotificationHandler() {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.brandBlue }}>
     <ErrorBoundary>
       <QueryProvider>
         <NetworkProvider>

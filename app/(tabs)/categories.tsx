@@ -122,12 +122,12 @@ export default function CategoriesScreen() {
               onPress={() => navigateInto(item)}
             >
               <View style={styles.iconCircle}>
-                <Icon name={getCategoryIcon(item.slug)} size={28} color={colors.brandBlue} />
+                <Icon name={getCategoryIcon(item.slug)} size={40} color={colors.brandBlue} />
               </View>
-              <AppText variant="label" align="center" numberOfLines={2} style={styles.cardLabel}>
+              <AppText variant="body" weight="semibold" align="center" numberOfLines={2} style={styles.cardLabel}>
                 {item.name}
               </AppText>
-              <Icon name="chevron-right" size={16} color={colors.gray400} />
+              <Icon name="chevron-right" size={16} color={colors.gray400} style={{ marginTop: spacing[1] }} />
             </Pressable>
           )}
         />
@@ -166,13 +166,13 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: colors.brandBlueLight,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: spacing[2],
+    marginBottom: spacing[3],
   },
-  cardLabel: { marginBottom: spacing[1] },
+  cardLabel: { marginBottom: spacing[1], lineHeight: 20 },
 });

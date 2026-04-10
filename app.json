@@ -13,6 +13,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#2d4ecf"
     },
+    "backgroundColor": "#2d4ecf",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wabbus.mobile",

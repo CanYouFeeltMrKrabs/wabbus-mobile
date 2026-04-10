@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import AppText from "@/components/ui/AppText";
 import Icon from "@/components/ui/Icon";
 import AppButton from "@/components/ui/AppButton";
@@ -336,11 +337,12 @@ export default function ChatTabScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.screen, { paddingTop: insets.top }]}
+      style={styles.screen}
       keyboardVerticalOffset={0}
     >
+      <StatusBar style="light" />
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing[3.5] }]}>
         <View style={styles.headerCenter}>
           <AppText variant="title" weight="bold" color={colors.white}>{t("chat.heading")}</AppText>
           <View style={styles.headerStatusRow}>
