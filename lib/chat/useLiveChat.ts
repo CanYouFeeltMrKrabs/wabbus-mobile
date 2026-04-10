@@ -274,7 +274,7 @@ export function useLiveChat(
     setStatus("connecting");
 
     const s: Socket = io(`${API_BASE}/support-chat`, {
-      transports: ["polling", "websocket"],
+      transports: ["websocket", "polling"],
       withCredentials: true,
     });
     socketRef.current = s;
