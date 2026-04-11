@@ -29,7 +29,7 @@ import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import { SkeletonOrderCard } from "@/components/ui/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import type { Order, ReturnRequest } from "@/lib/types";
+import type { Order, OrderItem, ReturnRequest } from "@/lib/types";
 
 type Tab = "orders" | "returns" | "buyagain";
 type SortBy = "newest" | "oldest" | "total-high" | "total-low";
@@ -178,7 +178,7 @@ function OrdersContent() {
       list = list.filter((o) => {
         const label = o.orderNumber || o.publicId || String(o.id ?? "");
         if (label.toLowerCase().includes(q)) return true;
-        if (o.items?.some((it) => pickItemTitle(it).toLowerCase().includes(q))) return true;
+        if (o.items?.some((it: OrderItem) => pickItemTitle(it).toLowerCase().includes(q))) return true;
         return false;
       });
     }
@@ -374,7 +374,7 @@ function OrdersContent() {
           ) : (
             <FlatList
               data={returns}
-              keyExtractor={(r) => String(r.id)}
+              keyExtractor={(r, idx) => r.caseNumber ?? String(idx)}
               contentContainerStyle={st.list}
               showsVerticalScrollIndicator={false}
               renderItem={({ item: ret }) => {

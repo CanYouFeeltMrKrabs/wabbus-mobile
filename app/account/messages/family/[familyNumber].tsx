@@ -124,7 +124,7 @@ function FamilyDetailContent() {
         <AppText variant="subtitle" color={colors.muted} style={{ marginTop: spacing[3] }}>
           {error}
         </AppText>
-        <AppButton title={t("messages.familyDetail.retry")} variant="outline" onPress={fetchCases} style={{ marginTop: spacing[4] }} />
+        <AppButton title={t("messages.familyDetail.retry")} variant="outline" onPress={() => fetchCases()} style={{ marginTop: spacing[4] }} />
         <AppButton title={t("messages.familyDetail.goBack")} variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing[2] }} />
       </View>
     );

@@ -89,7 +89,7 @@ function CaseDetailContent() {
         <AppText variant="subtitle" color={colors.muted} style={{ marginTop: spacing[3] }}>
           {error ?? t("messages.caseDetail.notFound")}
         </AppText>
-        <AppButton title={t("messages.caseDetail.retry")} variant="outline" onPress={fetchCase} style={{ marginTop: spacing[4] }} />
+        <AppButton title={t("messages.caseDetail.retry")} variant="outline" onPress={() => fetchCase()} style={{ marginTop: spacing[4] }} />
         <AppButton title={t("messages.caseDetail.goBack")} variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing[2] }} />
       </View>
     );

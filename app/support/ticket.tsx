@@ -132,8 +132,8 @@ function TicketContent() {
 
         {error && (
           <View style={styles.errorBanner}>
-            <Icon name="error-outline" size={18} color={colors.danger} />
-            <AppText variant="caption" color={colors.danger} style={{ flex: 1 }}>
+            <Icon name="error-outline" size={18} color={colors.error} />
+            <AppText variant="caption" color={colors.error} style={{ flex: 1 }}>
               {error}
             </AppText>
           </View>

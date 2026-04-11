@@ -31,11 +31,11 @@ function orderItemHasCase(
   );
 }
 
-function orderHasAnyCase(items: OrderItem[] | undefined): boolean {
+function orderHasAnyCase(items: OrderItem[] | null | undefined): boolean {
   return items?.some(orderItemHasCase) ?? false;
 }
 
-function firstCaseNumberFromOrder(items: OrderItem[] | undefined): string | undefined {
+function firstCaseNumberFromOrder(items: OrderItem[] | null | undefined): string | undefined {
   const found = items?.find(orderItemHasCase);
   return found?.caseItems[0]?.caseNumber;
 }

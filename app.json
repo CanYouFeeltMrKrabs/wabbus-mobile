@@ -145,7 +145,9 @@
           "merchantIdentifier": "merchant.com.wabbus.mobile",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "@sentry/react-native",
+      "expo-localization"
     ],
     "owner": "jonolesen30"
   }

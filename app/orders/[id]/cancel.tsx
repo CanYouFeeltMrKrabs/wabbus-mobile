@@ -82,7 +82,7 @@ function CancelContent() {
     setSubmitting(true);
     try {
       const promises = cancellableItems
-        .filter((i) => selected.has(i.publicId))
+        .filter((i) => selected.has(i.publicId ?? ""))
         .map((item) =>
           customerFetch(`/orders/${id}/items/${item.publicId}/cancel`, {
             method: "POST",
