@@ -111,6 +111,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Submit to TestFlight / Internal Testing
+        if: matrix.platform == 'ios'
         run: |
           eas submit \
             --platform ${{ matrix.platform }} \
@@ -192,6 +193,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Submit to stores
+        if: matrix.platform == 'ios'
         run: |
           eas submit \
             --platform ${{ matrix.platform }} \
