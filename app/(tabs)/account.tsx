@@ -23,13 +23,14 @@ const MENU_ITEMS: MenuItem[] = [
   { icon: "person", labelKey: "account.menu.accountDetails", route: ROUTES.accountDetails },
   { icon: "favorite", labelKey: "account.menu.wishlist", route: ROUTES.accountWishlist },
   { icon: "chat", labelKey: "account.menu.messages", route: ROUTES.accountMessages },
-  { icon: "help-outline", labelKey: "account.menu.support", route: ROUTES.support },
+  { icon: "support-agent", labelKey: "account.menu.support", route: ROUTES.support },
 ];
 
 const LEGAL_ITEMS: MenuItem[] = [
   { icon: "description", labelKey: "account.legal.termsOfService", route: ROUTES.terms },
   { icon: "privacy-tip", labelKey: "account.legal.privacyPolicy", route: ROUTES.privacy },
   { icon: "mail-outline", labelKey: "account.legal.contactUs", route: ROUTES.contact },
+  { icon: "accessibility", labelKey: "account.legal.accessibility", route: ROUTES.accessibility },
 ];
 
 function MenuRow({ item, t, onPress }: { item: MenuItem; t: (key: string) => string; onPress: () => void }) {

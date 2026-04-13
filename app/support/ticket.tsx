@@ -21,12 +21,13 @@ import { getQueryClient } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
+import { showToast } from "@/lib/toast";
 
 const CATEGORIES = [
   { code: "TECHNICAL", labelKey: "support.ticket.catTechnical", icon: "build" },
   { code: "BILLING", labelKey: "support.ticket.catBilling", icon: "credit-card" },
   { code: "ACCOUNT", labelKey: "support.ticket.catAccount", icon: "account-circle" },
-  { code: "OTHER", labelKey: "support.ticket.catOther", icon: "help-circle" },
+  { code: "OTHER", labelKey: "support.ticket.catOther", icon: "help-outline" },
 ];
 
 export default function SubmitTicketScreen() {
@@ -55,13 +56,20 @@ function TicketContent() {
     setError(null);
     setSubmitting(true);
     try {
-      await customerFetch("/support/tickets", {
+      const result = await customerFetch<any>("/support/tickets", {
         method: "POST",
         body: JSON.stringify({ body: body.trim(), category }),
       });
+      const ticketNumber = result?.ticketNumber || result?.publicId?.slice(0, 8).toUpperCase() || "";
       const qc = getQueryClient();
       qc.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
       qc.invalidateQueries({ queryKey: queryKeys.messages.unread() });
+      showToast(
+        ticketNumber
+          ? t("support.ticket.submitSuccessWithNumber", { ticketNumber })
+          : t("support.ticket.submitSuccess"),
+        "success",
+      );
       router.replace(ROUTES.accountMessages);
     } catch (e: any) {
       setError(e.message || t("support.ticket.submitError"));
@@ -184,10 +192,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing[4],
     alignItems: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
     ...shadows.sm,
   },
   categoryCardSelected: {
-    borderWidth: 2,
     borderColor: colors.brandBlue,
     backgroundColor: colors.brandBlueLight,
   },

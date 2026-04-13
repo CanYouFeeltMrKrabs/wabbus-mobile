@@ -15,7 +15,7 @@
     },
     "backgroundColor": "#2d4ecf",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.wabbus.mobile",
       "buildNumber": "1",
       "associatedDomains": [

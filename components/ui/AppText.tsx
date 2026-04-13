@@ -1,10 +1,11 @@
 /**
  * AppText — global text wrapper. ALL text in the app goes through this.
  * Provides themed variants so we never hardcode font sizes or colors.
+ * Uses Inter font family with weight-specific files.
  */
 import React from "react";
 import { Text, type TextProps, type TextStyle } from "react-native";
-import { colors, fontSize, fontWeight } from "@/lib/theme";
+import { colors, fontSize, fontWeight, resolveFontFamily } from "@/lib/theme";
 
 export type TextVariant =
   | "body"
@@ -29,20 +30,27 @@ type Props = TextProps & {
   align?: TextStyle["textAlign"];
 };
 
-const variants: Record<TextVariant, TextStyle> = {
-  body:        { fontSize: fontSize.base, color: colors.foreground, fontWeight: fontWeight.normal },
-  bodySmall:   { fontSize: fontSize.sm, color: colors.foreground, fontWeight: fontWeight.normal },
-  caption:     { fontSize: fontSize.xs, color: colors.muted, fontWeight: fontWeight.normal },
-  label:       { fontSize: fontSize.sm, color: colors.foreground, fontWeight: fontWeight.medium },
-  heading:     { fontSize: fontSize["2xl"], color: colors.foreground, fontWeight: fontWeight.bold },
-  title:       { fontSize: fontSize.lg, color: colors.foreground, fontWeight: fontWeight.bold },
-  subtitle:    { fontSize: fontSize.md, color: colors.foreground, fontWeight: fontWeight.semibold },
-  price:       { fontSize: fontSize.lg, color: colors.foreground, fontWeight: fontWeight.black },
-  priceSmall:  { fontSize: fontSize.base, color: colors.foreground, fontWeight: fontWeight.bold },
-  priceStrike: { fontSize: fontSize.xs, color: colors.mutedLight, fontWeight: fontWeight.normal, textDecorationLine: "line-through" },
-  small:       { fontSize: fontSize["2xs"], color: colors.muted, fontWeight: fontWeight.normal },
-  tiny:        { fontSize: 8, color: colors.mutedLight, fontWeight: fontWeight.normal },
-  button:      { fontSize: fontSize.base, color: colors.white, fontWeight: fontWeight.bold },
+type VariantDef = {
+  fontSize: number;
+  color: string;
+  weight: string;
+  textDecorationLine?: TextStyle["textDecorationLine"];
+};
+
+const variantDefs: Record<TextVariant, VariantDef> = {
+  body:        { fontSize: fontSize.base, color: colors.foreground, weight: fontWeight.normal },
+  bodySmall:   { fontSize: fontSize.sm, color: colors.foreground, weight: fontWeight.normal },
+  caption:     { fontSize: fontSize.xs, color: colors.muted, weight: fontWeight.normal },
+  label:       { fontSize: fontSize.sm, color: colors.foreground, weight: fontWeight.medium },
+  heading:     { fontSize: fontSize["2xl"], color: colors.foreground, weight: fontWeight.bold },
+  title:       { fontSize: fontSize.lg, color: colors.foreground, weight: fontWeight.bold },
+  subtitle:    { fontSize: fontSize.md, color: colors.foreground, weight: fontWeight.semibold },
+  price:       { fontSize: fontSize.lg, color: colors.foreground, weight: fontWeight.black },
+  priceSmall:  { fontSize: fontSize.base, color: colors.foreground, weight: fontWeight.bold },
+  priceStrike: { fontSize: fontSize.xs, color: colors.mutedLight, weight: fontWeight.normal, textDecorationLine: "line-through" },
+  small:       { fontSize: fontSize["2xs"], color: colors.muted, weight: fontWeight.normal },
+  tiny:        { fontSize: fontSize["2xs"], color: colors.mutedLight, weight: fontWeight.normal },
+  button:      { fontSize: fontSize.base, color: colors.white, weight: fontWeight.bold },
 };
 
 export default function AppText({
@@ -54,17 +62,20 @@ export default function AppText({
   style,
   ...rest
 }: Props) {
-  const base = variants[variant];
+  const def = variantDefs[variant];
+  const resolvedWeight = weightOverride ? fontWeight[weightOverride] : def.weight;
+
+  const baseStyle: TextStyle = {
+    fontSize: sizeOverride ? fontSize[sizeOverride] : def.fontSize,
+    color: colorOverride ?? def.color,
+    fontFamily: resolveFontFamily(resolvedWeight),
+    ...(def.textDecorationLine && { textDecorationLine: def.textDecorationLine }),
+    ...(align && { textAlign: align }),
+  };
+
   return (
     <Text
-      style={[
-        base,
-        colorOverride !== undefined && { color: colorOverride },
-        weightOverride !== undefined && { fontWeight: fontWeight[weightOverride] },
-        sizeOverride !== undefined && { fontSize: fontSize[sizeOverride] },
-        align !== undefined && { textAlign: align },
-        style,
-      ]}
+      style={[baseStyle, style]}
       {...rest}
     />
   );

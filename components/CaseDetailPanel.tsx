@@ -365,9 +365,11 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
               return (
                 <View key={m.publicId ?? `cm-${idx}`} style={[styles.msgBubbleRow, isCustomer ? styles.msgRight : styles.msgLeft]}>
                   <View style={[styles.msgBubble, isCustomer ? styles.msgBubbleCustomer : styles.msgBubbleAgent]}>
-                    <AppText variant="caption" weight="semibold" color={isCustomer ? colors.white : colors.foreground} style={{ fontSize: 9, textTransform: "uppercase", marginBottom: spacing[0.5] }}>
-                      {isCustomer ? "You" : "Support"}
-                    </AppText>
+                    {!isCustomer && (
+                      <AppText variant="caption" weight="semibold" color={colors.foreground} style={{ fontSize: 9, textTransform: "uppercase", marginBottom: spacing[0.5] }}>
+                        Support
+                      </AppText>
+                    )}
                     <AppText variant="bodySmall" color={isCustomer ? colors.white : colors.foreground}>
                       {m.body}
                     </AppText>

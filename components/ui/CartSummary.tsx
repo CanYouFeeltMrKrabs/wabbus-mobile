@@ -32,7 +32,9 @@ export default function CartSummary({ subtotalCents, onCheckout }: CartSummaryPr
       
       <View style={styles.totalRow}>
         <AppText style={styles.totalLabel}>{t("cart.estimatedTotal")}</AppText>
-        <AppText style={styles.totalPrice}>{formatMoney(subtotalCents)}</AppText>
+        <AppText variant="body" weight="bold" style={styles.totalPrice}>
+          {formatMoney(subtotalCents)}
+        </AppText>
       </View>
 
       <AppButton
@@ -76,7 +78,6 @@ const styles = StyleSheet.create({
   },
   totalPrice: {
     fontSize: 24,
-    fontWeight: "900",
     color: colors.foreground,
   },
   checkoutBtn: {

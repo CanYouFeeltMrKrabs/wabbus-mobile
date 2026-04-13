@@ -112,18 +112,33 @@ export function pickItemImage(item: {
   imageUrl?: string | null;
   productVariant?: {
     imageUrl?: string | null;
-    product?: { imageUrl?: string | null; image?: string | null } | null;
+    images?: Array<{ key?: string; url?: string }> | null;
+    product?: {
+      imageUrl?: string | null;
+      image?: string | null;
+      images?: Array<{ key?: string; url?: string }> | null;
+    } | null;
   } | null;
-  product?: { imageUrl?: string | null; image?: string | null } | null;
+  product?: {
+    imageUrl?: string | null;
+    image?: string | null;
+    images?: Array<{ key?: string; url?: string }> | null;
+  } | null;
 }): string | null {
+  const firstImgKey = (imgs?: Array<{ key?: string; url?: string }> | null) =>
+    imgs?.[0]?.url || imgs?.[0]?.key || null;
+
   const candidates = [
     item.image,
     item.imageUrl,
     item.productVariant?.product?.imageUrl,
     item.productVariant?.product?.image,
+    firstImgKey(item.productVariant?.product?.images),
     item.productVariant?.imageUrl,
+    firstImgKey(item.productVariant?.images),
     item.product?.imageUrl,
     item.product?.image,
+    firstImgKey(item.product?.images),
   ]
     .map((v) => (typeof v === "string" ? v.trim() : ""))
     .filter(Boolean);

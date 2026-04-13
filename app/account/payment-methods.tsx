@@ -139,12 +139,33 @@ function PaymentMethodsContent() {
 
       if (initError) throw new Error(initError.message || t("account.paymentMethods.errorInitSetup"));
 
-      const { error: presentError } = await presentPaymentSheet();
+      // Small delay to let the navigation stack settle before presenting
+      // the native Stripe view controller — prevents SIGABRT on iOS
+      await new Promise((r) => setTimeout(r, 500));
+
+      let presentError: any = null;
+      try {
+        const result = await presentPaymentSheet();
+        presentError = result.error;
+      } catch (nativeErr: any) {
+        // Native-level crash from Stripe's UIViewController presentation.
+        // Gracefully handle instead of letting the app crash.
+        console.warn("[Stripe] presentPaymentSheet native error:", nativeErr);
+        setError(t("account.paymentMethods.errorSetupFailed"));
+        return;
+      }
 
       if (presentError) {
         if (presentError.code === "Canceled") return;
         throw new Error(presentError.message || t("account.paymentMethods.errorSetupFailed"));
       }
+      // The web calls /payments/confirm-setup after Stripe confirms the setup intent.
+      // This tells the backend to attach the payment method to the customer.
+      const setupIntentId = data.clientSecret.split("_secret_")[0];
+      await customerFetch("/payments/confirm-setup", {
+        method: "POST",
+        body: JSON.stringify({ setupIntentId }),
+      });
 
       await refetchMethods();
       showToast(t("account.paymentMethods.toastCardAdded"), "success");
@@ -165,13 +186,7 @@ function PaymentMethodsContent() {
       <View style={s.header}>
         <BackButton />
         <AppText variant="title">{t("account.paymentMethods.heading")}</AppText>
-        <Pressable onPress={handleAddCard} disabled={addingCard} hitSlop={8} style={{ width: 44, alignItems: "center", justifyContent: "center" }}>
-          {addingCard ? (
-            <ActivityIndicator size="small" color={colors.brandBlue} />
-          ) : (
-            <Icon name="add-circle-outline" size={26} color={colors.brandBlue} />
-          )}
-        </Pressable>
+        <View style={{ width: 44 }} />
       </View>
 
       {displayError && (
@@ -270,11 +285,27 @@ function PaymentMethodsContent() {
             );
           }}
           ListFooterComponent={
-            <View style={s.footer}>
-              <Icon name="lock" size={14} color={colors.mutedLight} />
-              <AppText variant="tiny" color={colors.mutedLight} style={{ marginLeft: spacing[1] }}>
-                {t("account.paymentMethods.securedByStripe")}
-              </AppText>
+            <View style={s.footerWrap}>
+              <Pressable
+                onPress={handleAddCard}
+                disabled={addingCard}
+                style={[s.addPill, addingCard && { opacity: 0.6 }]}
+              >
+                {addingCard ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Icon name="add" size={22} color={colors.white} />
+                )}
+                <AppText variant="body" weight="bold" color={colors.white}>
+                  {t("account.paymentMethods.addPaymentMethod")}
+                </AppText>
+              </Pressable>
+              <View style={s.footer}>
+                <Icon name="lock" size={14} color={colors.mutedLight} />
+                <AppText variant="tiny" color={colors.mutedLight} style={{ marginLeft: spacing[1] }}>
+                  {t("account.paymentMethods.securedByStripe")}
+                </AppText>
+              </View>
             </View>
           }
         />
@@ -342,6 +373,19 @@ const s = StyleSheet.create({
 
   footer: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    paddingVertical: spacing[6],
+    paddingVertical: spacing[4],
+  },
+  footerWrap: {
+    paddingTop: spacing[4],
+  },
+  addPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[2],
+    backgroundColor: colors.brandBlue,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[6],
   },
 });

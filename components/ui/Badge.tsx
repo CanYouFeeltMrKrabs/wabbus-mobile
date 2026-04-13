@@ -69,5 +69,5 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   text: { fontSize: 9, letterSpacing: 0.5 },
-  row: { flexDirection: "column", gap: 3 },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
 });

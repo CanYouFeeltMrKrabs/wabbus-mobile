@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   FlatList,
@@ -20,10 +20,11 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery } from "@tanstack/react-query";
-import { customerFetch, FetchError } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { customerFetch, FetchError, AuthError } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
+import { showToast } from "@/lib/toast";
 import type { Address } from "@/lib/types";
 
 type FormState = {
@@ -61,6 +62,17 @@ function splitFullName(fullName?: string): { firstName: string; lastName: string
   return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") };
 }
 
+/**
+ * The backend may return addresses as a bare array, or wrapped in
+ * { addresses: [] } or { data: [] }. Mirrors the web's normalizer.
+ */
+function normalizeAddressList(payload: any): Address[] {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.addresses)) return payload.addresses;
+  if (payload && Array.isArray(payload.data)) return payload.data;
+  return [];
+}
+
 export default function AddressesScreen() {
   return (
     <RequireAuth>
@@ -69,15 +81,39 @@ export default function AddressesScreen() {
   );
 }
 
+
+
 function AddressesContent() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: addresses = [], isLoading: loading, refetch: refetchAddresses } = useQuery({
     queryKey: queryKeys.addresses.list(),
     queryFn: async () => {
-      const data = await customerFetch<Address[]>("/customer-addresses");
-      return Array.isArray(data) ? data : [];
+      // Try primary endpoint first
+      try {
+        const data0 = await customerFetch<any>("/customer-addresses");
+        const list = normalizeAddressList(data0);
+        if (list.length > 0) return list;
+      } catch (e: any) {
+        if (e instanceof AuthError) throw e;
+        if (e instanceof FetchError && e.status !== 404) throw e;
+      }
+
+      // Fallback endpoint
+      try {
+        const dataA = await customerFetch<any>("/addresses");
+        const list = normalizeAddressList(dataA);
+        if (list.length > 0) return list;
+      } catch (e: any) {
+        if (e instanceof AuthError) throw e;
+        if (e instanceof FetchError && e.status !== 404) throw e;
+      }
+
+      // Last resort: pull from /customer-auth/me
+      const me = await customerFetch<any>("/customer-auth/me");
+      return normalizeAddressList(me?.addresses ?? []);
     },
   });
   const [showForm, setShowForm] = useState(false);
@@ -85,6 +121,17 @@ function AddressesContent() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [defaultOverride, setDefaultOverride] = useState<string | null>(null);
+
+  // Derive display list: apply local default override without touching query cache
+  const displayAddresses = useMemo(() => {
+    if (!defaultOverride) return addresses;
+    return addresses.map((a) => {
+      const shouldBeDefault = a.publicId === defaultOverride;
+      if (a.isDefault === shouldBeDefault) return a;
+      return { ...a, isDefault: shouldBeDefault };
+    });
+  }, [addresses, defaultOverride]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -140,7 +187,7 @@ function AddressesContent() {
       setShowForm(false);
       setEditingId(null);
       setForm(EMPTY_FORM);
-      await refetchAddresses();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.addresses.all() });
     } catch (e: any) {
       Alert.alert(t("common.error"), e.message || t("account.addresses.errorSave"));
     } finally {
@@ -149,17 +196,17 @@ function AddressesContent() {
   };
 
   const handleSetDefault = async (id: string) => {
-    setBusyId(id);
+    setDefaultOverride(id);
+    showToast(t("account.addresses.defaultUpdated"), "success");
+
     try {
       await customerFetch(`/customer-addresses/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ isDefault: true }),
       });
-      await refetchAddresses();
     } catch (e: any) {
+      setDefaultOverride(null);
       Alert.alert(t("common.error"), e.message || t("account.addresses.errorSetDefault"));
-    } finally {
-      setBusyId(null);
     }
   };
 
@@ -173,7 +220,7 @@ function AddressesContent() {
           setBusyId(id);
           try {
             await customerFetch(`/customer-addresses/${id}`, { method: "DELETE" });
-            await refetchAddresses();
+            await queryClient.invalidateQueries({ queryKey: queryKeys.addresses.all() });
           } catch (e: any) {
             Alert.alert(t("common.error"), e.message || t("account.addresses.errorRemove"));
           } finally {
@@ -191,15 +238,11 @@ function AddressesContent() {
         style={[styles.screen, { paddingTop: insets.top }]}
       >
         <View style={styles.header}>
-          <AppButton
-            title=""
-            variant="ghost"
-            icon="arrow-back"
+          <BackButton
             onPress={() => {
               setShowForm(false);
               setEditingId(null);
             }}
-            style={{ width: 44 }}
           />
           <AppText variant="title">
             {editingId ? t("account.addresses.editAddress") : t("account.addresses.newAddress")}
@@ -270,16 +313,14 @@ function AddressesContent() {
     );
   }
 
-  const sorted = [...addresses].sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault));
+  const sorted = displayAddresses;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <BackButton />
         <AppText variant="title">{t("account.addresses.heading")}</AppText>
-        <Pressable onPress={openCreate} hitSlop={8}>
-          <Icon name="add" size={24} color={colors.brandBlue} />
-        </Pressable>
+        <View style={{ width: 40 }} />
       </View>
 
       {loading ? (
@@ -290,84 +331,83 @@ function AddressesContent() {
           <AppText variant="subtitle" color={colors.muted}>
             {t("account.addresses.noSavedAddresses")}
           </AppText>
-          <AppButton title={t("account.addresses.addAddress")} variant="primary" icon="plus" onPress={openCreate} />
+          <AppButton title={t("account.addresses.addAddress")} variant="primary" icon="add" onPress={openCreate} />
         </View>
       ) : (
-        <FlatList
-          data={sorted}
-          keyExtractor={(a) => a.publicId}
-          contentContainerStyle={styles.list}
-          ListFooterComponent={
-            <AppButton
-              title={t("account.addresses.addNewAddress")}
-              variant="outline"
-              fullWidth
-              icon="plus"
-              onPress={openCreate}
-              style={styles.addBtn}
-            />
-          }
-          renderItem={({ item }) => {
-            const busy = busyId === item.publicId;
-            return (
-              <View style={[styles.card, item.isDefault && styles.cardDefault]}>
-                {item.isDefault && (
-                  <View style={styles.defaultBadge}>
+        <>
+          <FlatList
+            data={sorted}
+            keyExtractor={(a) => a.publicId}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => {
+              const busy = busyId === item.publicId;
+              return (
+                <View style={[styles.card, item.isDefault && styles.cardDefault]}>
+                  <View style={[styles.defaultBadge, !item.isDefault && { opacity: 0 }]}>
                     <AppText variant="tiny" color={colors.brandBlue} weight="bold">
                       {t("account.addresses.default")}
                     </AppText>
                   </View>
-                )}
-                <AppText variant="label">{item.fullName}</AppText>
-                <AppText variant="body" color={colors.muted}>
-                  {item.line1}
-                  {item.line2 ? `, ${item.line2}` : ""}
-                </AppText>
-                <AppText variant="body" color={colors.muted}>
-                  {item.city}, {item.state} {item.zip}
-                </AppText>
-                {item.phone && (
-                  <AppText variant="caption" color={colors.mutedLight} style={{ marginTop: spacing[1] }}>
-                    {item.phone}
+                  <AppText variant="label">{item.fullName}</AppText>
+                  <AppText variant="body" color={colors.muted}>
+                    {item.line1}
+                    {item.line2 ? `, ${item.line2}` : ""}
                   </AppText>
-                )}
+                  <AppText variant="body" color={colors.muted}>
+                    {item.city}, {item.state} {item.zip || item.postalCode}
+                  </AppText>
+                  {item.phone && (
+                    <AppText variant="caption" color={colors.mutedLight} style={{ marginTop: spacing[1] }}>
+                      {item.phone}
+                    </AppText>
+                  )}
 
-                <View style={styles.cardActions}>
-                  <AppButton
-                    title={t("account.addresses.edit")}
-                    variant="primary"
-                    size="sm"
-                    icon="pencil"
-                    disabled={busy}
-                    onPress={() => openEdit(item)}
-                    style={{ flex: 1 }}
-                  />
-                  {!item.isDefault && (
+                  <View style={styles.cardActions}>
                     <AppButton
-                      title={t("account.addresses.setDefault")}
-                      variant="outline"
+                      title={t("account.addresses.edit")}
+                      variant="primary"
+                      size="sm"
+                      icon="edit"
+                      disabled={busy}
+                      onPress={() => openEdit(item)}
+                      style={{ flex: 1 }}
+                    />
+                    <AppButton
+                      title={item.isDefault ? t("account.addresses.default") : t("account.addresses.setDefault")}
+                      variant={item.isDefault ? "secondary" : "outline"}
                       size="sm"
                       icon="check-circle"
-                      disabled={busy}
-                      loading={busy}
+                      disabled={busy || item.isDefault}
+                      loading={busy && !item.isDefault}
                       onPress={() => handleSetDefault(item.publicId)}
                       style={{ flex: 1 }}
                     />
-                  )}
-                  <AppButton
-                    title={t("common.remove")}
-                    variant="danger"
-                    size="sm"
-                    icon="trash-can-outline"
-                    disabled={busy}
-                    onPress={() => handleDelete(item.publicId)}
-                    style={{ flex: 1 }}
-                  />
+                    <AppButton
+                      title={t("common.remove")}
+                      variant="danger"
+                      size="sm"
+                      icon="delete-outline"
+                      disabled={busy}
+                      onPress={() => handleDelete(item.publicId)}
+                      style={{ flex: 1 }}
+                    />
+                  </View>
                 </View>
-              </View>
-            );
-          }}
-        />
+              );
+            }}
+          />
+          <View style={[styles.addBtnBar, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
+            <AppButton
+              title={t("account.addresses.addNewAddress")}
+              variant="primary"
+              fullWidth
+              size="lg"
+              icon="add"
+              onPress={openCreate}
+            />
+          </View>
+        </>
       )}
     </View>
   );
@@ -429,10 +469,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing[4],
     marginBottom: spacing[3],
+    borderWidth: 1.5,
+    borderColor: "transparent",
     ...shadows.sm,
   },
   cardDefault: {
-    borderWidth: 1.5,
     borderColor: colors.brandBlueBorder,
   },
   defaultBadge: {
@@ -448,7 +489,14 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     marginTop: spacing[3],
   },
-  addBtn: { marginTop: spacing[2] },
+  addBtnBar: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    ...shadows.md,
+  },
   formContent: { paddingHorizontal: spacing[4], paddingBottom: spacing[10] },
   row: { flexDirection: "row", gap: spacing[3] },
   halfField: { flex: 1 },

@@ -54,12 +54,15 @@ export type ServerCartItem = {
 export type Address = {
   id: number;
   publicId: string;
+  label?: string | null;
   fullName: string;
   line1: string;
   line2?: string;
   city: string;
   state: string;
+  /** Backend may return either zip or postalCode */
   zip: string;
+  postalCode?: string;
   country: string;
   phone?: string;
   isDefault: boolean;
@@ -77,10 +80,49 @@ export type Order = {
   paidAt?: string | null;
   items?: OrderItem[] | null;
 
+  subtotalAmount?: string | number | null;
+  shippingAmount?: string | number | null;
+  taxAmount?: string | number | null;
+  discountAmount?: string | number | null;
+
   paymentStatus?: string | null;
   paymentMethodType?: string | null;
   cardBrand?: string | null;
   cardLast4?: string | null;
+
+  paymentMethod?: {
+    type?: string | null;
+    brand?: string | null;
+    last4?: string | null;
+  } | null;
+
+  shippingAddress?: {
+    fullName?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    line1?: string | null;
+    line2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postalCode?: string | null;
+    country?: string | null;
+  } | null;
+
+  cases?: Array<{
+    caseNumber: string;
+    status: string;
+    resolutionIntent?: string | null;
+    createdAt: string;
+    items?: Array<{ reasonCode?: string }> | null;
+  }> | null;
+
+  customerOrderCases?: Array<{
+    caseNumber: string;
+    status: string;
+    resolutionIntent?: string | null;
+    createdAt: string;
+    items?: Array<{ reasonCode?: string }> | null;
+  }> | null;
 };
 
 /**

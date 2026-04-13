@@ -11,13 +11,13 @@ export default function OfflineBanner() {
   const { t } = useTranslation();
   const { isConnected, isInternetReachable } = useNetwork();
   const insets = useSafeAreaInsets();
-  const translateY = useRef(new Animated.Value(-80)).current;
+  const translateY = useRef(new Animated.Value(-200)).current;
 
   const offline = !isConnected || isInternetReachable === false;
 
   useEffect(() => {
     Animated.spring(translateY, {
-      toValue: offline ? 0 : -80,
+      toValue: offline ? 0 : -200,
       damping: 20,
       stiffness: 200,
       useNativeDriver: true,

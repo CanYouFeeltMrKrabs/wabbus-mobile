@@ -13,13 +13,16 @@
  * - Recently Viewed slider
  * - Top Rated grid
  */
-import React, { useCallback } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import {
   View,
   ScrollView,
   Pressable,
   StyleSheet,
   Dimensions,
+  Image,
+  ActivityIndicator,
+  Keyboard,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -34,13 +37,16 @@ import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSl
 import { SkeletonGrid, SkeletonSlider } from "@/components/ui/Skeleton";
 import RecentlyViewedSlider from "@/components/ui/RecentlyViewedSlider";
 import { useTranslation } from "@/hooks/useT";
-import { colors, spacing, borderRadius } from "@/lib/theme";
+import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { API_BASE } from "@/lib/config";
 import { customerFetch } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { getCategoryIcon, CATEGORY_SHORT_NAMES } from "@/lib/categories";
 import { ROUTES } from "@/lib/routes";
-import type { PublicProduct } from "@/lib/types";
+import type { PublicProduct, TypesenseHit } from "@/lib/types";
+import { getLocalizedCategoryName } from "@/lib/types";
+import { searchTypesense } from "@/lib/search";
+import { productImageUrl } from "@/lib/image";
 import { PAGE_SIZE } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
@@ -137,13 +143,161 @@ export default function HomeScreen() {
     [addToCart],
   );
 
+  // ── Inline search typeahead (matches web NavbarSearch) ──
+  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<Array<{
+    productId: string; slug: string; title: string; price: number;
+    compareAtPrice: number | null; image: string | null;
+    ratingAvg: number; reviewCount: number; vendorName: string | null;
+    categoryName: string;
+  }>>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [totalResults, setTotalResults] = useState(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const fetchSuggestions = useCallback((q: string) => {
+    if (q.length < 1) {
+      setSuggestions([]); setShowDropdown(false); setTotalResults(0);
+      return;
+    }
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setSearchLoading(true);
+
+    searchTypesense({ q, perPage: 6, signal: controller.signal })
+      .then((data) => {
+        setSuggestions(
+          data.results
+            .filter((hit) => hit.document.image?.startsWith("http"))
+            .map((hit) => ({
+              productId: hit.document.id,
+              slug: hit.document.slug,
+              title: hit.document.title,
+              price: hit.document.price,
+              compareAtPrice: hit.document.compareAtPrice || null,
+              image: hit.document.image || null,
+              ratingAvg: hit.document.ratingAvg,
+              reviewCount: hit.document.reviewCount,
+              vendorName: hit.document.vendorName || null,
+              categoryName: getLocalizedCategoryName(hit.document),
+            })),
+        );
+        setTotalResults(data.total);
+        setShowDropdown(true);
+        setSearchLoading(false);
+      })
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        setSuggestions([]); setShowDropdown(false); setSearchLoading(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = searchQuery.trim();
+    if (q.length < 1) { setSuggestions([]); setShowDropdown(false); return; }
+    debounceRef.current = setTimeout(() => fetchSuggestions(q), 150);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchQuery, fetchSuggestions]);
+
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
-      {/* Sticky search header */}
+      {/* Sticky search header + dropdown */}
       <View style={[styles.searchHeader, { paddingTop: insets.top + spacing[2] }]}>
-        <SearchBar editable={false} onPress={() => router.push(ROUTES.search)} />
+        {/* Relative wrapper so dropdown anchors directly below the SearchBar input */}
+        <View style={styles.searchBarWrapper}>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              if (!text.trim()) setShowDropdown(false);
+            }}
+            onSubmit={() => {
+              Keyboard.dismiss();
+              setShowDropdown(false);
+            }}
+            autoFocus={false}
+          />
+
+          {/* Typeahead dropdown */}
+          {showDropdown && (
+            <View style={styles.dropdown}>
+              {searchLoading ? (
+                <View style={styles.dropdownLoading}>
+                  <ActivityIndicator size="small" color={colors.brandBlue} />
+                  <AppText variant="caption" color={colors.muted}>{t("common.searching") ?? "Searching..."}</AppText>
+                </View>
+              ) : suggestions.length === 0 ? (
+                <View style={styles.dropdownLoading}>
+                  <AppText variant="caption" color={colors.muted}>{t("common.noResults") ?? "No results found"}</AppText>
+                </View>
+              ) : (
+                <>
+                  {suggestions.map((item) => (
+                    <Pressable
+                      key={item.productId}
+                      style={({ pressed }) => [styles.dropdownItem, pressed && styles.dropdownItemPressed]}
+                      onPress={() => {
+                        setShowDropdown(false);
+                        setSearchQuery("");
+                        Keyboard.dismiss();
+                        router.push(ROUTES.product(item.productId));
+                      }}
+                    >
+                      <View style={styles.dropdownThumbWrap}>
+                        {item.image ? (
+                          <Image source={{ uri: item.image }} style={styles.dropdownThumb} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.dropdownThumb, { backgroundColor: colors.slate100 }]} />
+                        )}
+                      </View>
+                      <View style={styles.dropdownInfo}>
+                        <AppText numberOfLines={1} style={styles.dropdownTitle}>{item.title}</AppText>
+                        <View style={styles.dropdownMeta}>
+                          <AppText style={styles.dropdownPrice}>${item.price.toFixed(2)}</AppText>
+                          {item.compareAtPrice != null && item.compareAtPrice > item.price && (
+                            <AppText style={styles.dropdownCompare}>${item.compareAtPrice.toFixed(2)}</AppText>
+                          )}
+                          {item.reviewCount > 0 && (
+                            <AppText style={styles.dropdownRating}>★ {item.ratingAvg.toFixed(1)}</AppText>
+                          )}
+                          <AppText numberOfLines={1} style={styles.dropdownCategory}>{item.categoryName}</AppText>
+                        </View>
+                      </View>
+                    </Pressable>
+                  ))}
+                  {totalResults > suggestions.length && (
+                    <Pressable
+                      style={styles.dropdownViewAll}
+                      onPress={() => {
+                        setShowDropdown(false);
+                        Keyboard.dismiss();
+                        router.push(ROUTES.search);
+                      }}
+                    >
+                      <AppText style={styles.dropdownViewAllText}>
+                        View all {totalResults} results
+                      </AppText>
+                    </Pressable>
+                  )}
+                </>
+              )}
+            </View>
+          )}
+        </View>
       </View>
+
+      {/* Dismiss overlay when dropdown is open */}
+      {showDropdown && (
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => { setShowDropdown(false); Keyboard.dismiss(); }}
+        />
+      )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -326,9 +480,109 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandBlue,
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[2],
-    zIndex: 10,
+    zIndex: 50,
+    elevation: 50,
   },
   scrollContent: { flexGrow: 1 },
+
+  // ── Search bar wrapper (positioning context for dropdown) ──
+  searchBarWrapper: {
+    position: "relative",
+    zIndex: 60,
+    elevation: 60,
+  },
+
+  // ── Typeahead dropdown ──
+  dropdown: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    marginTop: spacing[1],
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.slate200,
+    ...shadows.lg,
+    overflow: "hidden",
+    maxHeight: 400,
+    zIndex: 60,
+    elevation: 60,
+  },
+  dropdownLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2.5],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.slate100,
+  },
+  dropdownItemPressed: {
+    backgroundColor: colors.slate50,
+  },
+  dropdownThumbWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.lg,
+    overflow: "hidden",
+    backgroundColor: colors.slate100,
+  },
+  dropdownThumb: {
+    width: "100%",
+    height: "100%",
+  },
+  dropdownInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  dropdownTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.slate900,
+  },
+  dropdownMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1.5],
+    marginTop: 2,
+  },
+  dropdownPrice: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.slate900,
+  },
+  dropdownCompare: {
+    fontSize: 11,
+    color: colors.slate400,
+    textDecorationLine: "line-through",
+  },
+  dropdownRating: {
+    fontSize: 11,
+    color: colors.warning,
+    fontWeight: "600",
+  },
+  dropdownCategory: {
+    fontSize: 11,
+    color: colors.slate400,
+    flex: 1,
+  },
+  dropdownViewAll: {
+    paddingVertical: spacing[2.5],
+    alignItems: "center",
+  },
+  dropdownViewAllText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.brandBlue,
+  },
 
   sectionHeader: {
     flexDirection: "row",

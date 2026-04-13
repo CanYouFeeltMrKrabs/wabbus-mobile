@@ -117,26 +117,46 @@ export const spacing = {
 } as const;
 
 export const fontSize = {
-  "2xs": 9,
-  xs: 10,
-  sm: 12,
-  base: 14,
-  md: 16,
-  lg: 18,
-  xl: 20,
-  "2xl": 24,
-  "3xl": 30,
-  "4xl": 36,
+  "2xs": 10,
+  xs: 12,
+  sm: 13,
+  base: 15,
+  md: 17,
+  lg: 20,
+  xl: 22,
+  "2xl": 26,
+  "3xl": 32,
+  "4xl": 38,
 } as const;
 
 export const fontWeight = {
-  normal: "400" as const,
-  medium: "500" as const,
+  normal: "600" as const,
+  medium: "600" as const,
   semibold: "600" as const,
   bold: "700" as const,
   extrabold: "800" as const,
   black: "900" as const,
 };
+
+export const fontFamily = {
+  regular: "Inter_400Regular",
+  medium: "Inter_500Medium",
+  semibold: "Inter_600SemiBold",
+  bold: "Inter_700Bold",
+} as const;
+
+const WEIGHT_TO_FAMILY: Record<string, string> = {
+  "400": fontFamily.semibold,
+  "500": fontFamily.semibold,
+  "600": fontFamily.semibold,
+  "700": fontFamily.bold,
+  "800": fontFamily.bold,
+  "900": fontFamily.bold,
+};
+
+export function resolveFontFamily(weight: string): string {
+  return WEIGHT_TO_FAMILY[weight] ?? fontFamily.regular;
+}
 
 export const borderRadius = {
   none: 0,

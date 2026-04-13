@@ -142,8 +142,9 @@ function MessageSellerWizard() {
   const insets = useSafeAreaInsets();
 
   const { data: orderData, isLoading: loading } = useQuery({
-    queryKey: queryKeys.orders.detail(orderId!),
+    queryKey: queryKeys.orders.detail(orderId ?? "__none__"),
     queryFn: async () => {
+      if (!orderId) return [];
       const data = await customerFetch<any>(`/orders/${orderId}`);
       const order = data?.order ?? data;
       let parsed = parseOrderItems(order);
@@ -167,7 +168,7 @@ function MessageSellerWizard() {
     enabled: !!orderId,
   });
 
-  const items = orderData ?? [];
+  const items: SelectableItem[] = Array.isArray(orderData) ? orderData : [];
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("select");

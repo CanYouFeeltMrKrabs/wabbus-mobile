@@ -38,13 +38,13 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.wabbus.com",
         "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://pub-c2607890712c4b98874f735fb03de34b.r2.dev",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "REPLACE_WITH_pk_live_KEY",
-        "EXPO_PUBLIC_TYPESENSE_HOST": "staging-api.wabbus.com",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_Live_43949990903900931",
+        "EXPO_PUBLIC_TYPESENSE_HOST": "api.wabbus.com",
         "EXPO_PUBLIC_TYPESENSE_PORT": "443",
         "EXPO_PUBLIC_TYPESENSE_PROTOCOL": "https",
         "EXPO_PUBLIC_TYPESENSE_SEARCH_KEY": "lrdGetyfzXQP6P142WZt0QcL2sYw3Xm4",
         "EXPO_PUBLIC_SENTRY_DSN": "https://620c72e61342fdf8c521cf403b4d348e@o4511197522886656.ingest.us.sentry.io/4511197608804352",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "false"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
   },

@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   topAction: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing[4], paddingBottom: spacing[2] },
   gridRow: { gap: spacing[3], paddingHorizontal: spacing[4] },
   gridContent: { paddingTop: spacing[2], paddingBottom: spacing[10], gap: spacing[3] },
-  gridCell: { flex: 1 },
+  gridCell: { flex: 1, maxWidth: "50%" },
   card: {
     backgroundColor: colors.card, borderRadius: borderRadius.xl, overflow: "hidden",
     borderWidth: 1, borderColor: colors.gray100, ...shadows.sm,

@@ -425,9 +425,8 @@ export default function CheckoutScreen() {
   const authNoAddresses = !c.isGuest && c.addresses.length === 0;
 
   return (
-    <KeyboardAvoidingView
+    <View
       style={[s.screen, { paddingTop: insets.top }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       {/* Header */}
       <View style={s.header}>
@@ -755,7 +754,7 @@ export default function CheckoutScreen() {
           onPress={handlePay}
         />
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

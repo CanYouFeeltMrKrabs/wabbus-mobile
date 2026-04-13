@@ -81,4 +81,6 @@ export const ROUTES = {
   terms: "/terms" as const,
   privacy: "/privacy" as const,
   contact: "/contact" as const,
+
+  accessibility: "/accessibility" as const,
 } as const;

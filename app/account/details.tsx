@@ -37,8 +37,8 @@ function AccountDetailsContent() {
           <DetailRow label={t("account.details.memberSince")} value={formatDate(user?.createdAt)} />
         </View>
 
-        <AppButton title={t("account.details.changePassword")} variant="outline" fullWidth icon="lock" onPress={() => router.push(ROUTES.accountChangePassword)} style={styles.actionBtn} />
-        <AppButton title={t("account.details.changeEmail")} variant="outline" fullWidth icon="email" onPress={() => router.push(ROUTES.accountChangeEmail)} style={styles.actionBtn} />
+        <AppButton title={t("account.details.changePassword")} variant="primary" fullWidth icon="lock" onPress={() => router.push(ROUTES.accountChangePassword)} style={styles.actionBtn} />
+        <AppButton title={t("account.details.changeEmail")} variant="accent" fullWidth icon="email" onPress={() => router.push(ROUTES.accountChangeEmail)} style={styles.actionBtn} />
 
         <View style={styles.dangerSection}>
           <AppButton title={t("account.details.deleteAccount")} variant="danger" fullWidth icon="delete-forever" onPress={() => router.push(ROUTES.accountDeleteAccount)} />

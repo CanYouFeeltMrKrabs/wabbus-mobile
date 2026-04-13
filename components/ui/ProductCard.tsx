@@ -3,8 +3,8 @@
  * Matches the web's card design: image, badges, wishlist, title, vendor,
  * star rating, price, and add-to-cart button.
  */
-import React, { useEffect, useState, useCallback } from "react";
-import { View, Image, Pressable, StyleSheet } from "react-native";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { View, Image, Pressable, StyleSheet, Animated, Easing } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "./AppText";
@@ -33,6 +33,35 @@ export default function ProductCard({ product, onAddToCart, imageSize = "card" }
   const hasDiscount =
     product.compareAtPrice != null && Number(product.compareAtPrice) > Number(product.price);
   const [inWishlist, setInWishlist] = useState(false);
+  const cartFlash = useRef(new Animated.Value(0)).current;
+
+  const handleAddToCart = useCallback(
+    (e: any) => {
+      e.stopPropagation?.();
+      onAddToCart?.(product);
+      cartFlash.setValue(0);
+      Animated.sequence([
+        Animated.timing(cartFlash, {
+          toValue: 1,
+          duration: 80,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(cartFlash, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    },
+    [onAddToCart, product, cartFlash],
+  );
+
+  const cartBtnBg = cartFlash.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.brandBlue, colors.brandOrange],
+  });
 
   useEffect(() => {
     isInWishlist(product.productId).then(setInWishlist);
@@ -126,14 +155,10 @@ export default function ProductCard({ product, onAddToCart, imageSize = "card" }
           </View>
 
           {onAddToCart && (
-            <Pressable
-              style={styles.cartBtn}
-              onPress={(e) => {
-                e.stopPropagation?.();
-                onAddToCart(product);
-              }}
-            >
-              <Icon name="add-shopping-cart" size={18} color={colors.white} />
+            <Pressable onPress={handleAddToCart}>
+              <Animated.View style={[styles.cartBtn, { backgroundColor: cartBtnBg }]}>
+                <Icon name="add-shopping-cart" size={18} color={colors.white} />
+              </Animated.View>
             </Pressable>
           )}
         </View>
@@ -154,7 +179,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.95, transform: [{ scale: 0.98 }] },
   imageWrap: { aspectRatio: 1, backgroundColor: colors.white },
   image: { width: "100%", height: "100%" },
-  badges: { position: "absolute", top: spacing[1], left: spacing[1], zIndex: 10 },
+  badges: { position: "absolute", top: 0, left: 0, zIndex: 10, padding: spacing[1] },
   wishlist: {
     position: "absolute",
     top: spacing[1.5],

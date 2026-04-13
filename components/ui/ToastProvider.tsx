@@ -11,6 +11,13 @@ let nextId = 0;
 const MAX_MESSAGE_LENGTH = 60;
 const ADDED_SUFFIX = " added to cart";
 
+/** Height of the tab bar row (excluding safe-area) */
+const TAB_BAR_HEIGHT = 42;
+/** Height of the sticky "Add to Cart" bar that floats above the tab bar */
+const STICKY_BAR_HEIGHT = 56;
+/** Extra breathing room so the toast doesn't butt right up against the bar */
+const TOAST_GAP = 8;
+
 function truncateMessage(msg: string): string {
   if (msg.length <= MAX_MESSAGE_LENGTH) return msg;
 
@@ -32,6 +39,7 @@ const ICON_MAP: Record<ToastVariant, { icon: string; color: string }> = {
 
 export default function ToastProvider() {
   const [toasts, setToasts] = useState<ToastItemType[]>([]);
+  const [stickyVisible, setStickyVisible] = useState(false);
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -52,10 +60,23 @@ export default function ToastProvider() {
     };
   }, []);
 
+  // Track sticky cart bar visibility so we can push toasts above it
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("toggleStickyCart", ({ visible }) => {
+      setStickyVisible(!!visible);
+    });
+    return () => sub.remove();
+  }, []);
+
   if (toasts.length === 0) return null;
 
+  // Base offset: clear the tab bar + safe area
+  // When the sticky bar is visible, add its height so the toast stacks above it
+  const bottomOffset =
+    insets.bottom + TAB_BAR_HEIGHT + TOAST_GAP + (stickyVisible ? STICKY_BAR_HEIGHT : 0);
+
   return (
-    <View style={[styles.container, { bottom: insets.bottom + spacing[12] }]} pointerEvents="none">
+    <View style={[styles.container, { bottom: bottomOffset }]} pointerEvents="none">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} />
       ))}

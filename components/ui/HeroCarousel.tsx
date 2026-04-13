@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import AppText from "./AppText";
 import Icon from "./Icon";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
+import { ROUTES } from "@/lib/routes";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CAROUSEL_WIDTH = SCREEN_WIDTH - spacing[4] * 2;
@@ -43,7 +44,7 @@ const slides: Slide[] = [
     ],
     sub: "Transform your living space with our premium household collection at unbeatable prices.",
     ctaLabel: "SHOP NOW",
-    ctaRoute: "/search?sort=bestselling",
+    ctaRoute: ROUTES.searchWithSort("bestselling"),
     ctaBg: colors.brandOrange,
     icon: "star",
   },
@@ -60,7 +61,7 @@ const slides: Slide[] = [
     ],
     sub: "Explore our latest additions across fashion, electronics, and home essentials.",
     ctaLabel: "EXPLORE NOW",
-    ctaRoute: "/search?sort=newest",
+    ctaRoute: ROUTES.searchWithSort("newest"),
     ctaBg: colors.heroPurple400,
     icon: "local-fire-department",
   },
@@ -77,7 +78,7 @@ const slides: Slide[] = [
     ],
     sub: "Grab limited-time deals before they're gone — massive savings across every category.",
     ctaLabel: "GRAB DEALS",
-    ctaRoute: "/search?sort=priceAsc",
+    ctaRoute: ROUTES.searchWithSort("priceAsc"),
     ctaBg: colors.yellow600,
     icon: "bolt",
   },
@@ -181,24 +182,15 @@ export default function HeroCarousel() {
           ))}
         </AppText>
 
-        {/* Sub */}
-        <AppText
-          variant="bodySmall"
-          color={colors.overlayWhite90}
-          style={styles.sub}
-        >
-          {slide.sub}
-        </AppText>
-
         {/* CTA */}
         <Pressable
           style={[styles.cta, { backgroundColor: slide.ctaBg }]}
           onPress={() => router.push(slide.ctaRoute as any)}
         >
-          <AppText variant="button" color={colors.white}>
+          <AppText variant="caption" weight="bold" color={colors.white}>
             {slide.ctaLabel}
           </AppText>
-          <Icon name="arrow-forward" size={16} color={colors.white} />
+          <Icon name="arrow-forward" size={14} color={colors.white} />
         </Pressable>
 
         {/* Prev / Next arrows */}
@@ -285,12 +277,12 @@ const styles = StyleSheet.create({
   cta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[2],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[6],
-    borderRadius: borderRadius.xl,
+    gap: spacing[1.5],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
+    borderRadius: borderRadius.full,
     alignSelf: "flex-start",
-    ...shadows.lg,
+    ...shadows.md,
   },
   arrowRow: {
     position: "absolute",

@@ -50,8 +50,8 @@ export default function TicketThread({ ticketPublicId }: Props) {
     if (!ticketPublicId) return;
     setLoading(true);
     setError(null);
-    customerFetch<SupportTicket>(`/support/tickets/${ticketPublicId}`)
-      .then(setTicket)
+    customerFetch<any>(`/support/tickets/${ticketPublicId}`)
+      .then((res) => setTicket((res?.data ?? res?.ticket ?? res) as SupportTicket))
       .catch((e) => setError(e?.message ?? "Failed to load messages"))
       .finally(() => setLoading(false));
   }, [ticketPublicId]);
@@ -126,14 +126,16 @@ export default function TicketThread({ ticketPublicId }: Props) {
         return (
           <View style={[styles.bubbleRow, isCustomer ? styles.bubbleRowRight : styles.bubbleRowLeft]}>
             <View style={[styles.bubble, isCustomer ? styles.bubbleCustomer : styles.bubbleAdmin]}>
-              <AppText
-                variant="caption"
-                weight="semibold"
-                color={isCustomer ? colors.white : colors.foreground}
-                style={styles.senderLabel}
-              >
-                {isCustomer ? "You" : "Support"}
-              </AppText>
+              {!isCustomer && (
+                <AppText
+                  variant="caption"
+                  weight="semibold"
+                  color={colors.foreground}
+                  style={styles.senderLabel}
+                >
+                  Support
+                </AppText>
+              )}
               <AppText
                 variant="bodySmall"
                 color={isCustomer ? colors.white : colors.foreground}

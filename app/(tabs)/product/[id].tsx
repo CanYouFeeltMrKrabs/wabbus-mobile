@@ -51,6 +51,8 @@ import { trackEvent, trackProductDwell } from "@/lib/tracker";
 const MAX_QTY = 99;
 const DISCOUNT_THRESHOLD = 5;
 const INITIAL_SPECS_SHOWN = 5;
+const INITIAL_FEATURES_SHOWN = 2;
+const DESCRIPTION_PREVIEW_LENGTH = 300;
 
 type ProductVariant = {
   publicId: string;
@@ -156,16 +158,25 @@ export default function ProductDetailScreen() {
     queryFn: () => publicFetch<ProductDetail>(`/products/public/${id}/view`),
     enabled: !!id,
   });
+  const { data: reviewSummary } = useQuery({
+    queryKey: ["reviewSummary", id],
+    queryFn: () => publicFetch<{ ratingAvg: number; reviewCount: number }>(`/reviews/${encodeURIComponent(id!)}/summary`),
+    enabled: !!id,
+  });
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [adding, setAdding] = useState(false);
   const [inWishlist, setInWishlist] = useState(false);
   const [specsExpanded, setSpecsExpanded] = useState(false);
+  const [featuresExpanded, setFeaturesExpanded] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
   const bodyYRef = useRef(0);
   const buyBoxLayoutRef = useRef({ y: 0, height: 0 });
   const hasSeenBuyBox = useRef(false);
   const isStickyVisible = useRef(false);
   const scrollRef = useRef({ lastY: 0, lastT: 0, vel: 0, firstSample: true, shownAtT: 0, lastToggleT: 0 });
+  const scrollViewRef = useRef<ScrollView>(null);
+  const reviewsYRef = useRef(0);
 
   const variantData: VariantData[] = useMemo(() => {
     if (!product?.variants?.length) return [];
@@ -405,7 +416,7 @@ export default function ProductDetailScreen() {
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Icon name="error-outline" size={48} color={colors.gray300} />
         <AppText variant="subtitle" color={colors.muted}>{t("product.notFound")}</AppText>
-        <AppButton title={t("product.goBack")} variant="outline" onPress={() => router.canGoBack() ? router.back() : router.replace(ROUTES.homeFeed)} style={{ marginTop: spacing[4] }} />
+        <AppButton title={t("product.goBack")} variant="primary" onPress={() => router.canGoBack() ? router.back() : router.replace(ROUTES.homeFeed)} style={{ marginTop: spacing[4] }} />
       </View>
     );
   }
@@ -424,10 +435,12 @@ export default function ProductDetailScreen() {
       />
 
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
       >
         <ProductImageGallery
           images={images}
@@ -447,9 +460,14 @@ export default function ProductDetailScreen() {
           )}
 
           {/* Rating + reviews + sold count */}
-          <View style={styles.ratingRow}>
-            <StarRating rating={product.ratingAvg} count={product.reviewCount} size={16} />
-          </View>
+          {(reviewSummary?.ratingAvg ?? 0) > 0 && (
+            <Pressable
+              style={styles.ratingRow}
+              onPress={() => scrollViewRef.current?.scrollTo({ y: reviewsYRef.current, animated: true })}
+            >
+              <StarRating rating={reviewSummary!.ratingAvg} count={reviewSummary!.reviewCount} size={16} />
+            </Pressable>
+          )}
 
           {product.soldCount != null && product.soldCount > 0 && (
             <AppText variant="caption" color={colors.slate600} style={{ marginTop: spacing[0.5] }}>
@@ -459,19 +477,24 @@ export default function ProductDetailScreen() {
 
           {/* Price Block */}
           <View style={styles.priceBlock}>
-            <AppText style={styles.priceLg}>{formatDollars(displayPrice)}</AppText>
-            {savingsPercent != null && savingsPercent >= DISCOUNT_THRESHOLD && displayCompareAt != null && (
-              <>
-                <AppText variant="priceStrike" style={styles.priceOld}>
-                  {formatDollars(Number(displayCompareAt))}
-                </AppText>
-                <View style={styles.discountPill}>
-                  <AppText style={styles.discountText}>
-                    {t("product.percentOff", { percent: savingsPercent })}
-                  </AppText>
-                </View>
-              </>
-            )}
+            <View>
+              <AppText variant="caption" color={colors.slate500} style={{ marginBottom: spacing[0.5] }}>{t("product.oneTimePurchase")}</AppText>
+              <View style={styles.priceRow}>
+                <AppText style={styles.priceLg}>{formatDollars(displayPrice)}</AppText>
+                {savingsPercent != null && savingsPercent >= DISCOUNT_THRESHOLD && displayCompareAt != null && (
+                  <>
+                    <AppText variant="priceStrike" style={styles.priceOld}>
+                      {formatDollars(Number(displayCompareAt))}
+                    </AppText>
+                    <View style={styles.discountPill}>
+                      <AppText style={styles.discountText}>
+                        {t("product.percentOff", { percent: savingsPercent })}
+                      </AppText>
+                    </View>
+                  </>
+                )}
+              </View>
+            </View>
           </View>
 
           {/* Variant Selector */}
@@ -486,40 +509,37 @@ export default function ProductDetailScreen() {
             />
           )}
 
-          {/* Availability */}
-          <View style={styles.availabilitySection}>
-            <AppText style={styles.availabilityTitle}>{t("product.availability")}</AppText>
-            {inStock ? (
-              <View style={styles.stockRow}>
-                <Icon name="check-circle" size={16} color={colors.success} />
-                <AppText style={styles.stockTextGreen}>{t("product.readyToShip")}</AppText>
+          {/* Availability + Shipping */}
+          <View style={styles.buyBoxInfoSection}>
+            {/* Availability */}
+            <View style={styles.infoCardRow}>
+              <View style={[styles.iconBox, { backgroundColor: colors.brandBlueLight, borderColor: "#dbeafe" }]}>
+                <Icon name="inventory-2" size={16} color={colors.brandBlue} />
               </View>
-            ) : (
-              <View style={styles.stockRow}>
-                <Icon name="cancel" size={16} color={colors.error} />
-                <AppText style={[styles.stockTextGreen, { color: colors.error }]}>{t("product.currentlyUnavailable")}</AppText>
+              <View style={styles.infoCardContent}>
+                <AppText style={styles.infoCardTitle}>{t("product.availability")}</AppText>
+                {inStock ? (
+                  <AppText style={styles.stockTextGreen}>{t("product.readyToShip")}</AppText>
+                ) : (
+                  <AppText style={[styles.stockTextGreen, { color: colors.error }]}>{t("product.currentlyUnavailable")}</AppText>
+                )}
+                {available !== null && available > 0 && available <= 5 && (
+                  <AppText style={styles.lowStockText}>{t("product.onlyNLeft", { count: available })}</AppText>
+                )}
               </View>
-            )}
-
-            {available !== null && available > 0 && available <= 5 && (
-              <AppText style={styles.lowStockText}>{t("product.onlyNLeft", { count: available })}</AppText>
-            )}
-          </View>
-
-          {/* Shipping */}
-          {shippingLabel != null && (
-            <View style={styles.infoRow}>
-              <Icon name="local-shipping" size={16} color={colors.slate600} />
-              <AppText variant="body" color={colors.slate600}>{shippingLabel}</AppText>
             </View>
-          )}
 
-          {/* Delivery */}
-          <View style={styles.infoRow}>
-            <Icon name="schedule" size={16} color={colors.slate600} />
-            <AppText variant="body" color={colors.slate600}>
-              {t("product.expectedShipWithin")} <AppText weight="bold" color={colors.foreground}>{t("product.businessDays")}</AppText>
-            </AppText>
+            {/* Shipping */}
+            {shippingLabel != null && (
+              <View style={styles.infoCardRow}>
+                <View style={[styles.iconBox, { backgroundColor: colors.successLight, borderColor: "#a7f3d0" }]}>
+                  <Icon name="local-shipping" size={16} color={colors.success} />
+                </View>
+                <View style={styles.infoCardContent}>
+                  <AppText style={styles.infoCardTitle}>{shippingLabel}</AppText>
+                </View>
+              </View>
+            )}
           </View>
 
           <BadgeRow badges={product.badges} />
@@ -529,8 +549,8 @@ export default function ProductDetailScreen() {
             <AppText style={styles.qtyLabel}>{t("product.quantity")}</AppText>
             <QuantitySelector
               quantity={qty}
-              onIncrease={() => setQty((q) => Math.min(MAX_QTY, q + 1))}
-              onDecrease={() => setQty((q) => Math.max(1, q - 1))}
+              onChange={(q) => setQty(q)}
+              max={MAX_QTY}
             />
           </View>
 
@@ -542,37 +562,70 @@ export default function ProductDetailScreen() {
               onPress={handleAddToCart}
               loading={adding}
               disabled={!inStock}
-              style={{ marginTop: spacing[6] }}
+              style={styles.addToCartBtn}
             />
           </View>
 
-          {/* Returns */}
-          <View style={styles.infoRow}>
-            <Icon name="replay" size={16} color={colors.slate600} />
-            <View>
-              <AppText variant="body" weight="bold" color={colors.foreground}>{t("product.thirtyDayReturns")}</AppText>
-              <AppText variant="caption" color={colors.slate600}>{t("product.easyReturns")}</AppText>
+          {/* Delivery */}
+          <View style={styles.deliverySection}>
+            <View style={styles.infoCardRow}>
+              <View style={[styles.iconBox, { backgroundColor: colors.brandBlueLight, borderColor: "#dbeafe" }]}>
+                <Icon name="schedule" size={16} color={colors.brandBlue} />
+              </View>
+              <View style={styles.infoCardContent}>
+                <AppText style={styles.infoCardTitle}>{t("product.expectedShipWithin")}</AppText>
+                <AppText variant="caption" color={colors.slate500}>
+                  {t("product.businessDays")}
+                </AppText>
+              </View>
             </View>
           </View>
 
-          {/* Secure transaction */}
-          <View style={styles.infoRow}>
-            <Icon name="lock" size={16} color={colors.success} />
-            <AppText variant="body" color={colors.slate600}>{t("product.secureTransaction")}</AppText>
+          {/* Returns + Secure Section */}
+          <View style={styles.trustSection}>
+            <View style={styles.infoCardRow}>
+              <View style={[styles.iconBox, styles.iconBoxNeutral]}>
+                <Icon name="replay" size={16} color={colors.slate700} />
+              </View>
+              <View style={styles.infoCardContent}>
+                <AppText style={styles.infoCardTitle}>{t("product.thirtyDayReturns")}</AppText>
+                <AppText variant="caption" color={colors.slate500}>{t("product.easyReturns")}</AppText>
+              </View>
+            </View>
+
+            {/* Secure transaction */}
+            <View style={styles.secureRow}>
+              <Icon name="lock" size={14} color={colors.success} />
+              <AppText variant="caption" color={colors.slate500} weight="medium">{t("product.secureTransaction")}</AppText>
+            </View>
           </View>
 
           {/* Key Features */}
           {product.keyFeatures && product.keyFeatures.length > 0 && (
             <View style={styles.descSection}>
-              <AppText style={styles.descTitle}>{t("product.keyFeatures")}</AppText>
-              {product.keyFeatures.map((feature, idx) => (
+              <AppText style={styles.featuresTitle}>{t("product.keyFeatures")}</AppText>
+              {(featuresExpanded ? product.keyFeatures : product.keyFeatures.slice(0, INITIAL_FEATURES_SHOWN)).map((feature, idx) => (
                 <View key={idx} style={styles.featureRow}>
-                  <View style={styles.featureBullet} />
-                  <AppText variant="body" color={colors.slate600} style={{ flex: 1 }}>
+                  <View style={styles.featureCheck}>
+                    <Icon name="check" size={10} color="#059669" />
+                  </View>
+                  <AppText variant="body" color={colors.slate600} style={{ flex: 1, lineHeight: 22 }}>
                     {feature}
                   </AppText>
                 </View>
               ))}
+              {product.keyFeatures.length > INITIAL_FEATURES_SHOWN && (
+                <Pressable
+                  onPress={() => setFeaturesExpanded((v) => !v)}
+                  style={styles.featuresToggle}
+                  accessibilityRole="button"
+                  accessibilityLabel={featuresExpanded ? t("product.showLess") : t("product.readMore")}
+                >
+                  <AppText style={styles.featuresToggleText}>
+                    {featuresExpanded ? t("product.showLess") : t("product.readMore")}
+                  </AppText>
+                </Pressable>
+              )}
             </View>
           )}
 
@@ -602,12 +655,31 @@ export default function ProductDetailScreen() {
           {product.description && (
             <View style={styles.descSection}>
               <AppText style={styles.descTitle}>{t("product.productDetails")}</AppText>
-              <AppText variant="body" color={colors.slate600}>{product.description}</AppText>
+              <AppText variant="body" color={colors.slate600}>
+                {descExpanded || product.description.length <= DESCRIPTION_PREVIEW_LENGTH
+                  ? product.description
+                  : product.description.slice(0, DESCRIPTION_PREVIEW_LENGTH).trimEnd() + "…"}
+              </AppText>
+              {product.description.length > DESCRIPTION_PREVIEW_LENGTH && (
+                <Pressable
+                  onPress={() => setDescExpanded((v) => !v)}
+                  style={styles.featuresToggle}
+                  accessibilityRole="button"
+                  accessibilityLabel={descExpanded ? t("product.showLess") : t("product.readMore")}
+                >
+                  <AppText style={styles.featuresToggleText}>
+                    {descExpanded ? t("product.showLess") : t("product.readMore")}
+                  </AppText>
+                </Pressable>
+              )}
             </View>
           )}
 
           {/* Reviews */}
-          <View style={styles.reviewsWrapper}>
+          <View
+            style={styles.reviewsWrapper}
+            onLayout={(e) => { reviewsYRef.current = e.nativeEvent.layout.y + bodyYRef.current; }}
+          >
             <ProductReviews productId={product.productId} />
           </View>
         </View>
@@ -666,38 +738,135 @@ const styles = StyleSheet.create({
     position: "absolute", top: 56, left: spacing[4], zIndex: 20,
   },
   scrollContent: { paddingBottom: spacing[8] },
-  body: { paddingHorizontal: spacing[4], paddingTop: spacing[5] },
-  productTitle: { fontSize: 24, lineHeight: 30, fontWeight: "bold", color: colors.foreground },
+  body: { paddingHorizontal: spacing[4], paddingTop: spacing[2] },
+  productTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "800",
+    color: colors.slate900,
+    letterSpacing: -0.3,
+  },
   vendor: { marginTop: spacing[1], color: colors.slate600 },
   ratingRow: { marginTop: spacing[2], marginBottom: spacing[0.5] },
-  priceBlock: { flexDirection: "row", alignItems: "center", gap: spacing[2], marginTop: spacing[3] },
-  priceLg: { fontSize: 24, fontWeight: "900", color: colors.foreground },
-  priceOld: { fontSize: 16, color: colors.slate400, textDecorationLine: "line-through" },
-  discountPill: { backgroundColor: colors.error, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  discountText: { color: colors.white, fontSize: 11, fontWeight: "bold" },
 
-  availabilitySection: { marginTop: spacing[4] },
-  availabilityTitle: { fontSize: 14, fontWeight: "bold", color: colors.foreground, marginBottom: spacing[1] },
-  stockRow: { flexDirection: "row", alignItems: "center", gap: spacing[1.5] },
-  stockTextGreen: { fontSize: 14, fontWeight: "600", color: colors.success },
-  lowStockText: { fontSize: 13, fontWeight: "600", color: colors.warning, marginTop: spacing[0.5], marginLeft: spacing[4] },
-
-  infoRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing[2], marginTop: spacing[2.5] },
-
-  qtySection: {
-    flexDirection: "column", alignItems: "flex-start", gap: spacing[2],
-    marginTop: spacing[4], paddingTop: spacing[4],
+  // ── Price ─────────────────────────────────────────────────────
+  priceBlock: {
+    marginTop: spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: colors.slate200,
+    paddingTop: spacing[3],
   },
-  qtyLabel: { fontSize: 16, fontWeight: "bold", color: colors.foreground, textTransform: "uppercase" },
-  descSection: { marginTop: spacing[6], paddingTop: spacing[4], borderTopWidth: 1, borderTopColor: colors.slate200 },
-  descTitle: { fontSize: 18, fontWeight: "bold", marginBottom: spacing[3], color: colors.foreground },
-  featureRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: spacing[2], gap: spacing[2] },
-  featureBullet: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.brandBlue, marginTop: 8 },
+  priceRow: { flexDirection: "row", alignItems: "baseline", gap: spacing[2.5] },
+  priceLg: {
+    fontSize: 30,
+    fontWeight: "900",
+    color: colors.slate900,
+    letterSpacing: -0.5,
+  },
+  priceOld: {
+    fontSize: 18,
+    color: colors.slate400,
+    fontWeight: "500",
+    textDecorationLine: "line-through",
+  },
+  discountPill: {
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.md,
+    ...shadows.sm,
+  },
+  discountText: { color: "#b91c1c", fontSize: 12, fontWeight: "bold" },
 
-  specsTable: { borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.slate200, overflow: "hidden" },
-  specRow: { flexDirection: "row", paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  // ── Buy Box Info (Availability / Shipping / Delivery) ─────────
+  buyBoxInfoSection: {
+    marginTop: spacing[5],
+    gap: spacing[3.5],
+  },
+  infoCardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2.5],
+  },
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    ...shadows.sm,
+  },
+  iconBoxNeutral: {
+    backgroundColor: colors.slate50,
+    borderColor: colors.slate200,
+  },
+  infoCardContent: {
+    flex: 1,
+  },
+  infoCardTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.foreground,
+  },
+  stockTextGreen: { fontSize: 13, fontWeight: "600", color: colors.success, fontStyle: "italic", marginTop: 2 },
+  lowStockText: { fontSize: 12, fontWeight: "600", color: colors.warning, marginTop: 2 },
+
+  // ── Quantity + ATC ────────────────────────────────────────────
+  qtySection: {
+    flexDirection: "column", alignItems: "stretch", gap: spacing[2],
+    marginTop: spacing[6], paddingTop: spacing[5],
+    borderTopWidth: 1, borderTopColor: colors.slate200,
+  },
+  qtyLabel: { fontSize: 12, fontWeight: "bold", color: colors.slate400, textTransform: "uppercase", letterSpacing: 1 },
+  addToCartBtn: {
+    marginTop: spacing[5],
+    borderRadius: borderRadius.xl,
+    ...shadows.lg,
+  },
+
+  // ── Delivery Section (after ATC) ──────────────────────────────
+  deliverySection: {
+    marginTop: spacing[6],
+  },
+
+  // ── Trust Section (Returns + Secure) ──────────────────────────
+  trustSection: {
+    marginTop: spacing[5],
+    paddingTop: spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: colors.slate100,
+    gap: spacing[4],
+  },
+  secureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[1.5],
+  },
+
+  // ── Sections ──────────────────────────────────────────────────
+  descSection: { marginTop: spacing[6], paddingTop: spacing[4], borderTopWidth: 1, borderTopColor: colors.slate200 },
+  descTitle: { fontSize: 17, fontWeight: "800", marginBottom: spacing[3], color: colors.slate900, letterSpacing: -0.2 },
+  featuresTitle: { fontSize: 15, fontWeight: "700", marginBottom: spacing[2.5], color: colors.slate900 },
+  featureRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: spacing[2.5], gap: spacing[2.5] },
+  featureCheck: {
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: "#d1fae5", alignItems: "center", justifyContent: "center",
+    marginTop: 2,
+  },
+  featuresToggle: { marginTop: spacing[1], paddingVertical: spacing[1] },
+  featuresToggleText: { fontSize: 14, fontWeight: "600", color: colors.brandBlue },
+
+  specsTable: {
+    borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.slate200,
+    overflow: "hidden", backgroundColor: colors.white, ...shadows.sm,
+  },
+  specRow: { flexDirection: "row", alignItems: "baseline", paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
   specRowAlt: { backgroundColor: colors.slate50 },
-  specLabel: { width: 130, fontSize: 13, fontWeight: "600", color: colors.slate600 },
+  specLabel: { width: 120, fontSize: 13, fontWeight: "600", color: colors.slate600 },
   specValue: { flex: 1, fontSize: 13, fontWeight: "500", color: colors.slate800 },
   specsToggle: { marginTop: spacing[2] },
   specsToggleText: { fontSize: 14, fontWeight: "600", color: colors.brandBlue },

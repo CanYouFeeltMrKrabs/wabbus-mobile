@@ -1,6 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
 import Icon from "./Icon";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
@@ -15,10 +15,19 @@ type Props = {
 
 export default function BackButton({ onPress, icon = "arrow-back", color, style }: Props) {
   const router = useRouter();
+  const navigation = useNavigation();
+
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)");
+    }
+  };
 
   return (
     <Pressable
-      onPress={onPress ?? (() => router.back())}
+      onPress={onPress ?? handleBack}
       hitSlop={12}
       style={[styles.btn, style]}
     >

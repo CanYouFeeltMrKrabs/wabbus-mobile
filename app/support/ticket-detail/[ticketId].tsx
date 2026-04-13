@@ -34,9 +34,11 @@ type Message = {
 
 type Ticket = {
   publicId: string;
+  ticketNumber?: string;
   subject?: string;
   category?: string;
   status: string;
+  archivedAt?: string | null;
   messages: Message[];
 };
 
@@ -48,8 +50,9 @@ function getTicketStatusLabel(status: string): string {
     ARCHIVED: "support.ticketDetail.statusArchived",
     RESOLVED: "support.ticketDetail.statusResolved",
   };
-  const key = map[status.toUpperCase()];
-  return key ? i18n.t(key) : status.replace(/_/g, " ");
+  const s = status ?? "";
+  const key = map[s.toUpperCase()];
+  return key ? i18n.t(key) : s.replace(/_/g, " ");
 }
 
 export default function TicketDetailScreen() {
@@ -70,7 +73,11 @@ function TicketDetailContent() {
 
   const { data: ticket, isLoading: loading, refetch } = useQuery({
     queryKey: queryKeys.messages.tickets.detail(ticketId!),
-    queryFn: () => customerFetch<Ticket>(`/support/tickets/${ticketId}`),
+    queryFn: async () => {
+      const res = await customerFetch<any>(`/support/tickets/${ticketId}`);
+      const ticket = res?.data ?? res?.ticket ?? res;
+      return ticket as Ticket;
+    },
     enabled: !!ticketId,
     refetchInterval: 30_000,
   });
@@ -111,7 +118,7 @@ function TicketDetailContent() {
 
   const handleArchiveToggle = async () => {
     if (!ticketId || !ticket) return;
-    const isArchived = ticket.status.toUpperCase() === "ARCHIVED";
+    const isArchived = !!ticket.archivedAt;
     const action = isArchived ? "unarchive" : "archive";
     try {
       await customerFetch(`/support/tickets/${ticketId}/${action}`, { method: "POST" });
@@ -141,7 +148,7 @@ function TicketDetailContent() {
   }
 
   const messages = ticket.messages || [];
-  const upperStatus = ticket.status.toUpperCase();
+  const upperStatus = (ticket.status ?? "").toUpperCase();
   const isClosed = upperStatus === "CLOSED";
 
   return (
@@ -153,26 +160,36 @@ function TicketDetailContent() {
       <View style={styles.header}>
         <BackButton />
         <View style={{ flex: 1, alignItems: "center" }}>
-          <AppText variant="label" numberOfLines={1}>
-            {ticket.subject || ticket.category || t("support.ticketDetail.ticketFallback")}
+          <AppText variant="title" numberOfLines={1}>
+            {ticket.ticketNumber ? `Ticket ${ticket.ticketNumber}` : ticket.subject || ticket.category || t("support.ticketDetail.ticketFallback")}
           </AppText>
           <AppText variant="caption" color={isClosed ? colors.muted : colors.success}>
             {getTicketStatusLabel(ticket.status)}
           </AppText>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[2] }}>
-          {!isClosed && (
-            <Pressable onPress={handleArchiveToggle} hitSlop={8}>
-              <Icon name={upperStatus === "ARCHIVED" ? "unarchive" : "archive"} size={22} color={colors.muted} />
-            </Pressable>
-          )}
-          {!isClosed && (
-            <Pressable onPress={handleClose} hitSlop={8}>
-              <Icon name="highlight-off" size={24} color={colors.muted} />
-            </Pressable>
-          )}
-        </View>
+        <View style={{ width: 40 }} />
       </View>
+
+      {!isClosed && (
+        <View style={styles.ticketActions}>
+          <AppButton
+            title={ticket.archivedAt ? t("support.ticketDetail.unarchive") : t("support.ticketDetail.archive")}
+            variant="secondary"
+            size="md"
+            icon={ticket.archivedAt ? "unarchive" : "archive"}
+            onPress={handleArchiveToggle}
+            style={{ flex: 1 }}
+          />
+          <AppButton
+            title={t("support.ticketDetail.closeTicket")}
+            variant="danger"
+            size="md"
+            icon="close"
+            onPress={handleClose}
+            style={{ flex: 1 }}
+          />
+        </View>
+      )}
 
       <FlatList
         ref={listRef}
@@ -195,9 +212,11 @@ function TicketDetailContent() {
           return (
             <View style={[styles.bubbleRow, isCustomer ? styles.bubbleRight : styles.bubbleLeft]}>
               <View style={[styles.bubble, isCustomer ? styles.bubbleCustomer : styles.bubbleAdmin]}>
-                <AppText variant="caption" weight="semibold" color={isCustomer ? colors.white : colors.foreground} style={styles.senderLabel}>
-                  {isCustomer ? t("support.ticketDetail.you") : t("support.ticketDetail.supportLabel")}
-                </AppText>
+                {!isCustomer && (
+                  <AppText variant="caption" weight="semibold" color={colors.foreground} style={styles.senderLabel}>
+                    {t("support.ticketDetail.supportLabel")}
+                  </AppText>
+                )}
                 <AppText variant="bodySmall" color={isCustomer ? colors.white : colors.foreground}>
                   {m.body}
                 </AppText>
@@ -242,6 +261,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  ticketActions: {
+    flexDirection: "row",
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,

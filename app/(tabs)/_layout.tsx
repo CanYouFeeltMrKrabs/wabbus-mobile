@@ -6,11 +6,12 @@
  * toggleStickyCart — matching the web StickyMobileCart behavior.
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { View, Image, Pressable, StyleSheet, Animated, Easing, DeviceEventEmitter } from "react-native";
+import { View, Image, Pressable, StyleSheet, Animated, Easing, DeviceEventEmitter, Dimensions } from "react-native";
 import { Tabs, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@/components/ui/Icon";
 import AppText from "@/components/ui/AppText";
+import { useTranslation } from "@/hooks/useT";
 import { useCart } from "@/lib/cart";
 import { formatDollars } from "@/lib/money";
 import { productImageUrl } from "@/lib/image";
@@ -40,12 +41,18 @@ const STICKY_BAR_HEIGHT = 56;
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const { t } = useTranslation();
   const { itemCount, addToCart } = useCart();
 
   const [stickyData, setStickyData] = useState<StickyPayload | null>(null);
   const stickyVisible = useRef(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(1)).current;
+
+  // Sliding indicator state
+  const [tabRowWidth, setTabRowWidth] = useState(0);
+  const indicatorOffset = useRef(new Animated.Value(0)).current;
+  const lastActiveIndex = useRef(state.index < TAB_CONFIG.length ? state.index : 0);
 
   const dismissBar = useCallback(() => {
     stickyVisible.current = false;
@@ -97,6 +104,26 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     });
     return () => sub.remove();
   }, [fadeAnim, slideAnim, dismissBar]);
+
+  // Sliding indicator animation
+  useEffect(() => {
+    let targetIndex = state.index;
+    if (targetIndex >= TAB_CONFIG.length) {
+      targetIndex = lastActiveIndex.current;
+    } else {
+      lastActiveIndex.current = targetIndex;
+    }
+
+    if (tabRowWidth > 0) {
+      const tabWidth = tabRowWidth / TAB_CONFIG.length;
+      Animated.spring(indicatorOffset, {
+        toValue: targetIndex * tabWidth,
+        useNativeDriver: true,
+        speed: 14,
+        bounciness: 4,
+      }).start();
+    }
+  }, [state.index, tabRowWidth, indicatorOffset]);
 
   const stickyTranslateY = slideAnim.interpolate({
     inputRange: [0, 1],
@@ -153,14 +180,14 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
                   styles.stickyStock,
                   { color: stickyData.inStock ? colors.success : colors.error },
                 ]}>
-                  {stickyData.inStock ? "In Stock" : "Out of Stock"}
+                  {stickyData.inStock ? t("product.inStock") : t("product.outOfStockLabel")}
                 </AppText>
                 {stickyData.shippingLabel && (
                   <>
                     <AppText style={styles.stickyDot}>·</AppText>
                     <AppText style={[
                       styles.stickyShipping,
-                      stickyData.shippingLabel === "Free Shipping" && { color: colors.success, fontWeight: "700" },
+                      stickyData.shippingLabel === t("product.freeShipping") && { color: colors.success, fontWeight: "700" },
                     ]}>
                       {stickyData.shippingLabel}
                     </AppText>
@@ -179,7 +206,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               disabled={!stickyData.inStock}
             >
               <Icon name="add-shopping-cart" size={18} color={colors.white} />
-              <AppText style={styles.stickyBtnText}>Add to Cart</AppText>
+              <AppText style={styles.stickyBtnText}>{t("product.addToCart")}</AppText>
             </Pressable>
           </View>
         )}
@@ -187,19 +214,30 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
       {/* Tab bar — always visible */}
       <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
-        <View style={styles.tabRow}>
+        <View style={styles.tabRow} onLayout={(e) => setTabRowWidth(e.nativeEvent.layout.width)}>
+          {/* Animated sliding block that fills the whole section */}
+          {tabRowWidth > 0 && (
+            <Animated.View
+              style={[
+                styles.slidingIndicator,
+                {
+                  width: tabRowWidth / TAB_CONFIG.length,
+                  transform: [{ translateX: indicatorOffset }],
+                },
+              ]}
+            />
+          )}
+
           {state.routes.map((route: any, index: number) => {
-            const focused = state.index === index;
+            const activeTabIndex = state.index < TAB_CONFIG.length ? state.index : lastActiveIndex.current;
+            const focused = activeTabIndex === index;
             const config = TAB_CONFIG[index];
             if (!config) return null;
 
             return (
               <Pressable
                 key={route.key}
-                style={[
-                  styles.tab,
-                  { backgroundColor: focused ? colors.brandOrange : colors.transparent },
-                ]}
+                style={styles.tab}
                 onPress={() => {
                   const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                   if (!event.defaultPrevented) {
@@ -262,6 +300,12 @@ const styles = StyleSheet.create({
   tabRow: {
     flexDirection: "row",
     height: 42,
+  },
+  slidingIndicator: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    backgroundColor: colors.brandOrange,
   },
   tab: {
     flex: 1,
