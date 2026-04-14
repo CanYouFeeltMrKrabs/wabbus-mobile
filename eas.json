@@ -37,8 +37,8 @@
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.wabbus.com",
-        "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://pub-c2607890712c4b98874f735fb03de34b.r2.dev",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_Live_43949990903900931",
+        "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://assets.wabbus.com",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "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",
         "EXPO_PUBLIC_TYPESENSE_HOST": "api.wabbus.com",
         "EXPO_PUBLIC_TYPESENSE_PORT": "443",
         "EXPO_PUBLIC_TYPESENSE_PROTOCOL": "https",
