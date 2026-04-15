@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQueryClient } from "@tanstack/react-query";
-import { initPaymentSheet, presentPaymentSheet } from "@stripe/stripe-react-native";
+import { initPaymentSheet, presentPaymentSheet, confirmPaymentSheetPayment } from "@stripe/stripe-react-native";
+import type { PaymentSheet } from "@stripe/stripe-react-native";
 import { customerFetch, publicFetch, AuthError } from "./api";
 import { API_BASE } from "./config";
 import { useAuth } from "./auth";
@@ -70,6 +71,11 @@ function normalizeAddresses(payload: unknown): CheckoutAddress[] {
 }
 
 export type CheckoutStep = "address" | "payment" | "review" | "placing";
+
+export type SelectedPaymentOption = {
+  label: string;
+  image: string;
+};
 
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
@@ -151,9 +157,13 @@ export function useCheckout() {
 
   // ── Payment state ──
   const [placingOrder, setPlacingOrder] = useState(false);
+  const [selectingPayment, setSelectingPayment] = useState(false);
+  const [paymentOption, setPaymentOption] = useState<SelectedPaymentOption | null>(null);
+  const [sheetReady, setSheetReady] = useState(false);
   const payingRef = useRef(false);
   const idempotencyKeyRef = useRef<string>("");
   const pendingOrderRef = useRef<PendingOrder | null>(null);
+  const clientSecretRef = useRef<string | null>(null);
 
   // ── Add address form ──
   const [showAddAddress, setShowAddAddress] = useState(false);
@@ -346,164 +356,185 @@ export function useCheckout() {
       gBillCity, gBillState, gBillPostcode, gBillPhone,
       cartItems]);
 
-  // ── Place order ──
-  const handlePay = useCallback(async () => {
-    if (payingRef.current) return;
-    if (isGuest ? !guestData : !shippingAddressId) return;
+  // ── Helper: create order + get clientSecret ──
+  const ensureOrderAndSecret = useCallback(async (): Promise<{
+    orderIdentifier: string | number;
+    clientSecret: string | null;
+    alreadyPaid: boolean;
+  }> => {
+    const billingPublicId = billingSameAsShipping ? shippingAddressId : billingAddressId;
 
-    payingRef.current = true;
-    setPlacingOrder(true);
-    setStep("placing");
-    setError(null);
+    // Invalidate stale pending orders
+    if (pendingOrderRef.current) {
+      const po = pendingOrderRef.current;
+      const stale =
+        (po.hasPaymentIntent && !requirePaymentMethod) ||
+        (po.usedStoreCredit !== undefined && po.usedStoreCredit !== useStoreCredit) ||
+        (po.shippingAddressId !== undefined && po.shippingAddressId !== shippingAddressId) ||
+        (po.billingAddressId !== undefined && po.billingAddressId !== billingPublicId) ||
+        (po.cartFingerprint !== undefined && po.cartFingerprint !== cartFingerprint);
 
-    trackCustomerEvent("customer.checkout.step.completed", {
-      step: "payment_submitted",
-      isGuest,
-    });
-
-    try {
-      const billingPublicId = billingSameAsShipping ? shippingAddressId : billingAddressId;
-
-      // Invalidate stale pending orders
-      if (pendingOrderRef.current) {
-        const po = pendingOrderRef.current;
-        const stale =
-          (po.hasPaymentIntent && !requirePaymentMethod) ||
-          (po.usedStoreCredit !== undefined && po.usedStoreCredit !== useStoreCredit) ||
-          (po.shippingAddressId !== undefined && po.shippingAddressId !== shippingAddressId) ||
-          (po.billingAddressId !== undefined && po.billingAddressId !== billingPublicId) ||
-          (po.cartFingerprint !== undefined && po.cartFingerprint !== cartFingerprint);
-
-        if (stale) {
-          pendingOrderRef.current = null;
-          const freshKey = makeIdempotencyKey();
-          idempotencyKeyRef.current = freshKey;
-          await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
-          await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
-        }
+      if (stale) {
+        pendingOrderRef.current = null;
+        sheetReady && setSheetReady(false);
+        setPaymentOption(null);
+        clientSecretRef.current = null;
+        const freshKey = makeIdempotencyKey();
+        idempotencyKeyRef.current = freshKey;
+        await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
+        await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
       }
+    }
 
-      let orderIdentifier: string | number | undefined;
-      let clientSecret: string | null = null;
+    let orderIdentifier: string | number | undefined;
+    let clientSecret: string | null = clientSecretRef.current;
 
-      if (pendingOrderRef.current) {
-        orderIdentifier = pendingOrderRef.current.orderId;
-      } else {
-        let data: CheckoutResponse;
+    if (pendingOrderRef.current) {
+      orderIdentifier = pendingOrderRef.current.orderId;
+    } else {
+      let data: CheckoutResponse;
 
-        if (isGuest && guestData) {
-          const guestPromise = (async () => {
-            const res = await fetch(`${API_BASE}/checkout/guest`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Idempotency-Key": idempotencyKeyRef.current,
-              },
-              credentials: "include",
-              body: JSON.stringify({
-                email: guestData.email,
-                shippingAddress: guestData.shippingAddress,
-                billingAddress: guestData.billingAddress,
-                items: guestData.items,
-                useStoreCredit: useStoreCredit || undefined,
-              }),
-            });
+      if (isGuest && guestData) {
+        const guestPromise = (async () => {
+          const res = await fetch(`${API_BASE}/checkout/guest`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key": idempotencyKeyRef.current,
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              email: guestData.email,
+              shippingAddress: guestData.shippingAddress,
+              billingAddress: guestData.billingAddress,
+              items: guestData.items,
+              useStoreCredit: useStoreCredit || undefined,
+            }),
+          });
 
-            if (!res.ok) {
-              if (res.status === 409) {
-                throw new Error("An account with that email already exists. Please sign in instead.");
-              }
-              throw new Error("Checkout failed. Please try again.");
+          if (!res.ok) {
+            if (res.status === 409) {
+              throw new Error("An account with that email already exists. Please sign in instead.");
             }
-
-            return res.json() as Promise<CheckoutResponse>;
-          })();
-
-          data = await raceTimeout(guestPromise, TIMEOUT_CHECKOUT_MS, "Checkout");
-
-          // Backend may establish a session for the guest — pick it up
-          await refreshAuth().catch(() => {});
-        } else {
-          data = await raceTimeout(
-            customerFetch<CheckoutResponse>("/checkout", {
-              method: "POST",
-              headers: { "Idempotency-Key": idempotencyKeyRef.current },
-              body: JSON.stringify({
-                shippingAddressPublicId: shippingAddressId,
-                billingAddressPublicId: billingPublicId || undefined,
-                useStoreCredit: useStoreCredit || undefined,
-              }),
-            }),
-            TIMEOUT_CHECKOUT_MS,
-            "Checkout",
-          );
-        }
-
-        orderIdentifier = data?.orderPublicId ?? data?.orderId;
-        clientSecret =
-          data?.payment?.clientSecret ??
-          data?.clientSecret ??
-          data?.paymentClientSecret ??
-          data?.paymentIntentClientSecret ??
-          data?.stripeClientSecret ??
-          null;
-
-        if (orderIdentifier) {
-          pendingOrderRef.current = {
-            orderId: orderIdentifier,
-            hasPaymentIntent: !!clientSecret,
-            stripeAmountCents: data?.stripeAmountCents ?? undefined,
-            usedStoreCredit: useStoreCredit,
-            shippingAddressId: shippingAddressId ?? undefined,
-            billingAddressId: billingPublicId,
-            cartFingerprint,
-          };
-          await AsyncStorage.setItem(PENDING_ORDER_KEY, JSON.stringify(pendingOrderRef.current)).catch(() => {});
-        }
-
-        // Store credit fully covered — skip Stripe
-        if (data?.payment?.status === "PAID") {
-          await cleanupAfterOrder();
-          router.replace(ROUTES.orderComplete(orderIdentifier ?? ""));
-          return;
-        }
-
-        // Credit no longer covers the order — backend created a payment intent
-        if (!requirePaymentMethod && (clientSecret || pendingOrderRef.current?.hasPaymentIntent)) {
-          throw new Error("Your store credit balance has changed. Please review your payment and try again.");
-        }
-      }
-
-      // Need Stripe payment
-      if (requirePaymentMethod && orderIdentifier) {
-        if (!clientSecret) {
-          const intentData = await raceTimeout(
-            customerFetch<{ clientSecret?: string; alreadyPaid?: boolean }>("/payments/create-intent", {
-              method: "POST",
-              body: JSON.stringify({ orderPublicId: orderIdentifier }),
-            }),
-            TIMEOUT_CHECKOUT_MS,
-            "Payment setup",
-          );
-
-          if (intentData?.alreadyPaid) {
-            await cleanupAfterOrder();
-            router.replace(ROUTES.orderComplete(orderIdentifier));
-            return;
+            throw new Error("Checkout failed. Please try again.");
           }
 
-          clientSecret = intentData?.clientSecret ?? null;
-        }
+          return res.json() as Promise<CheckoutResponse>;
+        })();
 
-        if (!clientSecret) {
-          pendingOrderRef.current = null;
-          await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
-          const freshKey = makeIdempotencyKey();
-          idempotencyKeyRef.current = freshKey;
-          await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
-          throw new Error("Could not set up payment. Please try again.");
-        }
+        data = await raceTimeout(guestPromise, TIMEOUT_CHECKOUT_MS, "Checkout");
 
+        // Backend may establish a session for the guest — pick it up
+        await refreshAuth().catch(() => {});
+      } else {
+        data = await raceTimeout(
+          customerFetch<CheckoutResponse>("/checkout", {
+            method: "POST",
+            headers: { "Idempotency-Key": idempotencyKeyRef.current },
+            body: JSON.stringify({
+              shippingAddressPublicId: shippingAddressId,
+              billingAddressPublicId: billingPublicId || undefined,
+              useStoreCredit: useStoreCredit || undefined,
+            }),
+          }),
+          TIMEOUT_CHECKOUT_MS,
+          "Checkout",
+        );
+      }
+
+      orderIdentifier = data?.orderPublicId ?? data?.orderId;
+      clientSecret =
+        data?.payment?.clientSecret ??
+        data?.clientSecret ??
+        data?.paymentClientSecret ??
+        data?.paymentIntentClientSecret ??
+        data?.stripeClientSecret ??
+        null;
+
+      if (orderIdentifier) {
+        pendingOrderRef.current = {
+          orderId: orderIdentifier,
+          hasPaymentIntent: !!clientSecret,
+          stripeAmountCents: data?.stripeAmountCents ?? undefined,
+          usedStoreCredit: useStoreCredit,
+          shippingAddressId: shippingAddressId ?? undefined,
+          billingAddressId: billingPublicId,
+          cartFingerprint,
+        };
+        await AsyncStorage.setItem(PENDING_ORDER_KEY, JSON.stringify(pendingOrderRef.current)).catch(() => {});
+      }
+
+      // Store credit fully covered — skip Stripe
+      if (data?.payment?.status === "PAID") {
+        return { orderIdentifier: orderIdentifier ?? "", clientSecret: null, alreadyPaid: true };
+      }
+
+      // Credit no longer covers the order — backend created a payment intent
+      if (!requirePaymentMethod && (clientSecret || pendingOrderRef.current?.hasPaymentIntent)) {
+        throw new Error("Your store credit balance has changed. Please review your payment and try again.");
+      }
+    }
+
+    if (!orderIdentifier) throw new Error("Could not create order. Please try again.");
+
+    // Get client secret if we don't have one yet
+    if (requirePaymentMethod && !clientSecret) {
+      const intentData = await raceTimeout(
+        customerFetch<{ clientSecret?: string; alreadyPaid?: boolean }>("/payments/create-intent", {
+          method: "POST",
+          body: JSON.stringify({ orderPublicId: orderIdentifier }),
+        }),
+        TIMEOUT_CHECKOUT_MS,
+        "Payment setup",
+      );
+
+      if (intentData?.alreadyPaid) {
+        return { orderIdentifier, clientSecret: null, alreadyPaid: true };
+      }
+
+      clientSecret = intentData?.clientSecret ?? null;
+    }
+
+    clientSecretRef.current = clientSecret;
+    return { orderIdentifier, clientSecret, alreadyPaid: false };
+  }, [
+    shippingAddressId, billingAddressId, billingSameAsShipping,
+    requirePaymentMethod, useStoreCredit, cartFingerprint,
+    isGuest, guestData, refreshAuth, sheetReady,
+  ]);
+
+  // ── Select payment method (custom flow: init + present for selection only) ──
+  const selectPaymentMethod = useCallback(async () => {
+    if (selectingPayment) return;
+    if (isGuest ? !guestData : !shippingAddressId) {
+      setError("Please complete your address first.");
+      return;
+    }
+
+    setSelectingPayment(true);
+    setError(null);
+
+    try {
+      const { orderIdentifier, clientSecret, alreadyPaid } = await ensureOrderAndSecret();
+
+      if (alreadyPaid) {
+        await cleanupAfterOrder();
+        router.replace(ROUTES.orderComplete(orderIdentifier));
+        return;
+      }
+
+      if (!clientSecret) {
+        pendingOrderRef.current = null;
+        clientSecretRef.current = null;
+        await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+        const freshKey = makeIdempotencyKey();
+        idempotencyKeyRef.current = freshKey;
+        await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
+        throw new Error("Could not set up payment. Please try again.");
+      }
+
+      // Only re-init the sheet if it isn't already initialized with the same secret
+      if (!sheetReady) {
         type SheetParams = { customerId?: string; ephemeralKeySecret?: string };
         let sheetParams: SheetParams = {};
         if (!isGuest) {
@@ -523,7 +554,9 @@ export function useCheckout() {
             paymentIntentClientSecret: clientSecret,
             merchantDisplayName: "Wabbus",
             allowsDelayedPaymentMethods: false,
+            customFlow: true,
             returnURL: "wabbus://order-complete",
+            applePay: { merchantCountryCode: "US" },
             ...(sheetParams.customerId && sheetParams.ephemeralKeySecret && {
               customerId: sheetParams.customerId,
               customerEphemeralKeySecret: sheetParams.ephemeralKeySecret,
@@ -536,32 +569,114 @@ export function useCheckout() {
         if (initError) {
           throw new Error("Could not initialize payment. Please try again.");
         }
-
-        const { error: presentError } = await raceTimeout(
-          presentPaymentSheet(),
-          TIMEOUT_CONFIRM_MS,
-          "Payment",
-        );
-
-        if (presentError) {
-          if (presentError.code === "Canceled") {
-            setStep("review");
-            return;
-          }
-          throw new Error("Payment could not be completed. Please try again.");
-        }
-
-        try {
-          await raceTimeout(
-            customerFetch("/payments/confirm-order", {
-              method: "POST",
-              body: JSON.stringify({ orderPublicId: orderIdentifier }),
-            }),
-            TIMEOUT_CONFIRM_MS,
-            "Order confirmation",
-          );
-        } catch { /* webhook will handle it */ }
       }
+
+      // Present the sheet for payment method selection only (custom flow)
+      const { error: presentError, paymentOption: selectedOption } = await raceTimeout(
+        presentPaymentSheet(),
+        TIMEOUT_CONFIRM_MS,
+        "Payment method selection",
+      );
+
+      if (presentError) {
+        if (presentError.code === "Canceled") {
+          // User dismissed — keep current state, sheet stays ready for re-present
+          setSheetReady(true);
+          return;
+        }
+        throw new Error("Could not select payment method. Please try again.");
+      }
+
+      // Payment method selected successfully
+      if (selectedOption) {
+        setPaymentOption({ label: selectedOption.label, image: selectedOption.image });
+      } else {
+        // Fallback: the sheet returned without a paymentOption but no error = selection made
+        setPaymentOption({ label: "Card", image: "" });
+      }
+      setSheetReady(true);
+
+    } catch (e) {
+      if (!isGuest && e instanceof AuthError) {
+        router.replace(ROUTES.login);
+        return;
+      }
+      const raw = e instanceof Error ? e.message : "";
+      if (mountedRef.current) setError(sanitizeCheckoutError(raw));
+    } finally {
+      if (mountedRef.current) setSelectingPayment(false);
+    }
+  }, [
+    selectingPayment, shippingAddressId, billingAddressId, billingSameAsShipping,
+    requirePaymentMethod, useStoreCredit, cartFingerprint,
+    isGuest, guestData, sheetReady, ensureOrderAndSecret, router,
+  ]);
+
+  // ── Place order (confirm the already-selected payment method) ──
+  const handlePay = useCallback(async () => {
+    if (payingRef.current) return;
+    if (isGuest ? !guestData : !shippingAddressId) return;
+
+    payingRef.current = true;
+    setPlacingOrder(true);
+    setStep("placing");
+    setError(null);
+
+    trackCustomerEvent("customer.checkout.step.completed", {
+      step: "payment_submitted",
+      isGuest,
+    });
+
+    try {
+      // For credit-fully-covered orders, skip Stripe
+      if (creditFullyCovered) {
+        const { orderIdentifier, alreadyPaid } = await ensureOrderAndSecret();
+        if (alreadyPaid) {
+          await cleanupAfterOrder();
+          router.replace(ROUTES.orderComplete(orderIdentifier));
+          return;
+        }
+        await cleanupAfterOrder();
+        router.replace(ROUTES.orderComplete(orderIdentifier));
+        return;
+      }
+
+      // Must have selected a payment method first
+      if (!paymentOption || !sheetReady) {
+        throw new Error("Please select a payment method first.");
+      }
+
+      const orderIdentifier = pendingOrderRef.current?.orderId;
+      if (!orderIdentifier) {
+        throw new Error("Order not found. Please try again.");
+      }
+
+      // Confirm the payment via the already-initialized sheet (custom flow)
+      const { error: confirmError } = await raceTimeout(
+        confirmPaymentSheetPayment(),
+        TIMEOUT_CONFIRM_MS,
+        "Payment confirmation",
+      );
+
+      if (confirmError) {
+        if (confirmError.code === "Canceled") {
+          setStep("review");
+          return;
+        }
+        throw new Error("Payment could not be completed. Please try again.");
+      }
+
+      // Tell the backend (best effort — webhook handles it if this fails)
+      try {
+        await raceTimeout(
+          customerFetch("/payments/confirm-order", {
+            method: "POST",
+            body: JSON.stringify({ orderPublicId: orderIdentifier }),
+          }),
+          TIMEOUT_CONFIRM_MS,
+          "Order confirmation",
+        );
+      } catch { /* webhook will handle it */ }
 
       await cleanupAfterOrder();
       router.replace(ROUTES.orderComplete(orderIdentifier ?? ""));
@@ -575,6 +690,9 @@ export function useCheckout() {
 
       if (raw.includes("timed out") && pendingOrderRef.current) {
         pendingOrderRef.current = null;
+        clientSecretRef.current = null;
+        setSheetReady(false);
+        setPaymentOption(null);
         const freshKey = makeIdempotencyKey();
         idempotencyKeyRef.current = freshKey;
         await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
@@ -593,6 +711,7 @@ export function useCheckout() {
     shippingAddressId, billingAddressId, billingSameAsShipping,
     requirePaymentMethod, useStoreCredit, cartFingerprint,
     isGuest, guestData, router, clearCart, refreshAuth,
+    paymentOption, sheetReady, creditFullyCovered, ensureOrderAndSecret,
   ]);
 
   async function cleanupAfterOrder() {
@@ -666,6 +785,8 @@ export function useCheckout() {
     // Payment
     requirePaymentMethod,
     placingOrder, handlePay,
+    selectPaymentMethod, selectingPayment,
+    paymentOption,
     canProceedToPayment, canPlaceOrder,
     addressComplete,
   };

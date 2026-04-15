@@ -170,6 +170,8 @@
     "creditCoversOrder": "Store credit covers this order — no additional payment needed",
     "cardPayment": "Card Payment",
     "securePaymentSheetHint": "Pay with a saved card or add a new one",
+    "selectPaymentMethod": "Select Payment Method",
+    "paymentSelected": "Payment method selected",
     "reviewOrder": "Review Order",
     "shippingSection": "Shipping",
     "edit": "Edit",

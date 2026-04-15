@@ -167,6 +167,8 @@
     "creditCoversOrder": "Kredit toko menutupi pesanan ini — tidak perlu pembayaran tambahan",
     "cardPayment": "Pembayaran Kartu",
     "securePaymentSheetHint": "Bayar dengan kartu tersimpan atau tambah kartu baru",
+    "selectPaymentMethod": "Pilih Metode Pembayaran",
+    "paymentSelected": "Metode pembayaran dipilih",
     "reviewOrder": "Tinjau Pesanan",
     "shippingSection": "Pengiriman",
     "edit": "Ubah",

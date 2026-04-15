@@ -167,6 +167,8 @@
     "creditCoversOrder": "商店积分已抵扣本单——无需额外支付",
     "cardPayment": "银行卡支付",
     "securePaymentSheetHint": "使用已保存的银行卡或添加新卡",
+    "selectPaymentMethod": "选择支付方式",
+    "paymentSelected": "已选择支付方式",
     "reviewOrder": "确认订单",
     "shippingSection": "配送",
     "edit": "编辑",

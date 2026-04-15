@@ -381,6 +381,11 @@ export default function CheckoutScreen() {
     c.handlePay();
   }, [c.handlePay, c.setError]);
 
+  const handleSelectPayment = useCallback(() => {
+    c.setError(null);
+    c.selectPaymentMethod();
+  }, [c.selectPaymentMethod, c.setError]);
+
   const displayTotal = c.creditFullyCovered
     ? "$0.00"
     : formatMoney(c.stripeAmountCents > 0 ? c.stripeAmountCents : c.totalCents);
@@ -643,7 +648,7 @@ export default function CheckoutScreen() {
         )}
 
         {/* ── 5. Payment method ── */}
-        <SectionCard title={t("checkout.paymentMethodTitle")} complete={!c.requirePaymentMethod || c.creditFullyCovered}>
+        <SectionCard title={t("checkout.paymentMethodTitle")} complete={!c.requirePaymentMethod || c.creditFullyCovered || !!c.paymentOption}>
           {c.creditFullyCovered ? (
             <View style={s.payInfoRow}>
               <Icon name="check-circle" size={20} color={colors.success} />
@@ -651,17 +656,34 @@ export default function CheckoutScreen() {
                 {t("checkout.creditCoversOrder")}
               </AppText>
             </View>
-          ) : (
-            <View style={s.payInfoRow}>
+          ) : c.paymentOption ? (
+            <Pressable style={s.payInfoRow} onPress={handleSelectPayment} disabled={c.selectingPayment}>
               <View style={s.payIconCircle}>
-                <Icon name="lock" size={16} color={colors.brandBlue} />
+                <Icon name="credit-card" size={16} color={colors.brandBlue} />
               </View>
               <View style={{ marginLeft: spacing[2.5], flex: 1 }}>
-                <AppText variant="body" weight="medium">{t("checkout.cardPayment")}</AppText>
-                <AppText variant="bodySmall" color={colors.muted}>{t("checkout.securePaymentSheetHint")}</AppText>
+                <AppText variant="body" weight="semibold">{c.paymentOption.label}</AppText>
+                <AppText variant="bodySmall" color={colors.success}>{t("checkout.paymentSelected")}</AppText>
               </View>
-              <Icon name="chevron-right" size={18} color={colors.gray400} />
-            </View>
+              <AppText variant="bodySmall" color={colors.brandBlue} weight="bold">{t("checkout.change")}</AppText>
+            </Pressable>
+          ) : (
+            <Pressable style={s.paySelectBtn} onPress={handleSelectPayment} disabled={c.selectingPayment || !c.addressComplete}>
+              {c.selectingPayment ? (
+                <ActivityIndicator size="small" color={colors.brandBlue} />
+              ) : (
+                <>
+                  <View style={s.payIconCircle}>
+                    <Icon name="add" size={16} color={colors.brandBlue} />
+                  </View>
+                  <View style={{ marginLeft: spacing[2.5], flex: 1 }}>
+                    <AppText variant="body" weight="semibold" color={colors.brandBlue}>{t("checkout.selectPaymentMethod")}</AppText>
+                    <AppText variant="bodySmall" color={colors.muted}>{t("checkout.securePaymentSheetHint")}</AppText>
+                  </View>
+                  <Icon name="chevron-right" size={18} color={colors.brandBlue} />
+                </>
+              )}
+            </Pressable>
           )}
         </SectionCard>
 
@@ -750,7 +772,7 @@ export default function CheckoutScreen() {
           fullWidth
           size="lg"
           loading={c.placingOrder}
-          disabled={!c.canPlaceOrder}
+          disabled={!c.canPlaceOrder || (c.requirePaymentMethod && !c.creditFullyCovered && !c.paymentOption)}
           onPress={handlePay}
         />
       </View>
@@ -797,6 +819,12 @@ const s = StyleSheet.create({
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: colors.brandBlueLight,
     alignItems: "center", justifyContent: "center",
+  },
+  paySelectBtn: {
+    flexDirection: "row" as const, alignItems: "center" as const,
+    borderWidth: 1.5, borderColor: colors.brandBlue,
+    borderRadius: borderRadius.lg, borderStyle: "dashed" as const,
+    padding: spacing[3],
   },
   itemRow: {
     flexDirection: "row", alignItems: "center",

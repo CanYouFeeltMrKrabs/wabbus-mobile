@@ -167,6 +167,8 @@
     "creditCoversOrder": "El crédito de tienda cubre este pedido — no se necesita pago adicional",
     "cardPayment": "Pago con tarjeta",
     "securePaymentSheetHint": "Paga con una tarjeta guardada o agrega una nueva",
+    "selectPaymentMethod": "Seleccionar Método de Pago",
+    "paymentSelected": "Método de pago seleccionado",
     "reviewOrder": "Revisar pedido",
     "shippingSection": "Envío",
     "edit": "Editar",
