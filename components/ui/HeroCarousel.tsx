@@ -1,324 +1,178 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
-import {
-  View,
-  Pressable,
-  StyleSheet,
-  Dimensions,
-  Animated,
-} from "react-native";
+import React from "react";
+import { View, Pressable, StyleSheet, Dimensions } from "react-native";
 import { useRouter } from "expo-router";
 import AppText from "./AppText";
-import Icon from "./Icon";
-import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
+import { colors, spacing, borderRadius } from "@/lib/theme";
 import { ROUTES } from "@/lib/routes";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CAROUSEL_WIDTH = SCREEN_WIDTH - spacing[4] * 2;
-const AUTO_PLAY_MS = 5000;
 
-interface Slide {
-  key: string;
-  bg: string;
-  decorColor: string;
-  badge: string;
-  badgeBg: string;
-  headlineParts: Array<{ text: string; highlight?: boolean }>;
-  sub: string;
-  ctaLabel: string;
-  ctaRoute: string;
-  ctaBg: string;
-  icon: string;
-}
-
-const slides: Slide[] = [
-  {
-    key: "blue",
-    bg: colors.heroBlue,
-    decorColor: colors.heroBlueDecor,
-    badge: "BIG SUMMER SALE",
-    badgeBg: colors.brandOrange,
-    headlineParts: [
-      { text: "UP TO " },
-      { text: "70% OFF", highlight: true },
-      { text: "\nEVERYTHING." },
-    ],
-    sub: "Transform your living space with our premium household collection at unbeatable prices.",
-    ctaLabel: "SHOP NOW",
-    ctaRoute: ROUTES.searchWithSort("bestselling"),
-    ctaBg: colors.brandOrange,
-    icon: "star",
-  },
-  {
-    key: "purple",
-    bg: colors.heroPurple,
-    decorColor: colors.heroPurpleDecor,
-    badge: "NEW ARRIVALS",
-    badgeBg: colors.heroPurple400,
-    headlineParts: [
-      { text: "FRESHEST " },
-      { text: "FINDS", highlight: true },
-      { text: "\nJUST DROPPED." },
-    ],
-    sub: "Explore our latest additions across fashion, electronics, and home essentials.",
-    ctaLabel: "EXPLORE NOW",
-    ctaRoute: ROUTES.searchWithSort("newest"),
-    ctaBg: colors.heroPurple400,
-    icon: "local-fire-department",
-  },
-  {
-    key: "yellow",
-    bg: colors.heroYellow,
-    decorColor: colors.heroYellowDecor,
-    badge: "FLASH DEALS",
-    badgeBg: colors.yellow600,
-    headlineParts: [
-      { text: "LIGHTNING " },
-      { text: "PRICES", highlight: true },
-      { text: "\nTODAY ONLY." },
-    ],
-    sub: "Grab limited-time deals before they're gone — massive savings across every category.",
-    ctaLabel: "GRAB DEALS",
-    ctaRoute: ROUTES.searchWithSort("priceAsc"),
-    ctaBg: colors.yellow600,
-    icon: "bolt",
-  },
-];
-
-export default function HeroCarousel() {
+export default function HeroCarousel({ children }: { children?: React.ReactNode }) {
   const router = useRouter();
-  const [current, setCurrent] = useState(0);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const animateTo = useCallback(
-    (next: number) => {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(() => {
-        setCurrent(next);
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-      });
-    },
-    [fadeAnim],
-  );
-
-  const goNext = useCallback(() => {
-    animateTo((current + 1) % slides.length);
-  }, [current, animateTo]);
-
-  const goPrev = useCallback(() => {
-    animateTo((current - 1 + slides.length) % slides.length);
-  }, [current, animateTo]);
-
-  useEffect(() => {
-    timerRef.current = setInterval(() => {
-      setCurrent((prev) => {
-        const next = (prev + 1) % slides.length;
-        Animated.sequence([
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]).start();
-        return next;
-      });
-    }, AUTO_PLAY_MS);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [fadeAnim]);
-
-  const slide = slides[current];
+  // Native gradient simulation to mimic Web's `bg-gradient-to-t from-[#EAEDED] to-transparent`
+  // Creates 20 absolute slices stacking up with decreasing opacity.
+  const gradientSlices = Array.from({ length: 20 });
 
   return (
-    <View style={styles.wrapper}>
-      <Animated.View
-        style={[
-          styles.container,
-          { backgroundColor: slide.bg, opacity: fadeAnim },
-        ]}
-      >
-        {/* Decorative circle */}
-        <View
-          style={[styles.decorCircle, { backgroundColor: slide.decorColor }]}
-        />
+    <View style={styles.heroBlock}>
+      {/* Absolute Bottom Backdrop Waves (Render behind everything) */}
+      <View style={styles.wavesLayer}>
+        {/* Purple wave (left side heavy) */}
+        <View style={styles.purpleWave} />
+        {/* Yellow wave (right side heavy) */}
+        <View style={styles.yellowWave} />
+      </View>
 
-        {/* Decorative icon */}
-        <View style={styles.decorIcon}>
-          <Icon name={slide.icon as any} size={120} color={colors.overlayWhite12} />
-        </View>
+      {/* Decorative Floating Elements */}
+      <MaterialCommunityIcons name="star-four-points" size={24} color="#FFEA00" style={[styles.animIcon, { top: 40, left: 24 }]} />
+      <MaterialCommunityIcons name="star-four-points" size={16} color="#FFEA00" style={[styles.animIcon, { top: 130, left: 8 }]} />
+      
+      <Ionicons name="flash" size={24} color="#FFEA00" style={[styles.animIcon, { top: 40, right: 40, transform: [{ rotate: "12deg" }] }]} />
+      <Ionicons name="flash-outline" size={28} color="#FFEA00" style={[styles.animIcon, { top: 160, right: 8, transform: [{ rotate: "-12deg" }] }]} />
 
-        {/* Badge */}
-        <View style={[styles.badge, { backgroundColor: slide.badgeBg }]}>
-          <AppText variant="caption" color={colors.white} weight="bold">
-            {slide.badge}
+      {/* Hero Header Content */}
+      <View style={styles.textContent}>
+        <View style={styles.badge}>
+          <AppText variant="caption" weight="bold" style={styles.badgeText}>
+            BIG SUMMER SALE
           </AppText>
         </View>
 
-        {/* Headline */}
-        <AppText style={styles.headline}>
-          {slide.headlineParts.map((part, i) => (
-            <AppText
-              key={i}
-              style={[
-                styles.headlineText,
-                part.highlight && { color: slide.badgeBg === colors.brandOrange ? colors.brandOrange : slide.badgeBg },
-              ]}
-            >
-              {part.text}
-            </AppText>
-          ))}
+        <AppText weight="black" style={styles.headline}>
+          SHOP OUR{"\n"}LATEST <AppText weight="black" style={[styles.headline, { color: "#FFEA00" }]}>TRENDS</AppText>
         </AppText>
 
-        {/* CTA */}
         <Pressable
-          style={[styles.cta, { backgroundColor: slide.ctaBg }]}
-          onPress={() => router.push(slide.ctaRoute as any)}
+          style={styles.ctaButton}
+          onPress={() => router.push(ROUTES.searchWithSort("bestselling") as any)}
         >
-          <AppText variant="caption" weight="bold" color={colors.white}>
-            {slide.ctaLabel}
+          <AppText weight="black" color={colors.black} style={{ fontSize: 16, letterSpacing: 0.5 }}>
+            SHOP NOW
           </AppText>
-          <Icon name="arrow-forward" size={14} color={colors.white} />
+          <Ionicons name="arrow-forward" size={24} color={colors.black} style={{ marginLeft: 8 }} />
         </Pressable>
+      </View>
 
-        {/* Prev / Next arrows */}
-        <View style={styles.arrowRow}>
-          <Pressable style={styles.arrow} onPress={goPrev} hitSlop={12}>
-            <Icon name="chevron-left" size={18} color={colors.white} />
-          </Pressable>
-          <Pressable style={styles.arrow} onPress={goNext} hitSlop={12}>
-            <Icon name="chevron-right" size={18} color={colors.white} />
-          </Pressable>
+      {/* The overlapping White Card (Hovering over the lower waves) */}
+      {children && (
+        <View style={styles.carouselCardLayer}>
+          <View style={styles.carouselCard}>
+            {children}
+          </View>
         </View>
-
-        {/* Dot indicators */}
-        <View style={styles.dotsRow}>
-          {slides.map((s, i) => (
-            <Pressable
-              key={s.key}
-              onPress={() => animateTo(i)}
-              hitSlop={6}
-            >
-              <View
-                style={[
-                  styles.dot,
-                  i === current ? styles.dotActive : styles.dotInactive,
-                ]}
-              />
-            </Pressable>
-          ))}
-        </View>
-      </Animated.View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
+  heroBlock: {
+    width: "100%",
+    backgroundColor: "#1a44c2", // Solid blue base
+    position: "relative",
+    overflow: "hidden", // Ensures nothing escapes this block
   },
-  container: {
-    borderRadius: borderRadius["3xl"],
-    padding: spacing[5],
-    paddingTop: spacing[6],
-    overflow: "hidden",
-    height: 195,
+  wavesLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
-  decorCircle: {
+  purpleWave: {
     position: "absolute",
-    right: -40,
-    top: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    bottom: -650, 
+    left: -200,
+    width: SCREEN_WIDTH + 400,
+    height: 1000,
+    borderRadius: 500,
+    backgroundColor: "#9d00ff",
+    transform: [{ scaleX: 1.5 }, { rotate: "-10deg" }],
   },
-  decorIcon: {
+  yellowWave: {
     position: "absolute",
-    right: 10,
-    bottom: 30,
-    opacity: 1,
+    bottom: -720,
+    left: -100,
+    width: SCREEN_WIDTH + 200,
+    height: 1000,
+    borderRadius: 500,
+    backgroundColor: "#FFEA00",
+    transform: [{ scaleX: 1.5 }, { rotate: "8deg" }],
+  },
+  animIcon: {
+    position: "absolute",
+    zIndex: 10,
+    shadowColor: "rgba(255, 234, 0, 0.4)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  textContent: {
+    position: "relative",
+    zIndex: 20,
+    paddingHorizontal: spacing[6],
+    paddingTop: spacing[8],
+    alignItems: "center",
   },
   badge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: borderRadius.full,
-    marginBottom: spacing[3],
+    marginBottom: spacing[4],
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+  },
+  badgeText: {
+    color: colors.white,
+    letterSpacing: 2,
+    fontSize: 10,
   },
   headline: {
-    marginBottom: spacing[2],
-  },
-  headlineText: {
-    fontSize: 28,
-    fontWeight: "800",
-    fontStyle: "italic",
+    fontSize: 52, // BUMPED MASSIVELY TO MATCH WEB TIGHT-TRACKING STYLE
+    fontWeight: "900",
     color: colors.white,
-    textTransform: "uppercase",
-    lineHeight: 32,
+    lineHeight: 52,
+    letterSpacing: -2.5, // EXTREME TIGHT GROUPING
+    marginBottom: spacing[8],
+    textAlign: "center",
+    textShadowColor: "rgba(0, 0, 0, 0.25)",
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 8,
   },
-  sub: {
-    maxWidth: 220,
-    marginBottom: spacing[5],
-    lineHeight: 18,
-  },
-  cta: {
+  ctaButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[1.5],
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[4],
+    justifyContent: "center",
+    backgroundColor: "#FFEA00",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
     borderRadius: borderRadius.full,
-    alignSelf: "flex-start",
-    ...shadows.md,
+    // Aggressive intense glow mimicking Web's massive drop-shadow scale
+    shadowColor: "rgba(255, 234, 0, 0.9)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.7,
+    shadowRadius: 20,
+    elevation: 15,
   },
-  arrowRow: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing[2],
+  carouselCardLayer: {
+    position: "relative",
+    zIndex: 30,
+    width: "100%",
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[8],
+    marginBottom: spacing[8], 
   },
-  arrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.overlayBlack20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dotsRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-    marginTop: spacing[4],
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  dotActive: {
+  carouselCard: {
+    width: "100%",
     backgroundColor: colors.white,
-    transform: [{ scale: 1.25 }],
-  },
-  dotInactive: {
-    backgroundColor: colors.overlayWhite40,
-  },
+    borderRadius: 20,
+    paddingVertical: spacing[4],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 15,
+    overflow: "hidden", 
+  }
 });

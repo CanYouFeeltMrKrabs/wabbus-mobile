@@ -238,7 +238,7 @@ function MessagesContent() {
       <View style={styles.header}>
         <BackButton />
         <AppText variant="title">{t("messages.heading")}</AppText>
-        <View style={{ width: 40 }} />
+        <BackButton icon="close" />
       </View>
 
       <ScrollView

@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import Icon from "@/components/ui/Icon";
+import QuantitySelector from "@/components/ui/QuantitySelector";
 import { formatMoney } from "@/lib/money";
 import { productImageUrl } from "@/lib/image";
 import { ROUTES } from "@/lib/routes";
@@ -64,26 +65,13 @@ export default function CartItemCard({ item, onUpdateQty, onRemove, onSaveForLat
             </AppText>
           )}
 
-          <View style={styles.qtyRow}>
+          <View style={[styles.qtyRow, { zIndex: 10 }]}>
             <AppText variant="caption" color={colors.muted}>{t("common.qty")}</AppText>
-            <View style={styles.qtyBox}>
-              <Pressable
-                style={[styles.qtyBtn, item.quantity <= 1 && styles.qtyBtnDisabled]}
-                onPress={() => item.quantity > 1 ? onUpdateQty(item.publicId, item.quantity - 1) : undefined}
-                disabled={item.quantity <= 1}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Icon name="remove" size={16} color={item.quantity <= 1 ? colors.slate300 : colors.foreground} />
-              </Pressable>
-              <AppText variant="label" style={styles.qtyValue}>{item.quantity}</AppText>
-              <Pressable
-                style={[styles.qtyBtn, atMax && styles.qtyBtnDisabled]}
-                onPress={() => !atMax ? onUpdateQty(item.publicId, item.quantity + 1) : undefined}
-                disabled={atMax}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Icon name="add" size={16} color={atMax ? colors.slate300 : colors.foreground} />
-              </Pressable>
+            <View style={{ width: 110 }}>
+              <QuantitySelector
+                quantity={item.quantity}
+                onChange={(qty) => onUpdateQty(item.publicId, qty)}
+              />
             </View>
           </View>
 
@@ -129,8 +117,6 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 8,
     backgroundColor: colors.gray100,
-    borderWidth: 1,
-    borderColor: colors.slate200,
   },
   content: {
     flex: 1,

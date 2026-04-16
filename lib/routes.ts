@@ -14,9 +14,9 @@ export const ROUTES = {
   accountTab: "/(tabs)/account" as const,
   search: "/search" as const,
   searchWithSort: (sort: string) => `/search?sort=${sort}` as const,
-  categories: "/(tabs)/categories" as const,
-  category: (slug: string) => `/(tabs)/category/${slug}` as const,
-  product: (id: string) => `/(tabs)/product/${id}` as const,
+  categories: "/(tabs)/(home)/categories" as const,
+  category: (slug: string) => `/(tabs)/(home)/category/${slug}` as const,
+  product: (id: string) => `/(tabs)/(home)/product/${id}` as const,
 
   // Auth
   login: "/(auth)/login" as const,

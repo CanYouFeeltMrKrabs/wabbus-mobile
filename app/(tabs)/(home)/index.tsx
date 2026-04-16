@@ -299,21 +299,25 @@ export default function HomeScreen() {
         />
       )}
 
+      {/* Sticky Categories Bar */}
+      <View style={{ zIndex: 40, elevation: 40 }}>
+        <TopCategoriesBar />
+      </View>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         style={styles.scrollView}
       >
-        <TopCategoriesBar />
-        <HeroCarousel />
-
-        {/* Suggestions — newest products (web: sidebar next to hero, mobile: slider after hero) */}
-        <ProductRecommendationSlider
-          title={t("home.suggestionsForYou")}
-          apiUrl="/products/public?take=10&sortBy=newest"
-          accentColor={colors.brandBlue}
-          onAddToCart={handleAddToCart}
-        />
+        <HeroCarousel>
+          {/* Suggestions — newest products (web: sidebar next to hero, mobile: slider after hero) */}
+          <ProductRecommendationSlider
+            title={t("home.suggestionsForYou")}
+            apiUrl="/products/public?take=10&sortBy=newest"
+            accentColor={colors.brandBlue}
+            onAddToCart={handleAddToCart}
+          />
+        </HeroCarousel>
 
         {/* Bestsellers */}
         {bestsellers.length > 0 && (

@@ -20,7 +20,7 @@ export default function ContactScreen() {
       <View style={st.header}>
         <BackButton />
         <AppText variant="title">{t("legal.contact.title")}</AppText>
-        <View style={{ width: 40 }} />
+        <BackButton icon="close" />
       </View>
 
       <View style={st.content}>

@@ -274,13 +274,10 @@ export default function TabLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="index" />
+      <Tabs.Screen name="(home)" />
       <Tabs.Screen name="account" />
       <Tabs.Screen name="cart" />
       <Tabs.Screen name="chat" />
-      <Tabs.Screen name="product/[id]" options={{ href: null }} />
-      <Tabs.Screen name="category/[slug]" options={{ href: null }} />
-      <Tabs.Screen name="categories" options={{ href: null }} />
     </Tabs>
   );
 }

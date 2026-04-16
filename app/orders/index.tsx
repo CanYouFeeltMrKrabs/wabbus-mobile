@@ -1323,7 +1323,7 @@ function OrdersContent() {
         <View>
           <AppText variant="title">{t("accountOrders.heading")}</AppText>
         </View>
-        <View style={{ width: 40 }} />
+        <BackButton icon="close" />
       </View>
 
       {/* Tab bar */}

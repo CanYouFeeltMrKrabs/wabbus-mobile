@@ -320,7 +320,7 @@ function AddressesContent() {
       <View style={styles.header}>
         <BackButton />
         <AppText variant="title">{t("account.addresses.heading")}</AppText>
-        <View style={{ width: 40 }} />
+        <BackButton icon="close" />
       </View>
 
       {loading ? (

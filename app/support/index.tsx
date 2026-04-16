@@ -27,7 +27,7 @@ export default function SupportScreen() {
       <View style={styles.header}>
         <BackButton />
         <AppText variant="title">{t("support.heading")}</AppText>
-        <View style={{ width: 40 }} />
+        <BackButton icon="close" />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

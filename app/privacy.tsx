@@ -48,7 +48,7 @@ export default function PrivacyScreen() {
       <View style={st.header}>
         <BackButton />
         <AppText variant="title">{t("legal.privacy.title")}</AppText>
-        <View style={{ width: 40 }} />
+        <BackButton icon="close" />
       </View>
 
       <ScrollView contentContainerStyle={st.content} showsVerticalScrollIndicator={false}>

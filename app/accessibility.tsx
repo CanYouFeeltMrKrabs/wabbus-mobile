@@ -23,7 +23,7 @@ export default function AccessibilityScreen() {
       <View style={styles.header}>
         <BackButton />
         <AppText variant="title">{t("legal.accessibility.title")}</AppText>
-        <View style={{ width: 40 }} />
+        <BackButton icon="close" />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

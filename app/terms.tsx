@@ -53,7 +53,7 @@ export default function TermsScreen() {
       <View style={st.header}>
         <BackButton />
         <AppText variant="title">{t("legal.terms.title")}</AppText>
-        <View style={{ width: 40 }} />
+        <BackButton icon="close" />
       </View>
 
       <ScrollView contentContainerStyle={st.content} showsVerticalScrollIndicator={false}>

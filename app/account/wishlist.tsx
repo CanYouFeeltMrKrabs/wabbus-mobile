@@ -76,7 +76,7 @@ function WishlistContent() {
       <View style={styles.header}>
         <BackButton />
         <AppText variant="title">{t("account.wishlist.heading")}</AppText>
-        <View style={{ width: 40 }} />
+        <BackButton icon="close" />
       </View>
 
       {loading ? (

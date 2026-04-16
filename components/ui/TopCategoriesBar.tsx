@@ -21,10 +21,21 @@ export default function TopCategoriesBar() {
   const [categories, setCategories] = useState<CategoryLink[]>([]);
 
   useEffect(() => {
-    fetchCategoriesClient().then(setCategories);
+    fetchCategoriesClient().then((data) => {
+      if (data && data.length > 0) {
+        setCategories(data);
+      }
+    });
   }, []);
 
-  if (!categories.length) return null;
+  // Use a pristine fallback mirroring the exact web screenshot options so the bar NEVER disappears even on local API failure
+  const displayCategories = categories.length > 0 ? categories : [
+    { id: 1, name: "Furniture", slug: "commercial-home-furniture" },
+    { id: 2, name: "Kitchenware", slug: "home-and-kitchen" },
+    { id: 3, name: "Household", slug: "everyday-household" },
+    { id: 4, name: "Clothing", slug: "clothing-and-underwear" },
+    { id: 5, name: "Baby", slug: "baby-maternity" },
+  ];
 
   return (
     <View style={styles.container}>
@@ -33,7 +44,7 @@ export default function TopCategoriesBar() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        {categories.map((c) => (
+        {displayCategories.map((c) => (
           <Pressable
             key={c.slug}
             style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}

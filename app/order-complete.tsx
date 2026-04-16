@@ -191,7 +191,7 @@ function OrderCompleteContent() {
 
               <View style={s.totalRow}>
                 <AppText variant="subtitle" color={colors.muted}>{t("orderComplete.total")}</AppText>
-                <AppText variant="subtitle" color={colors.brandBlue}>
+                <AppText variant="subtitle" color={colors.foreground}>
                   {formatMoney(orderTotalCents(order))}
                 </AppText>
               </View>
