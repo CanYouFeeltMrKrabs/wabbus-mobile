@@ -7,16 +7,16 @@
 
 export const ROUTES = {
   // Tabs
-  home: "/(tabs)" as const,
+  home: "/" as const,
   homeFeed: "/" as const,
-  chatTab: "/(tabs)/chat" as const,
-  cart: "/(tabs)/cart" as const,
-  accountTab: "/(tabs)/account" as const,
+  chatTab: "/chat" as const,
+  cart: "/cart" as const,
+  accountTab: "/account" as const,
   search: "/search" as const,
   searchWithSort: (sort: string) => `/search?sort=${sort}` as const,
-  categories: "/(tabs)/(home)/categories" as const,
-  category: (slug: string) => `/(tabs)/(home)/category/${slug}` as const,
-  product: (id: string) => `/(tabs)/(home)/product/${id}` as const,
+  categories: "/categories" as const,
+  category: (slug: string) => `/category/${slug}` as const,
+  product: (id: string) => `/product/${id}` as const,
 
   // Auth
   login: "/(auth)/login" as const,
@@ -60,7 +60,7 @@ export const ROUTES = {
   supportTicket: "/support/ticket" as const,
   supportTicketDetail: (ticketId: string) =>
     `/support/ticket-detail/${ticketId}` as const,
-  supportLiveChat: "/(tabs)/chat" as const,
+  supportLiveChat: "/chat" as const,
   supportMessageSeller: (orderId: string | number) =>
     `/support/message-seller/${orderId}` as const,
   supportMessageSellerAll: "/support/message-seller/all" as const,
