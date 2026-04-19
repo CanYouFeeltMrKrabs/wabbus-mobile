@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   View,
   FlatList,
@@ -22,6 +22,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { customerFetch } from "@/lib/api";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
+import { pickDocument, uploadFileAuth, type PickedFile } from "@/lib/fileUpload";
+import { ALLOWED_ATTACH_TYPES, MAX_ATTACH_SIZE } from "@/lib/constants";
 import i18n from "@/i18n";
 
 type Message = {
@@ -30,6 +32,10 @@ type Message = {
   senderType: string;
   eventType?: string | null;
   createdAt: string;
+  attachmentKey?: string | null;
+  attachmentFileName?: string | null;
+  attachmentMimeType?: string | null;
+  attachmentSize?: number | null;
 };
 
 type Ticket = {
@@ -84,16 +90,72 @@ function TicketDetailContent() {
 
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<PickedFile | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleAttach = useCallback(async () => {
+    try {
+      const file = await pickDocument({ type: ALLOWED_ATTACH_TYPES });
+      if (!file) return;
+      if (!ALLOWED_ATTACH_TYPES.includes(file.mimeType)) {
+        Alert.alert(t("common.error"), "Only JPEG, PNG, and WebP images are supported.");
+        return;
+      }
+      if (file.size > MAX_ATTACH_SIZE) {
+        Alert.alert(t("common.error"), "File is too large. Max 10 MB.");
+        return;
+      }
+      setPendingAttachment(file);
+    } catch {
+      // user cancelled
+    }
+  }, [t]);
 
   const handleSend = async () => {
-    if (!reply.trim() || !ticketId) return;
+    if ((!reply.trim() && !pendingAttachment) || !ticketId) return;
     setSending(true);
     try {
-      await customerFetch(`/support/tickets/${ticketId}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ body: reply.trim() }),
-      });
+      // Upload attachment first if present
+      let attachment: { key: string; fileName: string; mimeType: string; size: number } | undefined;
+      if (pendingAttachment) {
+        setUploading(true);
+        try {
+          const uploaded = await uploadFileAuth({
+            presignUrl: "/uploads/customer-chat-attachment",
+            confirmUrl: "/uploads/chat-attachment/confirm",
+            file: pendingAttachment,
+            extraPresignBody: { context: "ticket", entityId: ticketId },
+          });
+          attachment = {
+            key: uploaded.key,
+            fileName: pendingAttachment.name,
+            mimeType: pendingAttachment.mimeType,
+            size: pendingAttachment.size,
+          };
+        } finally {
+          setUploading(false);
+        }
+      }
+
+      // Send image message first (if attachment), then text message
+      if (attachment) {
+        await customerFetch(`/support/tickets/${ticketId}/messages`, {
+          method: "POST",
+          body: JSON.stringify({
+            body: "(attachment)",
+            attachment,
+          }),
+        });
+      }
+      if (reply.trim()) {
+        await customerFetch(`/support/tickets/${ticketId}/messages`, {
+          method: "POST",
+          body: JSON.stringify({ body: reply.trim() }),
+        });
+      }
+
       setReply("");
+      setPendingAttachment(null);
       await refetch();
       queryClient.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.messages.unread() });
@@ -209,6 +271,7 @@ function TicketDetailContent() {
           }
 
           const isCustomer = m.senderType === "CUSTOMER";
+          const isAttachmentOnly = m.body === "(attachment)" && !!m.attachmentFileName;
           return (
             <View style={[styles.bubbleRow, isCustomer ? styles.bubbleRight : styles.bubbleLeft]}>
               <View style={[styles.bubble, isCustomer ? styles.bubbleCustomer : styles.bubbleAdmin]}>
@@ -217,9 +280,19 @@ function TicketDetailContent() {
                     {t("support.ticketDetail.supportLabel")}
                   </AppText>
                 )}
-                <AppText variant="bodySmall" color={isCustomer ? colors.white : colors.foreground}>
-                  {m.body}
-                </AppText>
+                {!isAttachmentOnly && (
+                  <AppText variant="bodySmall" color={isCustomer ? colors.white : colors.foreground}>
+                    {m.body}
+                  </AppText>
+                )}
+                {m.attachmentFileName && (
+                  <View style={styles.attachmentIndicator}>
+                    <Icon name="attach-file" size={12} color={isCustomer ? "rgba(255,255,255,0.7)" : colors.muted} />
+                    <AppText variant="tiny" color={isCustomer ? "rgba(255,255,255,0.7)" : colors.muted} numberOfLines={1} style={{ flex: 1 }}>
+                      {m.attachmentFileName}
+                    </AppText>
+                  </View>
+                )}
                 <AppText variant="tiny" color={isCustomer ? "rgba(255,255,255,0.7)" : colors.mutedLight} style={styles.time}>
                   {new Date(m.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
                 </AppText>
@@ -231,23 +304,41 @@ function TicketDetailContent() {
 
       {!isClosed && (
         <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, spacing[2]) }]}>
-          <TextInput
-            style={styles.composerInput}
-            value={reply}
-            onChangeText={setReply}
-            placeholder={t("support.ticketDetail.placeholder")}
-            placeholderTextColor={colors.mutedLight}
-            multiline
-            maxLength={2000}
-          />
-          <Pressable
-            onPress={handleSend}
-            disabled={!reply.trim() || sending}
-            style={[styles.sendBtn, (!reply.trim() || sending) && { opacity: 0.4 }]}
-            hitSlop={8}
-          >
-            <Icon name="send" size={22} color={colors.white} />
-          </Pressable>
+          {pendingAttachment && (
+            <View style={styles.attachmentChip}>
+              <Icon name="attach-file" size={16} color={colors.brandBlue} />
+              <AppText variant="caption" style={{ flex: 1 }} numberOfLines={1}>{pendingAttachment.name}</AppText>
+              <Pressable onPress={() => setPendingAttachment(null)} hitSlop={8}>
+                <Icon name="close" size={16} color={colors.muted} />
+              </Pressable>
+            </View>
+          )}
+          <View style={styles.composerRow}>
+            <Pressable onPress={handleAttach} disabled={uploading} style={{ padding: spacing[1] }} hitSlop={8}>
+              <Icon name="attach-file" size={20} color={colors.muted} />
+            </Pressable>
+            <TextInput
+              style={styles.composerInput}
+              value={reply}
+              onChangeText={setReply}
+              placeholder={t("support.ticketDetail.placeholder")}
+              placeholderTextColor={colors.mutedLight}
+              multiline
+              maxLength={2000}
+            />
+            <Pressable
+              onPress={handleSend}
+              disabled={(!reply.trim() && !pendingAttachment) || sending || uploading}
+              style={[styles.sendBtn, ((!reply.trim() && !pendingAttachment) || sending || uploading) && { opacity: 0.4 }]}
+              hitSlop={8}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <Icon name="send" size={22} color={colors.white} />
+              )}
+            </Pressable>
+          </View>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -284,14 +375,31 @@ const styles = StyleSheet.create({
   senderLabel: { fontSize: 9, marginBottom: spacing[0.5], textTransform: "uppercase", letterSpacing: 0.3 },
   time: { marginTop: spacing[1], textAlign: "right" },
   composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
     paddingHorizontal: spacing[3],
     paddingTop: spacing[2],
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
     backgroundColor: colors.white,
+  },
+  composerRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
     gap: spacing[2],
+  },
+  attachmentChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    marginBottom: spacing[2],
+    backgroundColor: colors.gray100,
+    borderRadius: borderRadius.lg,
+    padding: spacing[2],
+  },
+  attachmentIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
+    marginTop: spacing[1],
   },
   composerInput: {
     flex: 1,
