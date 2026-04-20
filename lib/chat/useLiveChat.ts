@@ -5,29 +5,21 @@
  * UI layer (chat tab screen) stays declarative. Every socket event
  * name, conversation state transition, and safety guard mirrors the
  * web implementation exactly.
+ *
+ * Constants live in lib/constants.ts (CHAT) and are kept in sync with
+ * the web app.
  */
 
 import { useCallback, useEffect, useRef, useState, useMemo, type RefObject } from "react";
 import { AppState, type AppStateStatus, type TextInput } from "react-native";
 import { io, type Socket } from "socket.io-client";
 import { useAuth } from "@/lib/auth";
-import { customerFetch } from "@/lib/api";
+import { customerFetch, FetchError } from "@/lib/api";
 import { API_BASE } from "@/lib/config";
-import { PAGE_SIZE, MAX_CHAT_MESSAGES } from "@/lib/constants";
+import { PAGE_SIZE, MAX_CHAT_MESSAGES, CHAT } from "@/lib/constants";
 import { showToast } from "@/lib/toast";
-import { pickDocument, type PickedFile } from "@/lib/fileUpload";
+import { pickDocument } from "@/lib/fileUpload";
 import type { UiMsg, ConversationState } from "./types";
-
-const MAX_OUTSTANDING_MSGS = 15;
-const MAX_MSG_LENGTH = 750;
-const MAX_SEEN_IDS = 500;
-const TYPING_THROTTLE_MS = 2000;
-const TYPING_TTL_MS = 3000;
-const MAX_QUEUED_MSGS = 100;
-const FLUSH_PACE_MS = 50;
-const START_COOLDOWN_MS = 5000;
-const ALLOWED_ATTACH_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_ATTACH_SIZE = 10 * 1024 * 1024;
 
 function safeId(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } })?.crypto;
@@ -36,11 +28,44 @@ function safeId(): string {
 }
 
 function trimSeenIds(seen: Set<string>) {
-  if (seen.size <= MAX_SEEN_IDS) return;
+  if (seen.size <= CHAT.MAX_SEEN_IDS) return;
   const arr = Array.from(seen);
-  const keep = arr.slice(arr.length - MAX_SEEN_IDS);
+  const keep = arr.slice(arr.length - CHAT.MAX_SEEN_IDS);
   seen.clear();
   for (const id of keep) seen.add(id);
+}
+
+/**
+ * Multipart upload of a customer chat image. Mirrors the web's
+ * uploadCustomerChatAttachment in components/ChatBubble.tsx exactly:
+ * POST /employee-chat/attachments/upload with field "file" + "conversationPublicId".
+ *
+ * The previous mobile implementation called /attachments/presign + /confirm,
+ * which only exist on the employee-side endpoints — those calls always 404'd
+ * in production, leaving mobile attachments broken.
+ */
+async function uploadCustomerChatAttachment(
+  conversationPublicId: string,
+  file: { uri: string; name: string; mimeType: string },
+  signal: AbortSignal,
+): Promise<{ messagePublicId: string }> {
+  const form = new FormData();
+  // React Native FormData accepts the { uri, name, type } shape for files.
+  // The cast keeps TypeScript happy without depending on RN-only types here.
+  form.append(
+    "file",
+    {
+      uri: file.uri,
+      name: file.name || "image",
+      type: file.mimeType,
+    } as unknown as Blob,
+  );
+  form.append("conversationPublicId", conversationPublicId);
+
+  return await customerFetch<{ messagePublicId: string }>(
+    "/employee-chat/attachments/upload",
+    { method: "POST", body: form, headers: {}, signal },
+  );
 }
 
 export type LiveChatState = {
@@ -62,6 +87,7 @@ export type LiveChatState = {
   uploading: boolean;
 
   onInputChange: (v: string) => void;
+  onInputBlur: () => void;
   onSend: () => void;
   onStartNewChat: (reason?: string, detail?: string) => void;
   onEndChat: () => void;
@@ -101,11 +127,19 @@ export function useLiveChat(
   const conversationIdRef = useRef<number | null>(null);
   const convPublicIdRef = useRef<string | null>(null);
   const lastTypingPingRef = useRef(0);
+  const typingActiveRef = useRef(false);
   const agentTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendQueueRef = useRef<Array<{ id: string; text: string; ts: number }>>([]);
   const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startCooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
+  /**
+   * Maps a real attachment publicId (returned by the upload endpoint) to the
+   * local placeholder id we showed the user. When the server later echoes the
+   * customer's own image via `conversation:message`, we use this map to drop
+   * the duplicate cleanly instead of appending a second tile.
+   */
+  const ownAttachmentIdsRef = useRef<Set<string>>(new Set());
 
   const hasToken = isLoggedIn || guestSessionReady;
   const hasActiveConversation = conversationState === "WAITING" || conversationState === "OPEN";
@@ -298,7 +332,7 @@ export function useLiveChat(
           flushIntervalRef.current = null;
           if (i < queue.length) {
             sendQueueRef.current.push(...queue.slice(i));
-            setQueueFull(sendQueueRef.current.length >= MAX_QUEUED_MSGS);
+            setQueueFull(sendQueueRef.current.length >= CHAT.MAX_QUEUED_MSGS);
           }
           const flushedIds = new Set(queue.slice(0, i).map((m) => m.id));
           if (flushedIds.size > 0) {
@@ -322,7 +356,7 @@ export function useLiveChat(
           body: queue[i].text,
         });
         i++;
-      }, FLUSH_PACE_MS);
+      }, CHAT.FLUSH_PACE_MS);
     });
 
     s.on("disconnect", () => setStatus("idle"));
@@ -347,6 +381,28 @@ export function useLiveChat(
       setConversationState("NONE");
       setStartingChat(false);
       showToast(t("chat.pleaseTryAgainLater"), "error");
+    });
+
+    /**
+     * Backend emits `message:send_error` when an inbound `message:send` /
+     * `guest:message` could not be persisted. Mark any in-flight optimistic
+     * customer message as failed so the user can retry instead of silently
+     * losing it.
+     */
+    s.on("message:send_error", () => {
+      showToast(t("chat.messageSendFailed"), "error");
+      setMsgs((prev) => {
+        for (let i = prev.length - 1; i >= 0; i--) {
+          const m = prev[i];
+          if (m.side !== "me") break;
+          if (!m.status && !m.attachmentId) {
+            const next = [...prev];
+            next[i] = { ...m, status: "failed" };
+            return next;
+          }
+        }
+        return prev;
+      });
     });
 
     // ── Reconnection ──
@@ -444,20 +500,47 @@ export function useLiveChat(
     });
 
     // ── Messages ──
-    s.on("conversation:message", (msg: any) => {
+    s.on("conversation:message", (msg: {
+      id?: number | string;
+      publicId?: string;
+      body?: string;
+      createdAt?: string;
+      senderType?: string;
+      attachmentKey?: string | null;
+    }) => {
       const id = msg?.id ? String(msg.id) : safeId();
       if (seenIdsRef.current.has(id)) return;
-      seenIdsRef.current.add(id);
-      trimSeenIds(seenIdsRef.current);
 
       const senderType = msg?.senderType;
-      // Skip echoes of our own messages — we already added optimistic local ones
-      if (senderType === "CUSTOMER" || senderType === "GUEST") return;
+      const publicId = msg?.publicId ? String(msg.publicId) : "";
+
+      // Customer/guest echo of an attachment they just uploaded — we already
+      // have the local placeholder, just mark seen and skip to avoid a dupe.
+      if (
+        (senderType === "CUSTOMER" || senderType === "GUEST") &&
+        publicId &&
+        ownAttachmentIdsRef.current.has(publicId)
+      ) {
+        ownAttachmentIdsRef.current.delete(publicId);
+        seenIdsRef.current.add(id);
+        trimSeenIds(seenIdsRef.current);
+        return;
+      }
+
+      // Other own-message echoes — already rendered optimistically.
+      if (senderType === "CUSTOMER" || senderType === "GUEST") {
+        seenIdsRef.current.add(id);
+        trimSeenIds(seenIdsRef.current);
+        return;
+      }
+
+      seenIdsRef.current.add(id);
+      trimSeenIds(seenIdsRef.current);
 
       const side: UiMsg["side"] = senderType === "SYSTEM" ? "system" : "them";
       const text = msg?.body ? String(msg.body) : "";
       const ts = msg?.createdAt ? new Date(msg.createdAt).getTime() : Date.now();
-      const attachmentId = msg?.attachmentKey ? (msg.publicId || String(msg.id)) : undefined;
+      const attachmentId = msg?.attachmentKey ? (publicId || String(msg.id)) : undefined;
 
       setMsgs((prev) => [...prev, { id, text, ts, side, attachmentId }].slice(-MAX_CHAT_MESSAGES));
 
@@ -469,7 +552,7 @@ export function useLiveChat(
     });
 
     s.on("system:warning", (data: { message?: string }) => {
-      showToast(data?.message || "Action not allowed", "error");
+      showToast(data?.message || t("chat.actionNotAllowed"), "error");
     });
 
     // ── Typing (correct event name: conversation:typing) ──
@@ -480,7 +563,7 @@ export function useLiveChat(
       } else {
         setIsAgentTyping(true);
         if (agentTypingTimeoutRef.current) clearTimeout(agentTypingTimeoutRef.current);
-        agentTypingTimeoutRef.current = setTimeout(() => setIsAgentTyping(false), TYPING_TTL_MS);
+        agentTypingTimeoutRef.current = setTimeout(() => setIsAgentTyping(false), CHAT.TYPING_TTL_MS);
       }
     });
 
@@ -531,7 +614,7 @@ export function useLiveChat(
 
       setStartCooldown(true);
       if (startCooldownTimerRef.current) clearTimeout(startCooldownTimerRef.current);
-      startCooldownTimerRef.current = setTimeout(() => setStartCooldown(false), START_COOLDOWN_MS);
+      startCooldownTimerRef.current = setTimeout(() => setStartCooldown(false), CHAT.START_COOLDOWN_MS);
     } finally {
       setStartingChat(false);
     }
@@ -572,7 +655,8 @@ export function useLiveChat(
     setQueueFull(false);
     setInput("");
     setShowRating(false);
-  }, [updateConvId]);
+    ownAttachmentIdsRef.current.clear();
+  }, [updateConvId, setInput]);
 
   // ── Rating ───────────────────────────────────────────────────
 
@@ -592,8 +676,9 @@ export function useLiveChat(
 
   const emitTypingPing = useCallback(() => {
     const now = Date.now();
-    if (now - lastTypingPingRef.current < TYPING_THROTTLE_MS) return;
+    if (now - lastTypingPingRef.current < CHAT.TYPING_THROTTLE_MS) return;
     lastTypingPingRef.current = now;
+    typingActiveRef.current = true;
     const s = socketRef.current;
     if (s?.connected) {
       s.emit(isGuest ? "guest:typing_ping" : "typing:start", {
@@ -602,13 +687,35 @@ export function useLiveChat(
     }
   }, [isGuest]);
 
+  /**
+   * Emits typing:stop so the agent's UI clears its "customer typing"
+   * indicator promptly. Called when the input is cleared, the user blurs
+   * the composer, or the message is sent. Guests have no inverse event
+   * server-side, so we throttle by typingActiveRef to avoid noise.
+   */
+  const emitTypingStop = useCallback(() => {
+    if (!typingActiveRef.current) return;
+    typingActiveRef.current = false;
+    lastTypingPingRef.current = 0;
+    if (isGuest) return;
+    const s = socketRef.current;
+    if (s?.connected) {
+      s.emit("typing:stop", { conversationPublicId: convPublicIdRef.current });
+    }
+  }, [isGuest]);
+
   const clearingInputRef = useRef(false);
 
   const onInputChange = useCallback((value: string) => {
     if (clearingInputRef.current) return;
-    setInput(value.slice(0, MAX_MSG_LENGTH));
+    setInput(value.slice(0, CHAT.MAX_MSG_LENGTH));
     if (value.trim()) emitTypingPing();
-  }, [emitTypingPing, setInput]);
+    else emitTypingStop();
+  }, [emitTypingPing, emitTypingStop, setInput]);
+
+  const onInputBlur = useCallback(() => {
+    emitTypingStop();
+  }, [emitTypingStop]);
 
   // ── Spam protection ──────────────────────────────────────────
 
@@ -621,12 +728,12 @@ export function useLiveChat(
     return count;
   }, [msgs]);
 
-  const isSpamBlocked = outstandingCount >= MAX_OUTSTANDING_MSGS;
+  const isSpamBlocked = outstandingCount >= CHAT.MAX_OUTSTANDING_MSGS;
 
   // ── Send ─────────────────────────────────────────────────────
 
   const onSend = useCallback(() => {
-    const text = inputRef.current.trim().slice(0, MAX_MSG_LENGTH);
+    const text = inputRef.current.trim().slice(0, CHAT.MAX_MSG_LENGTH);
     if (!text || isSpamBlocked) return;
 
     const s = socketRef.current;
@@ -642,10 +749,10 @@ export function useLiveChat(
     composerRef?.current?.clear();
     setTimeout(() => { clearingInputRef.current = false; }, 150);
 
-    lastTypingPingRef.current = 0;
+    emitTypingStop();
 
     if (!s || !s.connected) {
-      const isOverflow = sendQueueRef.current.length >= MAX_QUEUED_MSGS;
+      const isOverflow = sendQueueRef.current.length >= CHAT.MAX_QUEUED_MSGS;
       if (!isOverflow) sendQueueRef.current.push({ id, text, ts });
       setMsgs((prev) => [...prev, {
         id, text, ts, side: "me" as const,
@@ -661,7 +768,7 @@ export function useLiveChat(
       conversationPublicId: convPublicIdRef.current,
       body: text,
     });
-  }, [isSpamBlocked, isGuest, conversationState, setInput]);
+  }, [isSpamBlocked, isGuest, conversationState, setInput, composerRef, emitTypingStop]);
 
   // ── Retry failed ─────────────────────────────────────────────
 
@@ -692,14 +799,14 @@ export function useLiveChat(
   const onAttach = useCallback(async () => {
     if (!convPublicIdRef.current || isGuest || uploading) return;
 
-    const file = await pickDocument({ type: ALLOWED_ATTACH_TYPES });
+    const file = await pickDocument({ type: [...CHAT.ALLOWED_IMAGE_TYPES] });
     if (!file) return;
 
-    if (!ALLOWED_ATTACH_TYPES.includes(file.mimeType)) {
+    if (!(CHAT.ALLOWED_IMAGE_TYPES as readonly string[]).includes(file.mimeType)) {
       showToast(t("chat.onlyJpegPngWebp"), "error");
       return;
     }
-    if (file.size > MAX_ATTACH_SIZE) {
+    if (file.size > CHAT.MAX_IMAGE_SIZE) {
       showToast(t("chat.fileTooLarge"), "error");
       return;
     }
@@ -717,55 +824,31 @@ export function useLiveChat(
     }].slice(-MAX_CHAT_MESSAGES));
 
     try {
-      const presignData = await customerFetch<{ uploadUrl: string; rawKey: string }>(
-        "/employee-chat/attachments/presign",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            conversationPublicId: convPublicIdRef.current,
-            mimeType: file.mimeType,
-            fileSize: file.size,
-            fileName: file.name,
-          }),
-          signal,
-        },
-      );
-
-      setMsgs((prev) => prev.map((m) =>
-        m.id === placeholderId ? { ...m, uploadProgress: "processing" as const } : m
-      ));
-
-      const blob = await fetch(file.uri).then((r) => r.blob());
-      const uploadRes = await fetch(presignData.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.mimeType },
-        body: blob,
+      // Single multipart POST: server processes the image (CDR pipeline) then
+      // returns the persisted message publicId. The same publicId is also
+      // emitted back to us via `conversation:message` — we record it in
+      // ownAttachmentIdsRef so the echo can be silently dropped.
+      const result = await uploadCustomerChatAttachment(
+        convPublicIdRef.current,
+        file,
         signal,
-      });
-      if (!uploadRes.ok) throw new Error("Upload to storage failed.");
-
-      const confirmData = await customerFetch<{ messagePublicId: string }>(
-        "/employee-chat/attachments/confirm",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            conversationPublicId: convPublicIdRef.current,
-            rawKey: presignData.rawKey,
-          }),
-          signal,
-        },
       );
+
+      const realId = result.messagePublicId;
+      ownAttachmentIdsRef.current.add(realId);
+      seenIdsRef.current.add(realId);
+      trimSeenIds(seenIdsRef.current);
 
       setMsgs((prev) => prev.map((m) =>
         m.id === placeholderId
-          ? { ...m, id: confirmData.messagePublicId, attachmentId: confirmData.messagePublicId, uploadProgress: undefined }
+          ? { ...m, id: realId, attachmentId: realId, uploadProgress: undefined }
           : m
       ));
-      seenIdsRef.current.add(confirmData.messagePublicId);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (signal.aborted) return;
-      const msg = err instanceof Error ? err.message : String(err?.message || "");
-      const isConvGone = /no active conversation/i.test(msg);
+      const msg = err instanceof Error ? err.message : String((err as { message?: string })?.message || "");
+      const status = err instanceof FetchError ? err.status : 0;
+      const isConvGone = status === 403 || /no active conversation/i.test(msg);
       if (isConvGone) {
         setMsgs((prev) => [
           ...prev.filter((m) => m.id !== placeholderId),
@@ -781,7 +864,7 @@ export function useLiveChat(
     } finally {
       if (!signal.aborted) setUploading(false);
     }
-  }, [isGuest, uploading, conversationId, t]);
+  }, [isGuest, uploading, t]);
 
   // ── Derived state ────────────────────────────────────────────
 
@@ -811,6 +894,7 @@ export function useLiveChat(
     hasToken,
     uploading,
     onInputChange,
+    onInputBlur,
     onSend,
     onStartNewChat,
     onEndChat,

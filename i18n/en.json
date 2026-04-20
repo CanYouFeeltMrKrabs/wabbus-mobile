@@ -1046,8 +1046,10 @@
     "optionalDetail": "Anything else you'd like us to know? (optional)",
     "emptyPrompt": "Start a conversation with our support team.",
     "onlyJpegPngWebp": "Only JPEG, PNG, and WebP images are allowed.",
-    "fileTooLarge": "File is too large. Maximum size is 10MB.",
+    "fileTooLarge": "File is too large. Maximum size is 10 MB.",
     "failedToUpload": "Failed to upload image.",
+    "messageSendFailed": "Message could not be sent. Please try again.",
+    "actionNotAllowed": "Action not allowed.",
     "reasons": {
       "orderIssue": "Order Issue",
       "technicalProblem": "Technical Problem",

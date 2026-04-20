@@ -102,7 +102,7 @@ export type CategoryNode = {
 
 export async function fetchCategoriesClient(): Promise<CategoryLink[]> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories`, {
+    const res = await fetch(`${API_BASE}/categories`, {
       headers: { "Accept-Language": getLocale() },
     });
     if (!res.ok) return [];
@@ -117,7 +117,7 @@ export async function fetchCategoriesClient(): Promise<CategoryLink[]> {
 
 export async function fetchRootCategories(): Promise<CategoryLink[]> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories/roots`, {
+    const res = await fetch(`${API_BASE}/categories/roots`, {
       headers: { "Accept-Language": getLocale() },
     });
     if (!res.ok) return fetchCategoriesClient();
@@ -132,7 +132,7 @@ export async function fetchRootCategories(): Promise<CategoryLink[]> {
 
 export async function fetchCategoryChildren(parentId: number): Promise<CategoryLink[]> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories/${parentId}/children`, {
+    const res = await fetch(`${API_BASE}/categories/${parentId}/children`, {
       headers: { "Accept-Language": getLocale() },
     });
     if (!res.ok) return [];
@@ -144,7 +144,7 @@ export async function fetchCategoryChildren(parentId: number): Promise<CategoryL
 
 export async function fetchCategoryById(id: number): Promise<CategoryNode | null> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories/${id}`, {
+    const res = await fetch(`${API_BASE}/categories/${id}`, {
       headers: { "Accept-Language": getLocale() },
     });
     if (!res.ok) return null;
@@ -156,7 +156,7 @@ export async function fetchCategoryById(id: number): Promise<CategoryNode | null
 
 export async function fetchCategoryTree(): Promise<CategoryNode[]> {
   try {
-    const res = await fetch(`${API_BASE}/products/categories`, {
+    const res = await fetch(`${API_BASE}/categories`, {
       headers: { "Accept-Language": getLocale() },
     });
     if (!res.ok) return [];

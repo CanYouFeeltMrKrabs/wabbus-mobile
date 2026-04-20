@@ -909,8 +909,10 @@
     "optionalDetail": "Ada hal lain yang ingin Anda sampaikan? (opsional)",
     "emptyPrompt": "Mulai percakapan dengan tim dukungan kami.",
     "onlyJpegPngWebp": "Hanya gambar JPEG, PNG, dan WebP yang diizinkan.",
-    "fileTooLarge": "File terlalu besar. Maksimal 10MB.",
+    "fileTooLarge": "File terlalu besar. Maksimal 10 MB.",
     "failedToUpload": "Gagal mengunggah gambar.",
+    "messageSendFailed": "Pesan tidak dapat dikirim. Silakan coba lagi.",
+    "actionNotAllowed": "Tindakan tidak diizinkan.",
     "reasons": {
       "orderIssue": "Masalah Pesanan",
       "technicalProblem": "Masalah Teknis",

@@ -1,5 +1,6 @@
 /**
- * Customer behavior tracker — sends batched events to POST /events/ingest.
+ * Customer behavior tracker — sends batched events to
+ * POST /analytics/events/ingest.
  *
  * Port of the web's customerTracker.ts for React Native.
  * Feeds the customer_events / customer_sessions analytics pipeline.
@@ -61,7 +62,7 @@ async function flush() {
     events,
   });
 
-  fetch(`${API_BASE}/events/ingest`, {
+  fetch(`${API_BASE}/analytics/events/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,

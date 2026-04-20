@@ -909,8 +909,10 @@
     "optionalDetail": "还有什么想让我们知道的吗？（可选）",
     "emptyPrompt": "向客服团队发起对话。",
     "onlyJpegPngWebp": "仅支持 JPEG、PNG 和 WebP 格式的图片。",
-    "fileTooLarge": "文件过大，最大不超过 10MB。",
+    "fileTooLarge": "文件过大，最大不超过 10 MB。",
     "failedToUpload": "图片上传失败。",
+    "messageSendFailed": "消息发送失败，请重试。",
+    "actionNotAllowed": "操作不被允许。",
     "reasons": {
       "orderIssue": "订单问题",
       "technicalProblem": "技术问题",

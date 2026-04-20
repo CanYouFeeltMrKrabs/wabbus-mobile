@@ -88,10 +88,19 @@ async function attemptRefresh(): Promise<boolean> {
   return refreshPromise;
 }
 
-export async function customerFetch<T = unknown>(
+/**
+ * Internal: perform an authenticated request with the full auth handshake
+ * (cookie credentials, 401 silent refresh, refresh-grace retry, logout
+ * dispatch on terminal 401, error normalisation). Returns the raw Response
+ * on success so callers can decode JSON, blob, arrayBuffer, text, etc.
+ *
+ * Throws AuthError on terminal 401, NetworkError on transport failure,
+ * FetchError on any non-2xx with parsed body when available.
+ */
+async function runAuthorized(
   path: string,
   options: RequestInit = {},
-): Promise<T> {
+): Promise<Response> {
   const isGet = !options.method || options.method.toUpperCase() === "GET";
 
   let url: string;
@@ -140,9 +149,6 @@ export async function customerFetch<T = unknown>(
       } catch {
         throw new NetworkError();
       }
-      if (res.status !== 401) {
-        // Grace retry succeeded — fall through to normal response handling
-      }
     }
 
     if (res.status === 401) {
@@ -190,12 +196,17 @@ export async function customerFetch<T = unknown>(
         // keep default
       }
     }
-    if (res.status === 429) {
-      throw new FetchError(429, message, body);
-    }
-
     throw new FetchError(res.status, message, body);
   }
+
+  return res;
+}
+
+export async function customerFetch<T = unknown>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const res = await runAuthorized(path, options);
 
   if (res.status === 204) return undefined as unknown as T;
 
@@ -206,6 +217,23 @@ export async function customerFetch<T = unknown>(
   }
 
   return data as T;
+}
+
+/**
+ * Authenticated binary fetch — same auth handshake as customerFetch but
+ * returns a Blob rather than parsed JSON. Used for protected images and
+ * other non-JSON resources (e.g. live-chat attachments) where the native
+ * Image component can't reliably forward cookies on its own.
+ */
+export async function customerFetchBlob(
+  path: string,
+  options: RequestInit = {},
+): Promise<Blob> {
+  const res = await runAuthorized(path, options);
+  if (res.status === 204) {
+    throw new FetchError(204, "Empty response.");
+  }
+  return await res.blob();
 }
 
 /** Unauthenticated fetch for public endpoints */

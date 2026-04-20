@@ -909,8 +909,10 @@
     "optionalDetail": "¿Algo más que debamos saber? (opcional)",
     "emptyPrompt": "Inicia una conversación con nuestro equipo de soporte.",
     "onlyJpegPngWebp": "Solo se permiten imágenes JPEG, PNG y WebP.",
-    "fileTooLarge": "El archivo es muy grande. Máximo 10MB.",
+    "fileTooLarge": "El archivo es muy grande. Máximo 10 MB.",
     "failedToUpload": "Error al subir la imagen.",
+    "messageSendFailed": "No se pudo enviar el mensaje. Inténtalo de nuevo.",
+    "actionNotAllowed": "Acción no permitida.",
     "reasons": {
       "orderIssue": "Problema con pedido",
       "technicalProblem": "Problema técnico",

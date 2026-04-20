@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useCallback, Fragment } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback, Fragment } from "react";
 import {
   View,
   FlatList,
@@ -20,32 +20,93 @@ import { useTranslation } from "@/hooks/useT";
 import { useLiveChat } from "@/lib/chat/useLiveChat";
 import { getChatReasons, type ChatReasonValue } from "@/lib/chat/chat-reasons";
 import type { UiMsg } from "@/lib/chat/types";
-import { API_BASE } from "@/lib/config";
+import { customerFetchBlob } from "@/lib/api";
+import { CHAT } from "@/lib/constants";
 import { colors, spacing, borderRadius, fontSize, shadows } from "@/lib/theme";
 
 const RETRY_DELAYS = [2_000, 5_000, 10_000];
 
 /**
+ * Reads a Blob into a data URI string (data:<mime>;base64,...) using
+ * FileReader, which React Native polyfills via the Hermes / JSC bridges.
+ * Used to feed cookie-protected images into <Image> without relying on
+ * the native HTTP layer's spotty cookie forwarding for image URIs.
+ */
+function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") resolve(result);
+      else reject(new Error("Unexpected FileReader result type."));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("FileReader failed."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
  * Renders an attachment image loaded from the authenticated API endpoint.
- * Retries with backoff on failure, shows skeleton while loading, and
- * falls back to an error state — mirroring the web's SecureImage.
+ *
+ * Why we don't pass the URL directly to <Image source={{ uri }}>:
+ * React Native's native image loader does not reliably forward the
+ * customer auth cookies to /employee-chat/attachments/:publicId across
+ * iOS and Android. We instead fetch the image via customerFetchBlob —
+ * which goes through the same cookie + 401-refresh + logout pipeline as
+ * every other authenticated request — convert it to a base64 data URI,
+ * and hand that to <Image>. The data URI is small enough for chat-sized
+ * webp images (server caps at 20 MB; client at 10 MB) and benefits from
+ * RN's built-in image cache keyed on URI.
+ *
+ * Retries with exponential-ish backoff (2s → 5s → 10s) on failure and
+ * shows a manual retry button after exhausting attempts.
  */
 function SecureAttachment({ attachmentId, side }: { attachmentId: string; side: "me" | "them" }) {
   const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
+  const [dataUri, setDataUri] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelledRef = useRef(false);
 
-  const uri = `${API_BASE}/employee-chat/attachments/${attachmentId}?attempt=${attempt}`;
+  useEffect(() => {
+    cancelledRef.current = false;
+    setState("loading");
+    setDataUri(null);
+    const ac = new AbortController();
 
-  const handleError = useCallback(() => {
-    const next = attempt + 1;
-    if (next <= RETRY_DELAYS.length) {
-      setState("loading");
-      timerRef.current = setTimeout(() => setAttempt(next), RETRY_DELAYS[next - 1]);
-    } else {
-      setState("error");
-    }
-  }, [attempt]);
+    (async () => {
+      try {
+        const blob = await customerFetchBlob(
+          `/employee-chat/attachments/${attachmentId}`,
+          { signal: ac.signal },
+        );
+        if (cancelledRef.current) return;
+        const uri = await blobToDataUri(blob);
+        if (cancelledRef.current) return;
+        setDataUri(uri);
+        setState("loaded");
+      } catch {
+        if (cancelledRef.current || ac.signal.aborted) return;
+        const next = attempt + 1;
+        if (next <= RETRY_DELAYS.length) {
+          retryTimerRef.current = setTimeout(() => {
+            if (!cancelledRef.current) setAttempt(next);
+          }, RETRY_DELAYS[next - 1]);
+        } else {
+          setState("error");
+        }
+      }
+    })();
+
+    return () => {
+      cancelledRef.current = true;
+      ac.abort();
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, [attachmentId, attempt]);
 
   const handleRetry = useCallback(() => {
     setState("loading");
@@ -77,19 +138,20 @@ function SecureAttachment({ attachmentId, side }: { attachmentId: string; side: 
         ? { backgroundColor: colors.brandBlue, borderBottomRightRadius: borderRadius.sm }
         : { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray100, borderBottomLeftRadius: borderRadius.sm },
     ]}>
-      {state === "loading" && (
+      {state !== "loaded" && (
         <View style={styles.attachSkeleton}>
           <ActivityIndicator size="small" color={colors.slate300} />
         </View>
       )}
-      <Image
-        key={attempt}
-        source={{ uri }}
-        style={[styles.attachImage, state === "loaded" ? { opacity: 1 } : { opacity: 0, position: "absolute" }]}
-        resizeMode="contain"
-        onLoad={() => setState("loaded")}
-        onError={handleError}
-      />
+      {dataUri && (
+        <Image
+          source={{ uri: dataUri }}
+          style={[styles.attachImage, state === "loaded" ? { opacity: 1 } : { opacity: 0, position: "absolute" }]}
+          resizeMode="contain"
+          onLoad={() => setState("loaded")}
+          onError={() => setState("error")}
+        />
+      )}
     </View>
   );
 }
@@ -613,10 +675,11 @@ export default function ChatTabScreen() {
                 style={styles.composerInput}
                 value={chat.input}
                 onChangeText={chat.onInputChange}
+                onBlur={chat.onInputBlur}
                 placeholder={chat.isSpamBlocked ? t("chat.waitForReplyPlaceholder") : t("chat.messagePlaceholder")}
                 placeholderTextColor={colors.mutedLight}
                 multiline
-                maxLength={750}
+                maxLength={CHAT.MAX_MSG_LENGTH}
                 editable={
                   chat.hasToken &&
                   !chat.isSpamBlocked &&

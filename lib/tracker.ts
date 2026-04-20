@@ -1,6 +1,6 @@
 /**
  * Mobile analytics tracker — sends events to POST /events (recommendation engine)
- * and bridges to POST /events/ingest (customer analytics pipeline).
+ * and bridges to POST /analytics/events/ingest (customer analytics pipeline).
  *
  * Port of the web's tracker.ts using AsyncStorage for session persistence.
  */
