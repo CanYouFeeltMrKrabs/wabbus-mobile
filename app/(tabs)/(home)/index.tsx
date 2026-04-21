@@ -39,7 +39,7 @@ import RecentlyViewedSlider from "@/components/ui/RecentlyViewedSlider";
 import { useTranslation } from "@/hooks/useT";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { API_BASE } from "@/lib/config";
-import { customerFetch } from "@/lib/api";
+import { customerFetch, NetworkError } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { getCategoryIcon, CATEGORY_SHORT_NAMES } from "@/lib/categories";
 import { ROUTES } from "@/lib/routes";
@@ -62,14 +62,32 @@ function normalizeProducts(data: unknown): PublicProduct[] {
   return [];
 }
 
+/**
+ * Public-endpoint JSON fetch.
+ *
+ * Distinguishes transport failure from server failure:
+ *   - Transport failure (DNS, TLS, no network, timeout) → throws
+ *     `NetworkError` so the surrounding `useQuery` rejects, retries
+ *     per `retry: 1`, and is re-driven by `onlineManager` when the
+ *     radio comes back online (see `lib/queryClientBootstrap.ts`).
+ *   - Non-2xx HTTP response → returns `null`. The endpoint reached
+ *     the server, so no amount of reconnect-retry is going to change
+ *     the answer; callers handle null as "no data" and render their
+ *     empty state.
+ *
+ * Replaces an earlier `try { ... } catch { return null; }` shape that
+ * silently turned cold-radio launches into permanently-empty UIs by
+ * masking transport failures as successful empty results.
+ */
 async function fetchJSON(url: string) {
+  let res: Response;
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return await res.json();
+    res = await fetch(url);
   } catch {
-    return null;
+    throw new NetworkError();
   }
+  if (!res.ok) return null;
+  return await res.json();
 }
 
 export default function HomeScreen() {

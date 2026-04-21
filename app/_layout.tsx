@@ -33,7 +33,7 @@ import OfflineBanner from "@/components/ui/OfflineBanner";
 import ToastProvider from "@/components/ui/ToastProvider";
 import OTAUpdatePrompt from "@/components/OTAUpdatePrompt";
 
-SplashScreen.preventAutoHideAsync();
+try { SplashScreen.preventAutoHideAsync(); } catch { }
 
 function NotificationHandler() {
   const router = useRouter();
@@ -58,7 +58,7 @@ function NotificationHandler() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -66,51 +66,63 @@ export default function RootLayout() {
   });
 
   const onLayoutReady = useCallback(() => {
-    if (fontsLoaded) SplashScreen.hideAsync();
-  }, [fontsLoaded]);
+    if (fontsLoaded || fontError) {
+      try { SplashScreen.hideAsync(); } catch { }
+    }
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) return null;
+  // Safety net: if onLayout doesn't fire (or fires before fonts load),
+  // useEffect guarantees we still hide the splash once fonts resolve.
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      try { SplashScreen.hideAsync(); } catch { }
+    }
+  }, [fontsLoaded, fontError]);
+
+  // Do NOT render the tree until fonts are ready. This ensures onLayout
+  // fires AFTER fontsLoaded is true, so the splash hides on first layout.
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }} onLayout={onLayoutReady}>
-    <ErrorBoundary>
-      <QueryProvider>
-        <NetworkProvider>
-          <SafeAreaProvider>
-            <StripeProvider
-              publishableKey={STRIPE_KEY}
-              merchantIdentifier="merchant.com.wabbus.mobile"
-              urlScheme="wabbus"
-            >
-              <AuthProvider>
-                <CartProvider>
-                <NotificationHandler />
-                <CustomerTrackingProvider />
-                <StatusBar style="dark" />
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: colors.background },
-                    animation: "slide_from_right",
-                  }}
-                >
-                  <Stack.Screen name="(tabs)" />
-                  <Stack.Screen name="search" />
-                  <Stack.Screen name="(auth)" options={{ presentation: "modal" }} />
-                  <Stack.Screen name="checkout" options={{ presentation: "fullScreenModal" }} />
-                  <Stack.Screen name="order-complete" />
-                  {__DEV__ && <Stack.Screen name="impersonate" options={{ headerShown: false }} />}
-                </Stack>
-                <OTAUpdatePrompt />
-                <ToastProvider />
-                <OfflineBanner />
-                </CartProvider>
-              </AuthProvider>
-            </StripeProvider>
-          </SafeAreaProvider>
-        </NetworkProvider>
-      </QueryProvider>
-    </ErrorBoundary>
+      <ErrorBoundary>
+        <QueryProvider>
+          <NetworkProvider>
+            <SafeAreaProvider>
+              <StripeProvider
+                publishableKey={STRIPE_KEY}
+                merchantIdentifier="merchant.com.wabbus.mobile"
+                urlScheme="wabbus"
+              >
+                <AuthProvider>
+                  <CartProvider>
+                    <NotificationHandler />
+                    <CustomerTrackingProvider />
+                    <StatusBar style="dark" />
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        contentStyle: { backgroundColor: colors.background },
+                        animation: "slide_from_right",
+                      }}
+                    >
+                      <Stack.Screen name="(tabs)" />
+                      <Stack.Screen name="search" />
+                      <Stack.Screen name="(auth)" options={{ presentation: "modal" }} />
+                      <Stack.Screen name="checkout" options={{ presentation: "fullScreenModal" }} />
+                      <Stack.Screen name="order-complete" />
+                      {__DEV__ && <Stack.Screen name="impersonate" options={{ headerShown: false }} />}
+                    </Stack>
+                    <OTAUpdatePrompt />
+                    <ToastProvider />
+                    <OfflineBanner />
+                  </CartProvider>
+                </AuthProvider>
+              </StripeProvider>
+            </SafeAreaProvider>
+          </NetworkProvider>
+        </QueryProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

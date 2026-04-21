@@ -14,10 +14,44 @@
  * - Surfaces `warning` field from response JSON via toast
  */
 
+import * as Sentry from "@sentry/react-native";
+
 import { API_BASE } from "./config";
 import { PAGE_SIZE } from "./constants";
 import { getLocale } from "./locale";
 import { showToast } from "./toast";
+
+/**
+ * Record a Sentry breadcrumb describing a transport-level fetch
+ * failure. Captures the underlying error name + message + URL so
+ * subsequent Sentry sessions surface the actual native cause
+ * (e.g. "The Internet connection appears to be offline.",
+ * "An SSL error has occurred…", "could not connect to the server")
+ * instead of the meaningless `status_code: 0` placeholder that
+ * Sentry's HTTP integration records when fetch rejects.
+ *
+ * Pure observability — does not change any control flow. Safe to
+ * call from any catch block before re-throwing.
+ */
+function recordTransportFailure(url: string, error: unknown, method?: string): void {
+  const err = error instanceof Error ? error : new Error(String(error));
+  try {
+    Sentry.addBreadcrumb({
+      category: "fetch.transport",
+      level: "error",
+      type: "http",
+      message: `${err.name}: ${err.message}`,
+      data: {
+        url,
+        method: method ?? "GET",
+        name: err.name,
+        message: err.message,
+      },
+    });
+  } catch {
+    // Sentry not initialised (dev mode, missing DSN) — swallow.
+  }
+}
 
 export class AuthError extends Error {
   status: number;
@@ -68,12 +102,20 @@ const REFRESH_GRACE_MS = 3_000;
 async function attemptRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
 
+  const refreshUrl = `${API_BASE}/customer-auth/refresh`;
+
   refreshPromise = (async () => {
     try {
-      const res = await fetch(`${API_BASE}/customer-auth/refresh`, {
-        method: "POST",
-        credentials: "include",
-      });
+      let res: Response;
+      try {
+        res = await fetch(refreshUrl, {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch (e) {
+        recordTransportFailure(refreshUrl, e, "POST");
+        throw e;
+      }
       if (res.ok) {
         lastRefreshAt = Date.now();
         return true;
@@ -131,6 +173,8 @@ async function runAuthorized(
     headers["Content-Type"] = "application/json";
   }
 
+  const method = options.method?.toUpperCase() ?? "GET";
+
   const doFetch = () =>
     fetch(url, { ...options, headers, credentials: "include" });
 
@@ -138,7 +182,8 @@ async function runAuthorized(
 
   try {
     res = await doFetch();
-  } catch {
+  } catch (e) {
+    recordTransportFailure(url, e, method);
     throw new NetworkError();
   }
 
@@ -146,7 +191,8 @@ async function runAuthorized(
     if (Date.now() - lastRefreshAt < REFRESH_GRACE_MS) {
       try {
         res = await doFetch();
-      } catch {
+      } catch (e) {
+        recordTransportFailure(url, e, method);
         throw new NetworkError();
       }
     }
@@ -155,14 +201,16 @@ async function runAuthorized(
       let refreshed: boolean;
       try {
         refreshed = await attemptRefresh();
-      } catch {
+      } catch (e) {
+        recordTransportFailure(url, e, method);
         throw new NetworkError();
       }
 
       if (refreshed) {
         try {
           res = await doFetch();
-        } catch {
+        } catch (e) {
+          recordTransportFailure(url, e, method);
           throw new NetworkError();
         }
       }
@@ -248,6 +296,7 @@ export async function publicFetch<T = unknown>(path: string): Promise<T> {
     return (await res.json()) as T;
   } catch (e) {
     if (e instanceof FetchError) throw e;
+    recordTransportFailure(url, e, "GET");
     throw new NetworkError();
   }
 }
