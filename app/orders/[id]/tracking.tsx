@@ -142,7 +142,7 @@ function TrackingContent() {
   ];
   const { data: order, isLoading: loading } = useQuery({
     queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<OrderAPI>(`/orders/${id}`),
+    queryFn: () => customerFetch<OrderAPI>(`/orders/by-public-id/${id}`),
     enabled: !!id,
   });
 

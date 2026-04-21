@@ -181,7 +181,7 @@ function AddressesContent() {
 
     try {
       const isEdit = editingId !== null;
-      const path = isEdit ? `/customer-addresses/${editingId}` : "/customer-addresses";
+      const path = isEdit ? `/customer-addresses/by-public-id/${editingId}` : "/customer-addresses";
       const method = isEdit ? "PATCH" : "POST";
       await customerFetch(path, { method, body: JSON.stringify(payload) });
       setShowForm(false);
@@ -200,7 +200,7 @@ function AddressesContent() {
     showToast(t("account.addresses.defaultUpdated"), "success");
 
     try {
-      await customerFetch(`/customer-addresses/${id}`, {
+      await customerFetch(`/customer-addresses/by-public-id/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ isDefault: true }),
       });
@@ -219,7 +219,7 @@ function AddressesContent() {
         onPress: async () => {
           setBusyId(id);
           try {
-            await customerFetch(`/customer-addresses/${id}`, { method: "DELETE" });
+            await customerFetch(`/customer-addresses/by-public-id/${id}`, { method: "DELETE" });
             await queryClient.invalidateQueries({ queryKey: queryKeys.addresses.all() });
           } catch (e: any) {
             Alert.alert(t("common.error"), e.message || t("account.addresses.errorRemove"));

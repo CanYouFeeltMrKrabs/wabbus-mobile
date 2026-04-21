@@ -46,7 +46,7 @@ function ReviewContent() {
   const queryClient = useQueryClient();
   const { data: orderData, isLoading: loading } = useQuery({
     queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<any>(`/orders/${id}`),
+    queryFn: () => customerFetch<any>(`/orders/by-public-id/${id}`),
     enabled: !!id,
   });
 
@@ -164,7 +164,7 @@ function ReviewContent() {
         if (imgId) reviewImageIds.push(imgId);
       }
 
-      await customerFetch(`/reviews/${productId}`, {
+      await customerFetch(`/reviews/by-product-id/${productId}`, {
         method: "POST",
         body: JSON.stringify({
           rating,

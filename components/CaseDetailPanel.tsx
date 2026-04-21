@@ -87,7 +87,7 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
     refetch: refetchDetail,
   } = useQuery({
     queryKey: queryKeys.messages.cases.detail(caseNumber),
-    queryFn: () => customerFetch<CustomerCaseDetail>(`/cases/${caseNumber}`),
+    queryFn: () => customerFetch<CustomerCaseDetail>(`/cases/by-id/${caseNumber}`),
     enabled: !!caseNumber,
   });
 
@@ -96,7 +96,7 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
   const { data: caseMessages = [] } = useQuery({
     queryKey: queryKeys.messages.cases.messages(caseNumber),
     queryFn: async () => {
-      const data = await customerFetch<{ messages?: CaseMessage[] }>(`/cases/${caseNumber}/messages`);
+      const data = await customerFetch<{ messages?: CaseMessage[] }>(`/cases/by-id/${caseNumber}/messages`);
       return Array.isArray(data?.messages) ? data.messages : Array.isArray(data) ? (data as CaseMessage[]) : [];
     },
     enabled: !!caseNumber,
@@ -139,7 +139,7 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
         }
       }
 
-      await customerFetch(`/cases/${caseNumber}/follow-up`, {
+      await customerFetch(`/cases/by-id/${caseNumber}/follow-up`, {
         method: "POST",
         body: JSON.stringify({
           note: followUpText.trim() || (pendingAttachment ? "(attachment)" : ""),

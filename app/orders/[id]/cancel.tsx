@@ -50,7 +50,7 @@ function CancelContent() {
   ];
   const { data: orderData, isLoading: loading } = useQuery({
     queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<any>(`/orders/${id}`),
+    queryFn: () => customerFetch<any>(`/orders/by-public-id/${id}`),
     enabled: !!id,
   });
   const order = (orderData?.order ?? orderData ?? null) as Order | null;
@@ -84,7 +84,7 @@ function CancelContent() {
       const promises = cancellableItems
         .filter((i) => selected.has(i.publicId ?? ""))
         .map((item) =>
-          customerFetch(`/orders/${id}/items/${item.publicId}/cancel`, {
+          customerFetch(`/orders/by-public-id/${id}/items/${item.publicId}/cancel`, {
             method: "POST",
             body: JSON.stringify({ reasonCode: reason, ...(note ? { note } : {}) }),
           }).catch(() => {}),

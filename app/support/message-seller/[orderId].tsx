@@ -145,7 +145,7 @@ function MessageSellerWizard() {
     queryKey: queryKeys.orders.detail(orderId ?? "__none__"),
     queryFn: async () => {
       if (!orderId) return [];
-      const data = await customerFetch<any>(`/orders/${orderId}`);
+      const data = await customerFetch<any>(`/orders/by-public-id/${orderId}`);
       const order = data?.order ?? data;
       let parsed = parseOrderItems(order);
 

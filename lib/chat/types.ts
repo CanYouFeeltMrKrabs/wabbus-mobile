@@ -11,7 +11,7 @@ export type UiMsg = {
   eventType?: "AGENT_JOINED" | "RESOLVED" | "CLOSED";
   /** Only set on customer-sent messages that failed, are queued, or overflowed the queue cap. */
   status?: "failed" | "queued" | "overflow";
-  /** Attachment publicId — used to load image via /employee-chat/attachments/:publicId */
+  /** Attachment publicId — used to load image via /employee-chat/attachments/by-public-id/:publicId */
   attachmentId?: string;
   /** Transient: tracks upload progress for attachments being uploaded */
   uploadProgress?: "uploading" | "processing" | "error";

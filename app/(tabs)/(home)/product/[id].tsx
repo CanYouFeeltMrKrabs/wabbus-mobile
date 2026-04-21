@@ -160,7 +160,7 @@ export default function ProductDetailScreen() {
   });
   const { data: reviewSummary } = useQuery({
     queryKey: ["reviewSummary", id],
-    queryFn: () => publicFetch<{ ratingAvg: number; reviewCount: number }>(`/reviews/${encodeURIComponent(id!)}/summary`),
+    queryFn: () => publicFetch<{ ratingAvg: number; reviewCount: number }>(`/reviews/by-product-id/${encodeURIComponent(id!)}/summary`),
     enabled: !!id,
   });
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);

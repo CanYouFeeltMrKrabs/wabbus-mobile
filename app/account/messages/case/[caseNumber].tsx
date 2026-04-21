@@ -118,7 +118,7 @@ function CaseDetailContent() {
     error: detailError,
   } = useQuery({
     queryKey: queryKeys.messages.cases.detail(caseNumber!),
-    queryFn: () => customerFetch<CustomerCaseDetail>(`/cases/${caseNumber}`),
+    queryFn: () => customerFetch<CustomerCaseDetail>(`/cases/by-id/${caseNumber}`),
     enabled: !!caseNumber,
   });
 
@@ -131,7 +131,7 @@ function CaseDetailContent() {
     queryKey: queryKeys.messages.cases.messages(caseNumber!),
     queryFn: async () => {
       const data = await customerFetch<{ messages?: CaseMessage[] }>(
-        `/cases/${caseNumber}/messages`,
+        `/cases/by-id/${caseNumber}/messages`,
       );
       return Array.isArray(data?.messages)
         ? data.messages
@@ -181,7 +181,7 @@ function CaseDetailContent() {
         }
       }
 
-      await customerFetch(`/cases/${caseNumber}/follow-up`, {
+      await customerFetch(`/cases/by-id/${caseNumber}/follow-up`, {
         method: "POST",
         body: JSON.stringify({
           note: reply.trim() || (pendingAttachment ? "(attachment)" : ""),

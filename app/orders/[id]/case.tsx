@@ -157,7 +157,7 @@ function CaseContent() {
 
   const { data: caseData, isLoading: loading, isError } = useQuery({
     queryKey: ["cases", "detail", issueId!],
-    queryFn: () => customerFetch<CaseData>(`/cases/${issueId}`),
+    queryFn: () => customerFetch<CaseData>(`/cases/by-id/${issueId}`),
     enabled: !!issueId,
   });
 

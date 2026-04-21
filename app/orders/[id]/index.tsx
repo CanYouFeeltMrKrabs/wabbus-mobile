@@ -86,7 +86,7 @@ function OrderDetailContent() {
 
   const { data: rawOrder, isLoading: loading } = useQuery({
     queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<Order>(`/orders/${id}`),
+    queryFn: () => customerFetch<Order>(`/orders/by-public-id/${id}`),
     enabled: !!id,
   });
 

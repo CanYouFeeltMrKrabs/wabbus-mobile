@@ -49,7 +49,7 @@ function OrderCompleteContent() {
 
   const { data: order, isLoading: loading, isError } = useQuery({
     queryKey: queryKeys.orders.detail(orderId!),
-    queryFn: () => customerFetch<OrderResponse>(`/orders/${encodeURIComponent(orderId!)}`),
+    queryFn: () => customerFetch<OrderResponse>(`/orders/by-public-id/${encodeURIComponent(orderId!)}`),
     enabled: !!orderId,
   });
 

@@ -214,7 +214,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const updateQuantity = useCallback(async (publicId: string, quantity: number) => {
     if (isLoggedIn) {
-      await customerFetch(`/cart/${publicId}`, {
+      await customerFetch(`/cart/by-public-id/${publicId}`, {
         method: "PATCH",
         body: JSON.stringify({ quantity }),
       });
@@ -230,7 +230,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const removeItem = useCallback(async (publicId: string) => {
     const productId = items.find((i) => i.publicId === publicId)?.productId;
     if (isLoggedIn) {
-      await customerFetch(`/cart/${publicId}`, { method: "DELETE" });
+      await customerFetch(`/cart/by-public-id/${publicId}`, { method: "DELETE" });
       await loadServerCart();
     } else {
       await saveGuestCart(items.filter((i) => i.publicId !== publicId));

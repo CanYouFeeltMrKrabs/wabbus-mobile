@@ -39,13 +39,13 @@ export default function VendorReviewsScreen() {
 
   const { data: reviewsRes, isLoading: reviewsLoading } = useQuery({
     queryKey: queryKeys.vendors.reviews(id!),
-    queryFn: () => publicFetch<any>(`/public/vendors/${id}/reviews?limit=${PAGE_LIMIT}`),
+    queryFn: () => publicFetch<any>(`/public/vendors/by-public-id/${id}/reviews?limit=${PAGE_LIMIT}`),
     enabled: !!id,
   });
 
   const { data: summary } = useQuery({
     queryKey: [...queryKeys.vendors.reviews(id!), "summary"] as const,
-    queryFn: () => publicFetch<ReviewSummary>(`/public/vendors/${id}/reviews/summary`).catch(() => null),
+    queryFn: () => publicFetch<ReviewSummary>(`/public/vendors/by-public-id/${id}/reviews/summary`).catch(() => null),
     enabled: !!id,
   });
 
@@ -70,7 +70,7 @@ export default function VendorReviewsScreen() {
     if (!cursor || loadingMore || !id) return;
     setLoadingMore(true);
     try {
-      const res = await publicFetch<any>(`/public/vendors/${id}/reviews?limit=${PAGE_LIMIT}&cursor=${encodeURIComponent(cursor)}`);
+      const res = await publicFetch<any>(`/public/vendors/by-public-id/${id}/reviews?limit=${PAGE_LIMIT}&cursor=${encodeURIComponent(cursor)}`);
       const data = res?.data ?? (Array.isArray(res) ? res : []);
       setExtraReviews((prev) => [...prev, ...data]);
       setCursor(res?.nextCursor ?? null);

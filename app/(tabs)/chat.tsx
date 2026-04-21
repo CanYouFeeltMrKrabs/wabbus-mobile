@@ -50,7 +50,7 @@ function blobToDataUri(blob: Blob): Promise<string> {
  *
  * Why we don't pass the URL directly to <Image source={{ uri }}>:
  * React Native's native image loader does not reliably forward the
- * customer auth cookies to /employee-chat/attachments/:publicId across
+ * customer auth cookies to /employee-chat/attachments/by-public-id/:publicId across
  * iOS and Android. We instead fetch the image via customerFetchBlob —
  * which goes through the same cookie + 401-refresh + logout pipeline as
  * every other authenticated request — convert it to a base64 data URI,
@@ -77,7 +77,7 @@ function SecureAttachment({ attachmentId, side }: { attachmentId: string; side: 
     (async () => {
       try {
         const blob = await customerFetchBlob(
-          `/employee-chat/attachments/${attachmentId}`,
+          `/employee-chat/attachments/by-public-id/${attachmentId}`,
           { signal: ac.signal },
         );
         if (cancelledRef.current) return;

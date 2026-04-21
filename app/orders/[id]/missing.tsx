@@ -84,7 +84,7 @@ function MissingContent() {
   const insets = useSafeAreaInsets();
   const { data: orderData, isLoading: orderLoading } = useQuery({
     queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<any>(`/orders/${id}`),
+    queryFn: () => customerFetch<any>(`/orders/by-public-id/${id}`),
     enabled: !!id,
   });
 

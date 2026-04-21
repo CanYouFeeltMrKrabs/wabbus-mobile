@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
-    "dev": "expo start --dev-client",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "start": "unset CI && expo start",
+    "dev": "unset CI && expo start --dev-client",
+    "android": "unset CI && expo run:android",
+    "ios": "unset CI && expo run:ios",
     "rebuild:ios": "expo prebuild --clean && cd ios && pod install && cd .. && SENTRY_DISABLE_AUTO_UPLOAD=true xcodebuild -workspace ios/Wabbus.xcworkspace -scheme Wabbus -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath ios/build build CODE_SIGNING_ALLOWED=NO && xcrun simctl install booted ios/build/Build/Products/Debug-iphonesimulator/Wabbus.app",
-    "web": "expo start --web"
+    "web": "unset CI && expo start --web"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

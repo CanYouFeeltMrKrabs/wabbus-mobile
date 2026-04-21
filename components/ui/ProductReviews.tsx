@@ -65,8 +65,8 @@ export default function ProductReviews({ productId }: { productId: string }) {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      publicFetch(`/reviews/${encodeURIComponent(productId)}?limit=${PAGE_SIZE}`),
-      publicFetch(`/reviews/${encodeURIComponent(productId)}/summary`),
+      publicFetch(`/reviews/by-product-id/${encodeURIComponent(productId)}?limit=${PAGE_SIZE}`),
+      publicFetch(`/reviews/by-product-id/${encodeURIComponent(productId)}/summary`),
     ])
       .then(([reviewsData, summaryData]) => {
         setReviews((reviewsData as any).data ?? []);
@@ -81,7 +81,7 @@ export default function ProductReviews({ productId }: { productId: string }) {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await publicFetch(`/reviews/${encodeURIComponent(productId)}?limit=${PAGE_SIZE}&cursor=${encodeURIComponent(nextCursor)}`);
+      const res = await publicFetch(`/reviews/by-product-id/${encodeURIComponent(productId)}?limit=${PAGE_SIZE}&cursor=${encodeURIComponent(nextCursor)}`);
       setReviews((prev) => {
         const incoming: PublicReview[] = (res as any).data ?? [];
         const seen = new Set(prev.map((r) => r.id));

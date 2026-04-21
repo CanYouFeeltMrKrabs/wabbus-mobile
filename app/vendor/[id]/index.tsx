@@ -69,7 +69,7 @@ export default function VendorScreen() {
 
   const { data: vendor, isLoading: vendorLoading } = useQuery({
     queryKey: queryKeys.vendors.detail(id!),
-    queryFn: () => publicFetch<VendorProfile>(`/public/vendors/${id}`),
+    queryFn: () => publicFetch<VendorProfile>(`/public/vendors/by-public-id/${id}`),
     enabled: !!id,
   });
 

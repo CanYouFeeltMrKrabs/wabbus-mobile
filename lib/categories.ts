@@ -132,7 +132,7 @@ export async function fetchRootCategories(): Promise<CategoryLink[]> {
 
 export async function fetchCategoryChildren(parentId: number): Promise<CategoryLink[]> {
   try {
-    const res = await fetch(`${API_BASE}/categories/${parentId}/children`, {
+    const res = await fetch(`${API_BASE}/categories/by-id/${parentId}/children`, {
       headers: { "Accept-Language": getLocale() },
     });
     if (!res.ok) return [];
@@ -144,7 +144,7 @@ export async function fetchCategoryChildren(parentId: number): Promise<CategoryL
 
 export async function fetchCategoryById(id: number): Promise<CategoryNode | null> {
   try {
-    const res = await fetch(`${API_BASE}/categories/${id}`, {
+    const res = await fetch(`${API_BASE}/categories/by-id/${id}`, {
       headers: { "Accept-Language": getLocale() },
     });
     if (!res.ok) return null;
