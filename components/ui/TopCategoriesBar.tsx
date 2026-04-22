@@ -85,15 +85,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[1],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1.5],
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
     borderRadius: borderRadius.md,
   },
   pillPressed: {
     backgroundColor: colors.overlayWhite20,
   },
   label: {
-    fontSize: 12,
-    letterSpacing: 0.5,
+    fontSize: 10,
+    letterSpacing: 0.2,
   },
 });
