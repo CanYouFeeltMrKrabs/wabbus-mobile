@@ -52,7 +52,7 @@ export default function TopCategoriesBar() {
           >
             <Icon
               name={getCategoryIcon(c.slug)}
-              size={14}
+              size={16}
               color={colors.white}
             />
             <AppText
@@ -73,7 +73,7 @@ export default function TopCategoriesBar() {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.brandOrange,
-    height: 36,
+    height: 42,
     justifyContent: "center",
   },
   scroll: {
@@ -86,14 +86,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing[1],
     paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
+    paddingVertical: spacing[1.5],
     borderRadius: borderRadius.md,
   },
   pillPressed: {
     backgroundColor: colors.overlayWhite20,
   },
   label: {
-    fontSize: 10,
+    fontSize: 12,
     letterSpacing: 0.5,
   },
 });

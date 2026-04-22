@@ -18,8 +18,13 @@ import { customerFetch, FetchError } from "@/lib/api";
 import { API_BASE } from "@/lib/config";
 import { PAGE_SIZE, MAX_CHAT_MESSAGES, CHAT } from "@/lib/constants";
 import { showToast } from "@/lib/toast";
-import { pickDocument } from "@/lib/fileUpload";
+import { pickDocument, type PickedFile } from "@/lib/fileUpload";
 import type { UiMsg, ConversationState } from "./types";
+import {
+  fetchCustomerSocketTicket,
+  fetchGuestSocketTicket,
+  SocketTicketError,
+} from "./socketTicket";
 
 function safeId(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } })?.crypto;
@@ -34,6 +39,17 @@ function trimSeenIds(seen: Set<string>) {
   seen.clear();
   for (const id of keep) seen.add(id);
 }
+
+/**
+ * Staged attachment awaiting upload. Displayed in a preview tray
+ * above the composer so the user can review / remove before sending.
+ */
+export type PendingAttachment = {
+  id: string;
+  file: PickedFile;
+  /** `file://` URI for the preview thumbnail, sourced from the picker. */
+  previewUri: string;
+};
 
 /**
  * Multipart upload of a customer chat image. Mirrors the web's
@@ -85,6 +101,8 @@ export type LiveChatState = {
   isGuest: boolean;
   hasToken: boolean;
   uploading: boolean;
+  /** Staged images awaiting upload, shown in the preview tray. */
+  pendingAttachments: PendingAttachment[];
 
   onInputChange: (v: string) => void;
   onInputBlur: () => void;
@@ -95,7 +113,15 @@ export type LiveChatState = {
   onRetrySend: (msgId: string) => void;
   onSubmitRating: (rating: number, comment: string) => void;
   onDismissRating: () => void;
-  onAttach: () => Promise<void>;
+  /** Opens the picker and stages selected images for preview. */
+  onPickAttachments: () => Promise<void>;
+  /** Removes a staged image by id before it is uploaded. */
+  onRemovePending: (id: string) => void;
+  /**
+   * Uploads all pending images (batch), then optionally sends the
+   * text in the composer. Called by the combined send button.
+   */
+  onUploadPending: () => Promise<void>;
 };
 
 export function useLiveChat(
@@ -171,7 +197,16 @@ export function useLiveChat(
       updateConvId(data.conversationId ?? null, data.conversationPublicId);
       if (data.conversationStatus === "WAITING") setConversationState("WAITING");
       else if (data.conversationStatus === "OPEN") setConversationState("OPEN");
-      else setConversationState("NONE");
+      else if (
+        data.conversationStatus === "RESOLVED" ||
+        data.conversationStatus === "ABANDONED" ||
+        data.conversationStatus === "EXPIRED"
+      ) {
+        setConversationState("CLOSED");
+        setTimeout(() => setShowRating(true), 500);
+      } else {
+        setConversationState("NONE");
+      }
 
       const history = data?.messages ?? [];
       if (Array.isArray(history) && history.length > 0) {
@@ -287,11 +322,12 @@ export function useLiveChat(
     const handler = (nextState: AppStateStatus) => {
       if (nextState === "active" && shouldConnect) {
         if (isLoggedIn) checkExistingConversation();
+        else checkGuestConversation();
       }
     };
     const sub = AppState.addEventListener("change", handler);
     return () => sub.remove();
-  }, [shouldConnect, isLoggedIn, checkExistingConversation]);
+  }, [shouldConnect, isLoggedIn, checkExistingConversation, checkGuestConversation]);
 
   // ── Socket lifecycle ─────────────────────────────────────────
 
@@ -307,9 +343,38 @@ export function useLiveChat(
 
     setStatus("connecting");
 
-    const s: Socket = io(`${API_BASE}/support-chat`, {
+    /**
+     * Mobile uses a separate Socket.IO namespace (`/support-chat-mobile`) that
+     * authenticates from `handshake.auth.token` rather than from cookies. RN's
+     * WebSocket polyfill drops cookies from WS upgrades, so the cookie path
+     * the web client uses (`/support-chat`) is not viable here.
+     *
+     * The `auth` callback runs on every (re)connect attempt and mints a fresh
+     * 60-second JWT ticket via the HTTP cookie jar (which RN does honour for
+     * `fetch`). On failure we surface "error" status so the UI shows the
+     * correct retry affordance and the user is not stuck on "connecting".
+     *
+     * `withCredentials` is intentionally NOT set — it is a no-op on RN's
+     * polyfill and would be misleading. See `lib/chat/README.md`.
+     */
+    const s: Socket = io(`${API_BASE}/support-chat-mobile`, {
       transports: ["websocket", "polling"],
-      withCredentials: true,
+      auth: (cb: (data: { token: string }) => void) => {
+        const ticketAbort = new AbortController();
+        const ticketPromise = isGuest
+          ? fetchGuestSocketTicket(ticketAbort.signal)
+          : fetchCustomerSocketTicket(ticketAbort.signal);
+        ticketPromise
+          .then((ticket) => cb({ token: ticket.token }))
+          .catch((err: unknown) => {
+            if (err instanceof SocketTicketError) {
+              setStatus(err.status === 401 ? "error" : "error");
+            } else {
+              setStatus("error");
+            }
+            cb({ token: "" });
+          });
+      },
     });
     socketRef.current = s;
 
@@ -409,7 +474,8 @@ export function useLiveChat(
     s.io.on("reconnect_attempt", () => setStatus("reconnecting"));
     s.io.on("reconnect", () => {
       setStatus("connected");
-      if (!isGuest) checkExistingConversation();
+      if (isGuest) checkGuestConversation();
+      else checkExistingConversation();
     });
     s.io.on("reconnect_failed", () => setStatus("error"));
 
@@ -496,6 +562,7 @@ export function useLiveChat(
           }].slice(-MAX_CHAT_MESSAGES));
         }
         setConversationState("CLOSED");
+        setTimeout(() => setShowRating(true), 500);
       }
     });
 
@@ -584,7 +651,7 @@ export function useLiveChat(
       setStatus("idle");
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoggedIn, isGuest, guestSessionReady, shouldConnect, checkExistingConversation, updateConvId]);
+  }, [isLoggedIn, isGuest, guestSessionReady, shouldConnect, checkExistingConversation, checkGuestConversation, updateConvId]);
 
   // Auto-connect on mount (tab is always "open" on mobile)
   useEffect(() => { connect(); }, [connect]);
@@ -639,6 +706,7 @@ export function useLiveChat(
         id: safeId(), text: "", ts: Date.now(),
         side: "system" as const, eventType: "CLOSED" as const,
       }].slice(-MAX_CHAT_MESSAGES));
+      setTimeout(() => setShowRating(true), 500);
     } finally {
       setEndingChat(false);
     }
@@ -656,6 +724,7 @@ export function useLiveChat(
     setInput("");
     setShowRating(false);
     ownAttachmentIdsRef.current.clear();
+    setPendingAttachments([]);
   }, [updateConvId, setInput]);
 
   // ── Rating ───────────────────────────────────────────────────
@@ -789,15 +858,26 @@ export function useLiveChat(
     });
   }, [isGuest]);
 
-  // ── Attachments ──────────────────────────────────────────────
+  // ── Attachments (batch, with pending preview tray) ──────
+
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
 
   const canAttach = !isGuest && isLoggedIn &&
-    (conversationId !== null || convPublicIdRef.current !== null) &&
-    (conversationState === "WAITING" || conversationState === "OPEN") &&
+    hasActiveConversation &&
     status === "connected";
 
-  const onAttach = useCallback(async () => {
-    if (!convPublicIdRef.current || isGuest || uploading) return;
+  /**
+   * Opens the document picker and stages valid images.
+   * Does NOT upload — the user reviews the preview tray first.
+   */
+  const onPickAttachments = useCallback(async () => {
+    if (isGuest || uploading) return;
+
+    const remaining = CHAT.MAX_PENDING_IMAGES - pendingAttachments.length;
+    if (remaining <= 0) {
+      showToast(t("chat.maxImagesReached"), "error");
+      return;
+    }
 
     const file = await pickDocument({ type: [...CHAT.ALLOWED_IMAGE_TYPES] });
     if (!file) return;
@@ -811,60 +891,148 @@ export function useLiveChat(
       return;
     }
 
-    uploadAbortRef.current?.abort();
-    const ac = new AbortController();
-    uploadAbortRef.current = ac;
-    const { signal } = ac;
+    setPendingAttachments((prev) => [
+      ...prev,
+      { id: safeId(), file, previewUri: file.uri },
+    ]);
+  }, [isGuest, uploading, pendingAttachments.length, t]);
 
-    setUploading(true);
-    const placeholderId = safeId();
-    setMsgs((prev) => [...prev, {
-      id: placeholderId, text: "", ts: Date.now(), side: "me" as const,
-      uploadProgress: "uploading" as const,
-    }].slice(-MAX_CHAT_MESSAGES));
+  /** Remove a staged image before it is uploaded. */
+  const onRemovePending = useCallback((id: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
 
-    try {
-      // Single multipart POST: server processes the image (CDR pipeline) then
-      // returns the persisted message publicId. The same publicId is also
-      // emitted back to us via `conversation:message` — we record it in
-      // ownAttachmentIdsRef so the echo can be silently dropped.
-      const result = await uploadCustomerChatAttachment(
-        convPublicIdRef.current,
-        file,
-        signal,
-      );
+  /**
+   * Batch-upload all pending images, then optionally send the text
+   * message in the composer. Mirrors the web's `handleCombinedSend`.
+   */
+  const onUploadPending = useCallback(async () => {
+    const hasText = !!inputRef.current.trim();
+    const hasImages = pendingAttachments.length > 0;
+    if (!hasImages && !hasText) return;
+    if (!convPublicIdRef.current || isGuest) return;
 
-      const realId = result.messagePublicId;
-      ownAttachmentIdsRef.current.add(realId);
-      seenIdsRef.current.add(realId);
-      trimSeenIds(seenIdsRef.current);
+    // Grab the current pending list and clear the tray immediately
+    const toUpload = [...pendingAttachments];
+    setPendingAttachments([]);
 
-      setMsgs((prev) => prev.map((m) =>
-        m.id === placeholderId
-          ? { ...m, id: realId, attachmentId: realId, uploadProgress: undefined }
-          : m
-      ));
-    } catch (err: unknown) {
-      if (signal.aborted) return;
-      const msg = err instanceof Error ? err.message : String((err as { message?: string })?.message || "");
-      const status = err instanceof FetchError ? err.status : 0;
-      const isConvGone = status === 403 || /no active conversation/i.test(msg);
-      if (isConvGone) {
-        setMsgs((prev) => [
-          ...prev.filter((m) => m.id !== placeholderId),
-          { id: safeId(), text: "", ts: Date.now(), side: "system" as const, eventType: "CLOSED" as const },
-        ].slice(-MAX_CHAT_MESSAGES));
-        setConversationState("CLOSED");
-      } else {
-        setMsgs((prev) => prev.map((m) =>
-          m.id === placeholderId ? { ...m, uploadProgress: "error" } : m
-        ));
-        showToast(msg || t("chat.failedToUpload"), "error");
+    if (hasImages) {
+      uploadAbortRef.current?.abort();
+      const ac = new AbortController();
+      uploadAbortRef.current = ac;
+      const { signal } = ac;
+
+      setUploading(true);
+
+      // Create placeholder messages for each image
+      const placeholderIds = toUpload.map(() => safeId());
+      setMsgs((prev) => [
+        ...prev,
+        ...placeholderIds.map((pid) => ({
+          id: pid,
+          text: "",
+          ts: Date.now(),
+          side: "me" as const,
+          uploadProgress: "uploading" as const,
+        })),
+      ].slice(-MAX_CHAT_MESSAGES));
+
+      let failCount = 0;
+
+      for (let i = 0; i < toUpload.length; i++) {
+        if (signal.aborted) break;
+        const att = toUpload[i];
+        const placeholderId = placeholderIds[i];
+
+        try {
+          const result = await uploadCustomerChatAttachment(
+            convPublicIdRef.current!,
+            att.file,
+            signal,
+          );
+
+          const realId = result.messagePublicId;
+          ownAttachmentIdsRef.current.add(realId);
+          seenIdsRef.current.add(realId);
+          trimSeenIds(seenIdsRef.current);
+
+          setMsgs((prev) => prev.map((m) =>
+            m.id === placeholderId
+              ? { ...m, id: realId, attachmentId: realId, uploadProgress: undefined }
+              : m
+          ));
+        } catch (err: unknown) {
+          if (signal.aborted) break;
+          failCount++;
+          const errMsg = err instanceof Error ? err.message : String((err as { message?: string })?.message || "");
+          const errStatus = err instanceof FetchError ? err.status : 0;
+          const isConvGone = errStatus === 403 || /no active conversation/i.test(errMsg);
+          if (isConvGone) {
+            const remainingIds = new Set(placeholderIds.slice(i));
+            setMsgs((prev) => [
+              ...prev.filter((m) => !remainingIds.has(m.id)),
+              { id: safeId(), text: "", ts: Date.now(), side: "system" as const, eventType: "CLOSED" as const },
+            ].slice(-MAX_CHAT_MESSAGES));
+            setConversationState("CLOSED");
+            break;
+          }
+          setMsgs((prev) => prev.map((m) =>
+            m.id === placeholderId ? { ...m, uploadProgress: "error" } : m
+          ));
+        }
       }
-    } finally {
-      if (!signal.aborted) setUploading(false);
+
+      if (!signal.aborted) {
+        setUploading(false);
+        if (failCount > 0 && failCount < toUpload.length) {
+          showToast(t("chat.someImagesFailed"), "error");
+        } else if (failCount === toUpload.length) {
+          showToast(t("chat.failedToUpload"), "error");
+        }
+      }
     }
-  }, [isGuest, uploading, t]);
+
+    // After images are uploaded, send any text in the composer
+    if (hasText) {
+      queueMicrotask(() => {
+        const text = inputRef.current.trim().slice(0, CHAT.MAX_MSG_LENGTH);
+        if (!text || isSpamBlocked) return;
+
+        const s = socketRef.current;
+        const id = safeId();
+        const ts = Date.now();
+
+        seenIdsRef.current.add(id);
+        trimSeenIds(seenIdsRef.current);
+
+        clearingInputRef.current = true;
+        composerRef?.current?.blur();
+        setInput("");
+        composerRef?.current?.clear();
+        setTimeout(() => { clearingInputRef.current = false; }, 150);
+
+        emitTypingStop();
+
+        if (!s || !s.connected) {
+          const isOverflow = sendQueueRef.current.length >= CHAT.MAX_QUEUED_MSGS;
+          if (!isOverflow) sendQueueRef.current.push({ id, text, ts });
+          setMsgs((prev) => [...prev, {
+            id, text, ts, side: "me" as const,
+            status: isOverflow ? "overflow" as const : "queued" as const,
+          }].slice(-MAX_CHAT_MESSAGES));
+          if (isOverflow) setQueueFull(true);
+          return;
+        }
+
+        setMsgs((prev) => [...prev, { id, text, ts, side: "me" as const }].slice(-MAX_CHAT_MESSAGES));
+        if (conversationState === "NONE") setConversationState("WAITING");
+        s.emit(isGuest ? "guest:message" : "message:send", {
+          conversationPublicId: convPublicIdRef.current,
+          body: text,
+        });
+      });
+    }
+  }, [pendingAttachments, isGuest, isSpamBlocked, conversationState, setInput, composerRef, emitTypingStop, t]);
 
   // ── Derived state ────────────────────────────────────────────
 
@@ -893,6 +1061,7 @@ export function useLiveChat(
     isGuest,
     hasToken,
     uploading,
+    pendingAttachments,
     onInputChange,
     onInputBlur,
     onSend,
@@ -902,6 +1071,8 @@ export function useLiveChat(
     onRetrySend,
     onSubmitRating,
     onDismissRating,
-    onAttach,
+    onPickAttachments,
+    onRemovePending,
+    onUploadPending,
   };
 }

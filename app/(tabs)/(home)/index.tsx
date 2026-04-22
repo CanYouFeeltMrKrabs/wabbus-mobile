@@ -2,11 +2,10 @@
  * Home Screen — matches the web homepage section order:
  * - Sticky search bar (blue background)
  * - Categories bar (orange, scrolls with content)
- * - Hero banner
- * - Suggestions carousel (web sidebar → mobile: horizontal slider after hero)
+ * - Hero banner + Trending Now carousel (inside hero, matches web HomeHero)
+ * - Suggestions carousel
  * - Bestsellers grid
  * - Recommended for You grid (personalization swap on mount)
- * - Trending Now carousel
  * - New Arrivals carousel
  * - Trending Categories grid
  * - Today's Deals carousel
@@ -328,14 +327,23 @@ export default function HomeScreen() {
         style={styles.scrollView}
       >
         <HeroCarousel>
-          {/* Suggestions — newest products (web: sidebar next to hero, mobile: slider after hero) */}
+          {/* Trending Now — inside hero to match web HomeHero layout */}
           <ProductRecommendationSlider
-            title={t("home.suggestionsForYou")}
-            apiUrl="/products/public?take=10&sortBy=newest"
-            accentColor={colors.brandBlue}
+            title={t("home.trendingNow")}
+            apiUrl="/recommendations?context=home&strategy=trending&take=10"
+            queryKey={queryKeys.recommendations.strategy("trending")}
+            accentColor={colors.rose500}
             onAddToCart={handleAddToCart}
           />
         </HeroCarousel>
+
+        {/* Suggestions — newest products (web: inline after hero) */}
+        <ProductRecommendationSlider
+          title={t("home.suggestionsForYou")}
+          apiUrl="/products/public?take=10&sortBy=newest"
+          accentColor={colors.brandBlue}
+          onAddToCart={handleAddToCart}
+        />
 
         {/* Bestsellers */}
         {bestsellers.length > 0 && (
@@ -372,14 +380,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Trending Now — 48h velocity */}
-        <ProductRecommendationSlider
-          title={t("home.trendingNow")}
-          apiUrl="/recommendations?context=home&strategy=trending&take=10"
-          queryKey={queryKeys.recommendations.strategy("trending")}
-          accentColor={colors.rose500}
-          onAddToCart={handleAddToCart}
-        />
+
 
         {/* New Arrivals — 14-day window */}
         <ProductRecommendationSlider

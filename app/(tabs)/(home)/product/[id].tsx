@@ -27,6 +27,7 @@ import BackButton from "@/components/ui/BackButton";
 import StarRating from "@/components/ui/StarRating";
 import { BadgeRow } from "@/components/ui/Badge";
 import ProductImageGallery from "@/components/ui/ProductImageGallery";
+import ProductVideoPlayer, { type VideoEntry } from "@/components/ui/ProductVideoPlayer";
 import QuantitySelector from "@/components/ui/QuantitySelector";
 import ProductReviews from "@/components/ui/ProductReviews";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
@@ -47,6 +48,7 @@ import { ROUTES } from "@/lib/routes";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { trackEvent, trackProductDwell } from "@/lib/tracker";
+import type { PreviewVideoMeta } from "@/lib/types";
 
 const MAX_QTY = 99;
 const DISCOUNT_THRESHOLD = 5;
@@ -71,6 +73,21 @@ type ProductVariant = {
   }[];
 };
 
+/**
+ * Mirror of the per-video shape returned by `findOnePublic` on the backend.
+ * Web's PDP consumes the same shape — see
+ * `Wabbus/src/app/[locale]/product/[id]/[slug]/page.tsx` (`videoEntries`
+ * derivation). Only `playback.mp4` is required for playback; the rest are
+ * presentation hints.
+ */
+type ProductVideo = {
+  playback?: { mp4?: string | null } | null;
+  thumbnailUrl?: string | null;
+  duration?: number | null;
+  width?: number | null;
+  height?: number | null;
+};
+
 type ProductDetail = {
   productId: string;
   slug: string;
@@ -91,6 +108,7 @@ type ProductDetail = {
   keyFeatures?: string[] | null;
   shippingPriceCents?: number | null;
   variants?: ProductVariant[];
+  videos?: ProductVideo[];
 
   brandName?: string | null;
   category?: { name?: string } | null;
@@ -107,6 +125,33 @@ type ProductDetail = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────
+
+/**
+ * The PDP endpoint (`/products/public/:id/view`) returns the full
+ * `videos[]` list rather than the public-list `previewVideo` summary
+ * field. To keep the recently-viewed slider's autoplay behavior
+ * identical to the source grid, we synthesize the same
+ * `PreviewVideoMeta` shape from the first video that has a usable
+ * mp4 URL. Returns null when no playable video exists; the slider
+ * falls back to the static image in that case.
+ */
+function derivePreviewVideo(
+  videos: ProductVideo[] | undefined,
+): PreviewVideoMeta | null {
+  if (!videos?.length) return null;
+  for (const v of videos) {
+    const mp4Url = v?.playback?.mp4;
+    if (!mp4Url) continue;
+    return {
+      mp4Url,
+      posterUrl: v.thumbnailUrl ?? null,
+      width: v.width ?? null,
+      height: v.height ?? null,
+      durationSec: v.duration ?? null,
+    };
+  }
+  return null;
+}
 
 function formatWeight(oz: number): string {
   if (oz >= 16) {
@@ -170,6 +215,7 @@ export default function ProductDetailScreen() {
   const [specsExpanded, setSpecsExpanded] = useState(false);
   const [featuresExpanded, setFeaturesExpanded] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [videoPlayerOpen, setVideoPlayerOpen] = useState(false);
   const bodyYRef = useRef(0);
   const buyBoxLayoutRef = useRef({ y: 0, height: 0 });
   const hasSeenBuyBox = useRef(false);
@@ -219,6 +265,30 @@ export default function ProductDetailScreen() {
 
   const specRows = useMemo(() => product ? buildSpecRows(product) : [], [product]);
   const visibleSpecs = specsExpanded ? specRows : specRows.slice(0, INITIAL_SPECS_SHOWN);
+
+  // Derive playable video entries from the backend `videos[]` payload.
+  // Mirrors web's PDP `videoEntries` derivation in
+  // `Wabbus/src/app/[locale]/product/[id]/[slug]/page.tsx`. Only entries
+  // with a non-empty mp4 playback URL are usable; everything else is
+  // dropped silently. If the resulting list is empty we never surface
+  // any video UI.
+  const videoEntries: VideoEntry[] = useMemo(() => {
+    if (!product?.videos?.length) return [];
+    const out: VideoEntry[] = [];
+    for (const v of product.videos) {
+      const mp4 = v?.playback?.mp4;
+      if (typeof mp4 !== "string" || mp4.length === 0) continue;
+      out.push({
+        mp4Url: mp4,
+        thumbnailUrl: v?.thumbnailUrl ?? undefined,
+        duration: v?.duration ?? undefined,
+        width: v?.width ?? undefined,
+        height: v?.height ?? undefined,
+      });
+    }
+    return out;
+  }, [product?.videos]);
+  const hasVideos = videoEntries.length > 0;
 
   const VEL_SMOOTH = 0.92;
   const SHOW_VEL = -0.14;
@@ -354,6 +424,12 @@ export default function ProductDetailScreen() {
       reviewCount: product.reviewCount,
       soldCount: product.soldCount,
       badges: product.badges,
+      // The PDP endpoint returns the full `videos[]` list rather than
+      // the public-list `previewVideo` field. Derive the same preview
+      // shape from the first video that actually has a playable mp4
+      // URL so the recently-viewed slider can autoplay the same clip
+      // the source grid did.
+      previewVideo: derivePreviewVideo(product.videos),
     });
     isInWishlist(product.productId).then(setInWishlist);
   }, [product]);
@@ -446,6 +522,8 @@ export default function ProductDetailScreen() {
           images={images}
           inWishlist={inWishlist}
           onToggleWishlist={toggleWishlist}
+          hasVideos={hasVideos}
+          onPlayVideo={() => setVideoPlayerOpen(true)}
         />
 
         <View style={styles.body} onLayout={handleBodyLayout}>
@@ -727,6 +805,21 @@ export default function ProductDetailScreen() {
           <RecentlyViewedSlider onAddToCart={handleAddToCart} />
         </View>
       </ScrollView>
+
+      {/* Full-screen video player modal — mirrors web's VideoPopover.
+          Mounted only when there are playable videos AND the user has
+          tapped the "Watch video" badge. The modal owns its own
+          tab/active-video state. */}
+      {hasVideos && (
+        <ProductVideoPlayer
+          visible={videoPlayerOpen}
+          videos={videoEntries}
+          imageUrls={images}
+          productTitle={product.title}
+          vendorName={product.vendorName}
+          onClose={() => setVideoPlayerOpen(false)}
+        />
+      )}
     </View>
   );
 }

@@ -38,7 +38,8 @@ import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import { SkeletonOrderCard } from "@/components/ui/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import type { Order, OrderItem, ReturnRequest } from "@/lib/types";
+import type { Order, OrderItem, PublicProduct, ReturnRequest } from "@/lib/types";
+import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
 import {
   progressIndex,
   isCancellable,
@@ -1251,6 +1252,55 @@ function OrdersContent() {
 
   // ─── Handlers ───────────────────────────────────────────────
 
+  // ─── Top Rated discovery rail ───────────────────────────────
+  // High-intent post-purchase shoppers are the highest-conversion audience
+  // for discovery; we surface a Top Rated rail at the bottom of each tab's
+  // scrollable list. The slider self-collapses (returns null) when empty
+  // and swallows fetch errors via publicFetch, so a backend outage on this
+  // endpoint never blocks the orders page. The endpoint and query key match
+  // the home screen's Top Rated section so the cache is shared across both.
+  const TOP_RATED_LIMIT = 10;
+
+  const handleAddToCartFromCarousel = useCallback(
+    (product: PublicProduct) => {
+      if (!product.defaultVariantPublicId) return;
+      addToCart({
+        variantPublicId: product.defaultVariantPublicId,
+        price: product.price,
+        title: product.title,
+        image: product.image || "",
+        productId: product.productId,
+        slug: product.slug,
+      });
+    },
+    [addToCart],
+  );
+
+  const renderTopRatedFooter = useCallback(
+    (showLoadingMore: boolean) => (
+      <View>
+        {showLoadingMore ? (
+          <ActivityIndicator
+            size="small"
+            color={colors.brandBlue}
+            style={{ marginVertical: spacing[4] }}
+          />
+        ) : null}
+        <ProductRecommendationSlider
+          title={t("home.topRated")}
+          apiUrl={`/products/public?sortBy=rating&take=${TOP_RATED_LIMIT}`}
+          queryKey={queryKeys.products.list({
+            sortBy: "rating",
+            take: TOP_RATED_LIMIT,
+          })}
+          accentColor={colors.brandOrange}
+          onAddToCart={handleAddToCartFromCarousel}
+        />
+      </View>
+    ),
+    [t, handleAddToCartFromCarousel],
+  );
+
   const handleBuyAgainAddToCart = useCallback(
     async (item: BuyAgainItem | OrderItem) => {
       const vid =
@@ -1461,15 +1511,7 @@ function OrdersContent() {
                   })}
                 </AppText>
               }
-              ListFooterComponent={
-                loadingMore ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={colors.brandBlue}
-                    style={{ marginVertical: spacing[4] }}
-                  />
-                ) : null
-              }
+              ListFooterComponent={renderTopRatedFooter(loadingMore)}
               renderItem={({ item: order }) => (
                 <OrderCard
                   order={order}
@@ -1536,6 +1578,7 @@ function OrdersContent() {
                 </AppText>
               }
               renderItem={({ item: ret }) => <ReturnCard ret={ret} />}
+              ListFooterComponent={renderTopRatedFooter(false)}
             />
           )}
         </>
@@ -1579,6 +1622,7 @@ function OrdersContent() {
               columnWrapperStyle={st.buyAgainRow}
               contentContainerStyle={st.list}
               showsVerticalScrollIndicator={false}
+              ListFooterComponent={renderTopRatedFooter(false)}
               renderItem={({ item }) => (
                 <View style={st.buyAgainCard}>
                   <Image

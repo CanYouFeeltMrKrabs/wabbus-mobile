@@ -23,6 +23,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { PAGE_SIZE as PAGE_SIZES } from "@/lib/constants";
 
 const PAGE_SIZE = PAGE_SIZES.PRODUCTS;
+const CAROUSEL_LIMIT = PAGE_SIZES.CAROUSEL;
 
 type SortOption = {
   key: string;
@@ -129,6 +130,55 @@ export default function CategoryScreen() {
     [addToCart],
   );
 
+  /**
+   * Discovery rail rendered below the product grid (and inside the empty
+   * state). Mirrors the web `CategoryClient` layout exactly so analytics
+   * surface order stays consistent across platforms:
+   *   1. New In {Category}        — category-scoped freshness signal
+   *   2. Trending Now             — global velocity, broadens discovery
+   *   3. Suggestions for you      — newest products fallback
+   *   4. Recommended for You      — personalized, category-context
+   *
+   * Each carousel is independent: an empty result hides itself (handled
+   * inside ProductRecommendationSlider) so a single failing surface
+   * never blocks the rest.
+   */
+  const renderCarouselRail = useCallback(() => {
+    if (!slug) return null;
+    return (
+      <View style={styles.footerRecos}>
+        <ProductRecommendationSlider
+          title={t("category.newIn", { name: title })}
+          apiUrl={`/products/public?categorySlug=${encodeURIComponent(slug)}&sortBy=newest&take=${CAROUSEL_LIMIT}`}
+          queryKey={queryKeys.categories.newArrivals(slug)}
+          accentColor={colors.violet500}
+          onAddToCart={handleAddToCart}
+        />
+        <ProductRecommendationSlider
+          title={t("home.trendingNow")}
+          apiUrl={`/recommendations?context=home&strategy=trending&take=${CAROUSEL_LIMIT}`}
+          queryKey={queryKeys.recommendations.strategy("trending")}
+          accentColor={colors.rose500}
+          onAddToCart={handleAddToCart}
+        />
+        <ProductRecommendationSlider
+          title={t("home.suggestionsForYou")}
+          apiUrl={`/products/public?take=${CAROUSEL_LIMIT}&sortBy=newest`}
+          queryKey={queryKeys.products.list({ take: CAROUSEL_LIMIT, sortBy: "newest" })}
+          accentColor={colors.brandBlue}
+          onAddToCart={handleAddToCart}
+        />
+        <ProductRecommendationSlider
+          title={t("home.recommendedForYou")}
+          apiUrl={`/recommendations?context=category&take=${CAROUSEL_LIMIT}`}
+          queryKey={queryKeys.recommendations.context("category", slug)}
+          accentColor={colors.brandBlue}
+          onAddToCart={handleAddToCart}
+        />
+      </View>
+    );
+  }, [slug, title, t, handleAddToCart]);
+
   const renderFooter = useCallback(() => {
     return (
       <View>
@@ -137,27 +187,10 @@ export default function CategoryScreen() {
             <ActivityIndicator size="small" color={colors.brandBlue} />
           </View>
         )}
-        {!hasMore && slug && (
-          <View style={styles.footerRecos}>
-            <ProductRecommendationSlider
-              title={t("category.trendingIn", { name: title })}
-              apiUrl={`/recommendations?context=category&categorySlug=${encodeURIComponent(slug)}&take=10`}
-              queryKey={queryKeys.recommendations.category(slug)}
-              accentColor="#14b8a6"
-              onAddToCart={handleAddToCart}
-            />
-            <ProductRecommendationSlider
-              title={t("category.newIn", { name: title })}
-              apiUrl={`/products/public?categorySlug=${encodeURIComponent(slug)}&sortBy=newest&take=10`}
-              queryKey={queryKeys.categories.newArrivals(0)}
-              accentColor={colors.violet500}
-              onAddToCart={handleAddToCart}
-            />
-          </View>
-        )}
+        {!hasMore && renderCarouselRail()}
       </View>
     );
-  }, [loadingMore, hasMore, slug, title, handleAddToCart]);
+  }, [loadingMore, hasMore, renderCarouselRail]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -210,17 +243,7 @@ export default function CategoryScreen() {
               <AppText variant="label" color={colors.brandBlue}>{t("category.browseAll")}</AppText>
             </Pressable>
           </View>
-          <ProductRecommendationSlider
-            title={t("category.trendingInThis")}
-            apiUrl={`/recommendations?context=category&categorySlug=${encodeURIComponent(slug!)}&strategy=trending&take=10`}
-            queryKey={queryKeys.recommendations.category(slug!)}
-            accentColor={colors.rose500}
-          />
-          <ProductRecommendationSlider
-            title={t("category.suggestionsForYou")}
-            apiUrl="/products/public?take=10&sortBy=newest"
-            accentColor={colors.brandBlue}
-          />
+          {renderCarouselRail()}
         </ScrollView>
       ) : (
         <FlatList

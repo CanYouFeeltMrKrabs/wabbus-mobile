@@ -24,7 +24,7 @@ function defaultExtract(data: unknown, postProcess?: (data: any) => PublicProduc
   return [];
 }
 
-export default function ProductRecommendationSlider({
+function ProductRecommendationSliderInner({
   title,
   apiUrl,
   queryKey,
@@ -45,6 +45,22 @@ export default function ProductRecommendationSlider({
     },
     staleTime: 5 * 60_000,
   });
+
+  const [visibleProductId, setVisibleProductId] = React.useState<string | null>(null);
+
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    if (viewableItems && viewableItems.length > 0) {
+      const mostVisible =
+        viewableItems.find((v: any) => v.isViewable) || viewableItems[0];
+      if (mostVisible && mostVisible.item) {
+        setVisibleProductId(mostVisible.item.productId);
+      }
+    }
+  }, []);
+
+  const viewabilityConfig = React.useRef({
+    itemVisiblePercentThreshold: 50,
+  }).current;
 
   if (!loading && products.length === 0) return null;
 
@@ -69,15 +85,27 @@ export default function ProductRecommendationSlider({
         showsHorizontalScrollIndicator={false}
         keyExtractor={(p) => p.productId}
         contentContainerStyle={styles.scrollContent}
-        renderItem={({ item }) => (
-          <View style={styles.cardContainer}>
-            <ProductCard product={item} onAddToCart={onAddToCart} />
-          </View>
-        )}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        renderItem={({ item, index }) => {
+          // If haven't scrolled yet, default to first item
+          const isVisible = visibleProductId 
+            ? item.productId === visibleProductId 
+            : index === 0;
+            
+          return (
+            <View style={styles.cardContainer}>
+              <ProductCard product={item} onAddToCart={onAddToCart} enablePreview={isVisible} />
+            </View>
+          );
+        }}
       />
     </View>
   );
 }
+
+const ProductRecommendationSlider = React.memo(ProductRecommendationSliderInner);
+export default ProductRecommendationSlider;
 
 const styles = StyleSheet.create({
   container: {

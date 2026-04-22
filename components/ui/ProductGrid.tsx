@@ -1,6 +1,13 @@
 /**
- * ProductGrid — 2-column product grid used on Home, Category, Search screens.
+ * ProductGrid — 2-column product grid used on Home, Recommended, etc.
  * Wraps ProductCard in a responsive grid layout.
+ *
+ * Pure layout component. Per-card on-screen viewability (used to gate
+ * preview-video autoplay) is handled by `useOnScreenViewability` inside
+ * each `ProductCard` via the global tracker in
+ * `lib/onScreenViewability.ts` — there is NO container-level provider
+ * here. This grid works correctly inside any scroll surface (plain
+ * ScrollView, FlatList, no scroll at all) without parent integration.
  */
 import React from "react";
 import { View, StyleSheet } from "react-native";

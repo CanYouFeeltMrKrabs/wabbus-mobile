@@ -1,5 +1,20 @@
 /** Shared types used across the mobile app */
 
+/**
+ * Approved product preview-video metadata. Shape mirrors the backend
+ * `PublicProductDto.previewVideo` exactly, matching the web type at
+ * `Wabbus/src/lib/category-data.ts`. Used by `PublicProduct`,
+ * `RecentlyViewedItem`, and any other surface that needs to carry
+ * the silent-autoplay video reference.
+ */
+export type PreviewVideoMeta = {
+  mp4Url: string;
+  posterUrl: string | null;
+  width: number | null;
+  height: number | null;
+  durationSec: number | null;
+};
+
 export type PublicProduct = {
   productId: string;
   slug: string;
@@ -15,6 +30,13 @@ export type PublicProduct = {
   vendorName: string | null;
   categoryId?: number | null;
   badges?: Array<{ type: string; label: string; value?: number }>;
+
+  /**
+   * Primary APPROVED product video for in-card preview autoplay on
+   * carousels and grids. Absent when the product has no approved video.
+   * The card silently falls back to the static image when null/undefined.
+   */
+  previewVideo?: PreviewVideoMeta | null;
 };
 
 export type CartItem = {

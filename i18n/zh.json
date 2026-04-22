@@ -124,6 +124,15 @@
       "careInstructions": "保养说明",
       "weight": "重量",
       "dimensions": "尺寸"
+    },
+    "gallery": {
+      "watchVideo": "观看视频",
+      "playVideo": "播放视频",
+      "closeVideo": "关闭视频播放器",
+      "videosTab": "视频",
+      "imagesTab": "图片",
+      "videosForProduct": "本商品视频",
+      "noImages": "暂无图片"
     }
   },
   "checkout": {

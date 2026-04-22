@@ -147,7 +147,8 @@
         }
       ],
       "@sentry/react-native",
-      "expo-localization"
+      "expo-localization",
+      "expo-video"
     ],
     "owner": "jonolesen30"
   }

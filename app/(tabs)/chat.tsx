@@ -9,6 +9,7 @@ import {
   Platform,
   Pressable,
   Image,
+  Modal,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,6 +21,7 @@ import { useTranslation } from "@/hooks/useT";
 import { useLiveChat } from "@/lib/chat/useLiveChat";
 import { getChatReasons, type ChatReasonValue } from "@/lib/chat/chat-reasons";
 import type { UiMsg } from "@/lib/chat/types";
+import type { PendingAttachment } from "@/lib/chat/useLiveChat";
 import { customerFetchBlob } from "@/lib/api";
 import { CHAT } from "@/lib/constants";
 import { colors, spacing, borderRadius, fontSize, shadows } from "@/lib/theme";
@@ -61,7 +63,7 @@ function blobToDataUri(blob: Blob): Promise<string> {
  * Retries with exponential-ish backoff (2s → 5s → 10s) on failure and
  * shows a manual retry button after exhausting attempts.
  */
-function SecureAttachment({ attachmentId, side }: { attachmentId: string; side: "me" | "them" }) {
+function SecureAttachment({ attachmentId, side, onPress }: { attachmentId: string; side: "me" | "them"; onPress?: (uri: string) => void }) {
   const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
   const [dataUri, setDataUri] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -144,13 +146,15 @@ function SecureAttachment({ attachmentId, side }: { attachmentId: string; side: 
         </View>
       )}
       {dataUri && (
-        <Image
-          source={{ uri: dataUri }}
-          style={[styles.attachImage, state === "loaded" ? { opacity: 1 } : { opacity: 0, position: "absolute" }]}
-          resizeMode="contain"
-          onLoad={() => setState("loaded")}
-          onError={() => setState("error")}
-        />
+        <Pressable onPress={() => dataUri && onPress?.(dataUri)} disabled={!onPress || state !== "loaded"}>
+          <Image
+            source={{ uri: dataUri }}
+            style={[styles.attachImage, state === "loaded" ? { opacity: 1 } : { opacity: 0, position: "absolute" }]}
+            resizeMode="contain"
+            onLoad={() => setState("loaded")}
+            onError={() => setState("error")}
+          />
+        </Pressable>
       )}
     </View>
   );
@@ -238,6 +242,9 @@ export default function ChatTabScreen() {
   const [ratingComment, setRatingComment] = useState("");
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
+
+  // Fullscreen image viewer
+  const [fullscreenImageUri, setFullscreenImageUri] = useState<string | null>(null);
 
   // Reset rating UI when showRating changes
   const prevShowRating = useRef(chat.showRating);
@@ -348,7 +355,7 @@ export default function ChatTabScreen() {
           </View>
         ) : m.attachmentId ? (
           <View style={[styles.bubbleRow, m.side === "me" ? styles.bubbleRight : styles.bubbleLeft]}>
-            <SecureAttachment attachmentId={m.attachmentId} side={m.side === "me" ? "me" : "them"} />
+            <SecureAttachment attachmentId={m.attachmentId} side={m.side === "me" ? "me" : "them"} onPress={setFullscreenImageUri} />
             {m.text ? (
               <View style={[
                 styles.bubble,
@@ -632,19 +639,14 @@ export default function ChatTabScreen() {
               style={{ borderRadius: borderRadius.full }}
             />
           </View>
-        ) : chat.conversationState === "WAITING" ? (
-          /* ── Waiting: disabled composer ── */
-          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing[3]) }]}>
-            <AppText variant="body" color={colors.gray500} align="center">
-              {t("chat.waitingForAgentTyping")}
-            </AppText>
-            <AppText variant="bodySmall" color={colors.gray400} align="center" style={{ marginTop: spacing[1] }}>
-              {t("chat.youllBeAble")}
-            </AppText>
-          </View>
         ) : (
-          /* ── Open: active composer ── */
+          /* ── Waiting / Open: active composer ── */
           <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, spacing[2]) }]}>
+            {chat.conversationState === "WAITING" && (
+              <AppText variant="caption" color={colors.brandBlue} align="center" style={{ marginBottom: spacing[2] }}>
+                {t("chat.youllBeAble")}
+              </AppText>
+            )}
             {chat.queueFull && (
               <AppText variant="caption" color={colors.warning} align="center" style={{ marginBottom: spacing[1] }}>
                 {t("chat.offlineQueued")}
@@ -655,10 +657,33 @@ export default function ChatTabScreen() {
                 {t("chat.waitForReply")}
               </AppText>
             )}
+
+            {/* Pending attachment preview tray */}
+            {chat.pendingAttachments.length > 0 && (
+              <View style={styles.pendingTray}>
+                {chat.pendingAttachments.map((att: PendingAttachment) => (
+                  <View key={att.id} style={styles.pendingThumb}>
+                    <Image
+                      source={{ uri: att.previewUri }}
+                      style={styles.pendingImage}
+                      resizeMode="cover"
+                    />
+                    <Pressable
+                      onPress={() => chat.onRemovePending(att.id)}
+                      style={styles.pendingRemove}
+                      hitSlop={6}
+                    >
+                      <Icon name="close" size={12} color={colors.white} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+
             <View style={styles.composerRow}>
               {chat.canAttach && (
                 <Pressable
-                  onPress={chat.onAttach}
+                  onPress={chat.onPickAttachments}
                   disabled={chat.uploading}
                   style={{ padding: spacing[1], opacity: chat.uploading ? 0.4 : 1 }}
                   hitSlop={8}
@@ -687,9 +712,22 @@ export default function ChatTabScreen() {
                 }
               />
               <Pressable
-                onPress={chat.onSend}
-                disabled={!chat.canSend}
-                style={[styles.sendBtn, !chat.canSend && { opacity: 0.4 }]}
+                onPress={
+                  chat.pendingAttachments.length > 0
+                    ? chat.onUploadPending
+                    : chat.onSend
+                }
+                disabled={
+                  chat.pendingAttachments.length > 0
+                    ? (!chat.canAttach && !chat.canSend)
+                    : !chat.canSend
+                }
+                style={[
+                  styles.sendBtn,
+                  (chat.pendingAttachments.length > 0
+                    ? (!chat.canAttach && !chat.canSend)
+                    : !chat.canSend) && { opacity: 0.4 },
+                ]}
                 hitSlop={8}
               >
                 <Icon name="send" size={20} color={colors.white} />
@@ -698,6 +736,32 @@ export default function ChatTabScreen() {
           </View>
         )
       )}
+
+      {/* Fullscreen image viewer */}
+      <Modal
+        visible={!!fullscreenImageUri}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setFullscreenImageUri(null)}
+      >
+        <Pressable style={styles.fullscreenOverlay} onPress={() => setFullscreenImageUri(null)}>
+          {fullscreenImageUri && (
+            <Image
+              source={{ uri: fullscreenImageUri }}
+              style={styles.fullscreenImage}
+              resizeMode="contain"
+            />
+          )}
+          <Pressable
+            onPress={() => setFullscreenImageUri(null)}
+            style={styles.fullscreenClose}
+            hitSlop={12}
+          >
+            <Icon name="close" size={24} color={colors.white} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -988,5 +1052,60 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 1,
     ...shadows.md,
+  },
+
+  // Pending attachment preview tray
+  pendingTray: {
+    flexDirection: "row",
+    gap: spacing[2],
+    marginBottom: spacing[2.5],
+    paddingVertical: spacing[1],
+  },
+  pendingThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: borderRadius.lg,
+    overflow: "hidden" as const,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    ...shadows.sm,
+  },
+  pendingImage: {
+    width: "100%",
+    height: "100%",
+  },
+  pendingRemove: {
+    position: "absolute" as const,
+    top: 2,
+    right: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+
+  // ── Fullscreen image viewer ──
+  fullscreenOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  fullscreenImage: {
+    width: "90%",
+    height: "80%",
+  },
+  fullscreenClose: {
+    position: "absolute" as const,
+    top: 56,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
 });

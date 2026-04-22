@@ -29,7 +29,7 @@ export default function SearchBar({
 
   return (
     <Wrapper onPress={onPress} style={styles.container}>
-      <Icon name="search" size={20} color={colors.mutedLight} />
+      <Icon name="search" size={24} color={colors.mutedLight} />
       <TextInput
         style={styles.input}
         value={value}
@@ -45,7 +45,7 @@ export default function SearchBar({
       />
       {value ? (
         <Pressable onPress={() => onChangeText?.("")} hitSlop={8}>
-          <Icon name="close" size={18} color={colors.muted} />
+          <Icon name="close" size={24} color={colors.muted} />
         </Pressable>
       ) : null}
     </Wrapper>
@@ -58,13 +58,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
     gap: spacing[2],
   },
   input: {
     flex: 1,
-    fontSize: fontSize.base,
+    fontSize: 18,
     color: colors.foreground,
     padding: 0,
   },

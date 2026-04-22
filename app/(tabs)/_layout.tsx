@@ -36,7 +36,7 @@ type StickyPayload = {
   variantPublicId: string | null;
 };
 
-const STICKY_BAR_HEIGHT = 56;
+const STICKY_BAR_HEIGHT = 80;
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -205,7 +205,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               onPress={handleAdd}
               disabled={!stickyData.inStock}
             >
-              <Icon name="add-shopping-cart" size={18} color={colors.white} />
+              <Icon name="add-shopping-cart" size={20} color={colors.white} />
               <AppText style={styles.stickyBtnText}>{t("product.addToCart")}</AppText>
             </Pressable>
           </View>
@@ -350,8 +350,8 @@ const styles = StyleSheet.create({
     minHeight: STICKY_BAR_HEIGHT,
   },
   stickyThumbWrap: {
-    width: 40,
-    height: 40,
+    width: 56,
+    height: 56,
     borderRadius: borderRadius.md,
     overflow: "hidden",
     borderWidth: 1,
@@ -372,13 +372,13 @@ const styles = StyleSheet.create({
     gap: spacing[1],
   },
   stickyPrice: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: "900",
     color: colors.slate900,
     letterSpacing: -0.3,
   },
   stickyCompare: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: "600",
     color: colors.slate400,
     textDecorationLine: "line-through",
@@ -390,15 +390,15 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   stickyStock: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "700",
   },
   stickyDot: {
-    fontSize: 11,
+    fontSize: 13,
     color: colors.slate300,
   },
   stickyShipping: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "600",
     color: colors.slate500,
   },
@@ -410,14 +410,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandOrange,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing[4],
-    height: 40,
+    height: 48,
     ...shadows.md,
   },
   stickyBtnPressed: {
     backgroundColor: colors.brandOrangeHover,
   },
   stickyBtnText: {
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: "800",
     color: colors.white,
   },

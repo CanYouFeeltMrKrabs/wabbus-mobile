@@ -127,6 +127,15 @@
       "careInstructions": "Care Instructions",
       "weight": "Weight",
       "dimensions": "Dimensions"
+    },
+    "gallery": {
+      "watchVideo": "Watch video",
+      "playVideo": "Play video",
+      "closeVideo": "Close video player",
+      "videosTab": "Videos",
+      "imagesTab": "Images",
+      "videosForProduct": "Videos for this product",
+      "noImages": "No images available"
     }
   },
   "checkout": {

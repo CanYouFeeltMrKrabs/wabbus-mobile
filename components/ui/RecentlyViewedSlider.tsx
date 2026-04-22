@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { View, FlatList, StyleSheet } from "react-native";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
@@ -11,7 +11,7 @@ export type RecentlyViewedSliderProps = {
   onAddToCart?: (product: PublicProduct) => void;
 };
 
-export default function RecentlyViewedSlider({ onAddToCart }: RecentlyViewedSliderProps) {
+function RecentlyViewedSliderInner({ onAddToCart }: RecentlyViewedSliderProps) {
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedItem[]>([]);
 
   useEffect(() => {
@@ -39,11 +39,28 @@ export default function RecentlyViewedSlider({ onAddToCart }: RecentlyViewedSlid
         defaultVariantPublicId: item.variantPublicId,
         categoryId: item.categoryId ?? null,
         badges: item.badges ?? undefined,
+        previewVideo: item.previewVideo ?? null,
       })),
     [recentlyViewed]
   );
 
   const { t } = useTranslation();
+
+  const [visibleProductId, setVisibleProductId] = React.useState<string | null>(null);
+
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    if (viewableItems && viewableItems.length > 0) {
+      const mostVisible =
+        viewableItems.find((v: any) => v.isViewable) || viewableItems[0];
+      if (mostVisible && mostVisible.item) {
+        setVisibleProductId(mostVisible.item.productId);
+      }
+    }
+  }, []);
+
+  const viewabilityConfig = React.useRef({
+    itemVisiblePercentThreshold: 50,
+  }).current;
 
   if (recentProducts.length === 0) return null;
 
@@ -53,22 +70,33 @@ export default function RecentlyViewedSlider({ onAddToCart }: RecentlyViewedSlid
         <View style={styles.accent} />
         <AppText variant="subtitle" weight="bold">{t("common.recentlyViewed")}</AppText>
       </View>
-      
+
       <FlatList
         data={recentProducts}
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(p) => p.productId}
         contentContainerStyle={styles.scrollContent}
-        renderItem={({ item }) => (
-          <View style={styles.cardContainer}>
-            <ProductCard product={item} onAddToCart={onAddToCart} imageSize="thumb" />
-          </View>
-        )}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        renderItem={({ item, index }) => {
+          const isVisible = visibleProductId 
+            ? item.productId === visibleProductId 
+            : index === 0;
+
+          return (
+            <View style={styles.cardContainer}>
+              <ProductCard product={item} onAddToCart={onAddToCart} imageSize="thumb" enablePreview={isVisible} />
+            </View>
+          );
+        }}
       />
     </View>
   );
 }
+
+const RecentlyViewedSlider = React.memo(RecentlyViewedSliderInner);
+export default RecentlyViewedSlider;
 
 const styles = StyleSheet.create({
   container: {

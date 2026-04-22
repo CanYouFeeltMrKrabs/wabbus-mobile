@@ -124,6 +124,15 @@
       "careInstructions": "Petunjuk Perawatan",
       "weight": "Berat",
       "dimensions": "Dimensi"
+    },
+    "gallery": {
+      "watchVideo": "Tonton video",
+      "playVideo": "Putar video",
+      "closeVideo": "Tutup pemutar video",
+      "videosTab": "Video",
+      "imagesTab": "Gambar",
+      "videosForProduct": "Video untuk produk ini",
+      "noImages": "Tidak ada gambar tersedia"
     }
   },
   "checkout": {

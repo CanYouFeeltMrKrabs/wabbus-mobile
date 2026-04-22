@@ -68,6 +68,14 @@ export const queryKeys = {
     product: (productId: string, type: string) => ["recommendations", "product", productId, type] as const,
     strategy: (strategy: string) => ["recommendations", "strategy", strategy] as const,
     category: (slug: string) => ["recommendations", "category", slug] as const,
+    /**
+     * Context-scoped personalized recommendations (mirrors web's
+     * RecommendedCarousel). Cache key includes contextType + contextId
+     * so the same surface used on different pages (e.g. category A vs
+     * category B) does not corrupt each other's cache.
+     */
+    context: (contextType: string, contextId?: string | number | null) =>
+      ["recommendations", "context", contextType, contextId == null ? null : String(contextId)] as const,
     postPurchase: (orderId: string | number) => ["recommendations", "post_purchase", String(orderId)] as const,
   },
 
@@ -75,7 +83,11 @@ export const queryKeys = {
     all: () => ["categories"] as const,
     detail: (slug: string) => ["categories", "detail", slug] as const,
     products: (slug: string, params?: Record<string, unknown>) => ["categories", slug, "products", params] as const,
-    newArrivals: (id: number) => ["categories", "newArrivals", id] as const,
+    /**
+     * Accepts slug (mobile) or numeric id (web parity). Coerced to string
+     * so the cache key shape is stable regardless of caller.
+     */
+    newArrivals: (idOrSlug: string | number) => ["categories", "newArrivals", String(idOrSlug)] as const,
   },
 
   vendors: {

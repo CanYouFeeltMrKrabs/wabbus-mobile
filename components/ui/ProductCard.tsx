@@ -11,12 +11,16 @@ import AppText from "./AppText";
 import Icon from "./Icon";
 import StarRating from "./StarRating";
 import { BadgeRow } from "./Badge";
+import ProductPreviewVideo from "./ProductPreviewVideo";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 import { FALLBACK_IMAGE } from "@/lib/config";
 import { productImageUrl, type ImageSize } from "@/lib/image";
 import { ROUTES } from "@/lib/routes";
 import { addToWishlist, removeFromWishlist, isInWishlist, onWishlistUpdate } from "@/lib/wishlist";
 import { showToast } from "@/lib/toast";
+import { useOnScreenViewability } from "@/hooks/useOnScreenViewability";
+import { useAppActiveGate } from "@/hooks/useAppActiveGate";
+import { usePreviewEnvironmentGate } from "@/hooks/usePreviewEnvironmentGate";
 import type { PublicProduct } from "@/lib/types";
 
 type Props = {
@@ -24,9 +28,13 @@ type Props = {
   onAddToCart?: (product: PublicProduct) => void;
   /** Display size for R2 derivatives; wishlist/small sliders may use "thumb". */
   imageSize?: ImageSize;
+  /** When true, caller is explicitly managing which card gets preview
+   *  (carousel context). When undefined, card self-manages via isOnScreen
+   *  polling (grid context). */
+  enablePreview?: boolean;
 };
 
-export default function ProductCard({ product, onAddToCart, imageSize = "card" }: Props) {
+function ProductCardInner({ product, onAddToCart, imageSize = "card", enablePreview }: Props) {
   const { t } = useTranslation();
   const router = useRouter();
   const imageUri = productImageUrl(product.image, imageSize);
@@ -34,6 +42,30 @@ export default function ProductCard({ product, onAddToCart, imageSize = "card" }
     product.compareAtPrice != null && Number(product.compareAtPrice) > Number(product.price);
   const [inWishlist, setInWishlist] = useState(false);
   const cartFlash = useRef(new Animated.Value(0)).current;
+
+  const cardRef = useRef<View>(null);
+
+  // Preview-video gating — two modes:
+  //
+  //   1. Carousel context (enablePreview is boolean):
+  //      The slider's `onViewableItemsChanged` already picked the one
+  //      visible card. Trust it — no per-card polling needed. This
+  //      matches web where `ProductCarousel` sets
+  //      `previewVideoEnabled={idx === 0 && ...}`.
+  //
+  //   2. Grid context (enablePreview is undefined):
+  //      No carousel is managing visibility. Use `isOnScreen` polling
+  //      so only cards actually in the viewport try to play. The LRU
+  //      concurrency cap (MAX=3) handles the rest.
+  const previewMp4 = product.previewVideo?.mp4Url ?? null;
+  const isOnScreen = useOnScreenViewability(product.productId, cardRef);
+  const isAppActive = useAppActiveGate();
+  const envAllowed = usePreviewEnvironmentGate();
+
+  // Carousel: trust enablePreview directly. Grid: require isOnScreen.
+  const cardShouldPreview = enablePreview !== undefined ? enablePreview : isOnScreen;
+  const previewEnabled =
+    cardShouldPreview && !!previewMp4 && isAppActive && envAllowed === true;
 
   const handleAddToCart = useCallback(
     (e: any) => {
@@ -91,12 +123,20 @@ export default function ProductCard({ product, onAddToCart, imageSize = "card" }
 
   return (
     <Pressable
+      ref={cardRef}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
       onPress={() => router.push(ROUTES.product(product.productId))}
     >
       {/* Image */}
       <View style={styles.imageWrap}>
         <Image source={{ uri: imageUri }} style={styles.image} resizeMode="contain" />
+
+        {/* Silent autoplay preview overlay — overlays the static image
+            when (and ONLY when) the gates align. Returns null on any
+            failure so the static image continues to be the surface. */}
+        {previewMp4 && (
+          <ProductPreviewVideo mp4Url={previewMp4} enabled={previewEnabled} />
+        )}
 
         {/* Badges */}
         <View style={styles.badges}>
@@ -166,6 +206,9 @@ export default function ProductCard({ product, onAddToCart, imageSize = "card" }
     </Pressable>
   );
 }
+
+const ProductCard = React.memo(ProductCardInner);
+export default ProductCard;
 
 const styles = StyleSheet.create({
   card: {

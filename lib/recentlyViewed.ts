@@ -3,6 +3,7 @@
  * Tracks products the user has viewed for the home screen carousel.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { PreviewVideoMeta } from "@/lib/types";
 
 export type RecentlyViewedItem = {
   productId: string;
@@ -19,6 +20,13 @@ export type RecentlyViewedItem = {
   reviewCount?: number | null;
   soldCount?: number | null;
   badges?: Array<{ type: string; label: string; value?: number }> | null;
+  /**
+   * Carried through from `PublicProduct.previewVideo` so the recently-
+   * viewed slider can autoplay the same silent preview that the source
+   * grid did. Older AsyncStorage payloads predating this field will
+   * simply be `undefined` here, falling back to the static image.
+   */
+  previewVideo?: PreviewVideoMeta | null;
 };
 
 const STORAGE_KEY = "wabbus_recently_viewed";

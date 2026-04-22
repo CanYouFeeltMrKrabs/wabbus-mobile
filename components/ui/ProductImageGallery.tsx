@@ -1,8 +1,10 @@
 import React, { useState, useRef, useCallback } from "react";
 import { View, FlatList, Image, Pressable, Modal, Text, StyleSheet, Dimensions, StatusBar, ViewToken, TouchableOpacity, Animated } from "react-native";
 import Icon from "@/components/ui/Icon";
+import AppText from "@/components/ui/AppText";
 import { productImageUrl } from "@/lib/image";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
+import { useTranslation } from "@/hooks/useT";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 const ITEM_W = SCREEN_W - 32; // Exact layout size because of 16px margins on each side
@@ -11,9 +13,27 @@ interface ProductImageGalleryProps {
   images: string[];
   inWishlist: boolean;
   onToggleWishlist: () => void;
+  /**
+   * Whether this product has any approved videos. When true, a "Watch
+   * video" floating badge is shown overlaying the gallery — tapping it
+   * fires `onPlayVideo`, which the parent uses to open the full-screen
+   * `ProductVideoPlayer` modal. Mobile has no horizontal thumb rail (web
+   * does), so a single floating badge is the analogous discoverability
+   * surface. The badge is suppressed when `hasVideos` is false; the
+   * gallery silently falls back to the image-only experience.
+   */
+  hasVideos?: boolean;
+  onPlayVideo?: () => void;
 }
 
-export default function ProductImageGallery({ images, inWishlist, onToggleWishlist }: ProductImageGalleryProps) {
+export default function ProductImageGallery({
+  images,
+  inWishlist,
+  onToggleWishlist,
+  hasVideos = false,
+  onPlayVideo,
+}: ProductImageGalleryProps) {
+  const { t } = useTranslation();
   const [activeIndex, setActiveIndex] = useState(0);
   const [lightboxVisible, setLightboxVisible] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -125,6 +145,26 @@ export default function ProductImageGallery({ images, inWishlist, onToggleWishli
             />
           </Pressable>
         </Animated.View>
+
+        {/* Watch-video floating badge — bottom-left, only when there
+            are approved videos. Tapping defers entirely to the parent
+            (PDP screen owns modal visibility + active video index). */}
+        {hasVideos && onPlayVideo && (
+          <Pressable
+            onPress={onPlayVideo}
+            style={styles.watchVideoBadge}
+            accessibilityRole="button"
+            accessibilityLabel={t("product.gallery.playVideo")}
+            hitSlop={8}
+          >
+            <View style={styles.watchVideoIconBox}>
+              <Icon name="play-arrow" size={14} color={colors.white} />
+            </View>
+            <AppText style={styles.watchVideoLabel} weight="bold">
+              {t("product.gallery.watchVideo")}
+            </AppText>
+          </Pressable>
+        )}
       </View>
 
       {/* Pagination Dots — floating below image */}
@@ -221,6 +261,34 @@ const styles = StyleSheet.create({
   floatingWishlistBtnActive: {
     backgroundColor: colors.brandBlueDark,
     borderColor: colors.brandBlueDark,
+  },
+  watchVideoBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
+    backgroundColor: "rgba(0,0,0,0.72)",
+    borderRadius: borderRadius.full,
+    paddingVertical: 2,
+    paddingLeft: 2,
+    paddingRight: spacing[2],
+    ...shadows.md,
+  },
+  watchVideoIconBox: {
+    width: 20,
+    height: 20,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.brandBlue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  watchVideoLabel: {
+    color: colors.white,
+    fontSize: 10,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
   },
   heartPressable: {
     width: "100%",
