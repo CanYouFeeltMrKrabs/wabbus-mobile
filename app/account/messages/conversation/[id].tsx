@@ -19,26 +19,10 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
-import { queryKeys } from "@/lib/queryKeys";
+import { invalidate, useConversationDetail } from "@/lib/queries";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
 import { pickDocument, uploadFileAuth } from "@/lib/fileUpload";
-
-type ConvoMessage = {
-  publicId?: string;
-  body: string;
-  senderType: string;
-  createdAt: string;
-  attachment?: { url?: string; key?: string } | null;
-};
-
-type ConversationDetail = {
-  publicId: string;
-  subject: string;
-  status: string;
-  messages: ConvoMessage[];
-};
 
 export default function ConversationScreen() {
   return (
@@ -54,23 +38,11 @@ function ConversationContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList>(null);
-  const queryClient = useQueryClient();
 
-  const { data: convo = null, isLoading: loading, refetch: refetchConvo } = useQuery({
-    queryKey: queryKeys.messages.conversations.detail(id!),
-    queryFn: async () => {
-      const detail = await customerFetch<ConversationDetail>(`/messages/conversations/${id}`);
-      if (!detail.messages) {
-        const msgs = await customerFetch<{ data?: ConvoMessage[]; messages?: ConvoMessage[] }>(
-          `/messages/conversations/${id}/messages`,
-        );
-        detail.messages = msgs.data || msgs.messages || [];
-      }
-      return detail;
-    },
-    enabled: !!id,
-    refetchInterval: 30_000,
-  });
+  const conversationQuery = useConversationDetail(id, { refetchInterval: 30_000 });
+  const convo = conversationQuery.data ?? null;
+  const loading = conversationQuery.isLoading;
+  const refetchConvo = conversationQuery.refetch;
 
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
@@ -86,8 +58,8 @@ function ConversationContent() {
       });
       setReply("");
       await refetchConvo();
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.conversations.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.unread() });
+      void invalidate.messages.conversations.list();
+      void invalidate.messages.unread();
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 200);
     } catch (e: any) {
       Alert.alert(t("common.error"), e.message || t("messages.conversation.errorSend"));
@@ -103,7 +75,7 @@ function ConversationContent() {
     const action = isArchived ? "unarchive" : "archive";
     try {
       await customerFetch(`/messages/conversations/${id}/${action}`, { method: "PATCH" });
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.conversations.list() });
+      void invalidate.messages.conversations.list();
       if (isArchived) {
         await refetchConvo();
       } else {
@@ -128,7 +100,7 @@ function ConversationContent() {
         extraPresignBody: { context: "convo", entityId: id },
       });
       await refetchConvo();
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.conversations.list() });
+      void invalidate.messages.conversations.list();
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 200);
     } catch {
       Alert.alert(t("common.error"), t("messages.conversation.errorUpload"));

@@ -18,35 +18,12 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
 import { customerFetch } from "@/lib/api";
+import { invalidate, useTicketDetail } from "@/lib/queries";
 import { colors, spacing, borderRadius, fontSize } from "@/lib/theme";
 import { pickDocument, uploadFileAuth, type PickedFile } from "@/lib/fileUpload";
 import { ALLOWED_ATTACH_TYPES, MAX_ATTACH_SIZE } from "@/lib/constants";
 import i18n from "@/i18n";
-
-type Message = {
-  publicId?: string;
-  body: string;
-  senderType: string;
-  eventType?: string | null;
-  createdAt: string;
-  attachmentKey?: string | null;
-  attachmentFileName?: string | null;
-  attachmentMimeType?: string | null;
-  attachmentSize?: number | null;
-};
-
-type Ticket = {
-  publicId: string;
-  ticketNumber?: string;
-  subject?: string;
-  category?: string;
-  status: string;
-  archivedAt?: string | null;
-  messages: Message[];
-};
 
 function getTicketStatusLabel(status: string): string {
   const map: Record<string, string> = {
@@ -75,18 +52,11 @@ function TicketDetailContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList>(null);
-  const queryClient = useQueryClient();
 
-  const { data: ticket, isLoading: loading, refetch } = useQuery({
-    queryKey: queryKeys.messages.tickets.detail(ticketId!),
-    queryFn: async () => {
-      const res = await customerFetch<any>(`/support/tickets/${ticketId}`);
-      const ticket = res?.data ?? res?.ticket ?? res;
-      return ticket as Ticket;
-    },
-    enabled: !!ticketId,
-    refetchInterval: 30_000,
-  });
+  const ticketQuery = useTicketDetail(ticketId, { refetchInterval: 30_000 });
+  const ticket = ticketQuery.data;
+  const loading = ticketQuery.isLoading;
+  const refetch = ticketQuery.refetch;
 
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
@@ -157,8 +127,8 @@ function TicketDetailContent() {
       setReply("");
       setPendingAttachment(null);
       await refetch();
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.unread() });
+      void invalidate.messages.tickets.list();
+      void invalidate.messages.unread();
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 200);
     } catch (e: any) {
       Alert.alert(t("common.error"), e.message || t("support.ticketDetail.errorSend"));
@@ -172,7 +142,7 @@ function TicketDetailContent() {
     try {
       await customerFetch(`/support/tickets/${ticketId}/close`, { method: "POST" });
       await refetch();
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
+      void invalidate.messages.tickets.list();
     } catch (e: any) {
       Alert.alert(t("common.error"), e.message || t("support.ticketDetail.errorClose"));
     }
@@ -185,7 +155,7 @@ function TicketDetailContent() {
     try {
       await customerFetch(`/support/tickets/${ticketId}/${action}`, { method: "POST" });
       await refetch();
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
+      void invalidate.messages.tickets.list();
     } catch (e: any) {
       Alert.alert(t("common.error"), e.message || t("support.ticketDetail.errorArchive", { action }));
     }

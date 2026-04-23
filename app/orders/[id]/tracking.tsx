@@ -17,15 +17,25 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery } from "@tanstack/react-query";
-import { customerFetch } from "@/lib/api";
 import { FALLBACK_IMAGE } from "@/lib/config";
-import { formatMoney } from "@/lib/money";
 import { buildCarrierTrackingUrl } from "@/lib/carrierTrackingUrl";
 import { formatDateLong, formatDateShort } from "@/lib/orderHelpers";
-import { queryKeys } from "@/lib/queryKeys";
+import { useOrderDetail } from "@/lib/queries";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
+// Local view-model types for tracking screen.
+//
+// The canonical Order schema in lib/queries/orders.ts uses `v.looseObject`
+// (plan §3.2 — schema-as-contract is the LOWER bound; backend extras pass
+// through verbatim). That preserves runtime fields this screen relies on
+// outside the canonical contract — `id` (numeric), `unitPriceCents`,
+// `shipment.purpose`, `shipment.carrierService`, `shipment.labelCreatedAt`,
+// `shipment.id` — all still present on the cached value at runtime.
+//
+// We type them locally below so this screen's narrow access patterns are
+// type-safe. The cast at the consumption site (`as unknown as OrderAPI`) is
+// intentional: it acknowledges that these fields live outside the sealed
+// contract and are this screen's local responsibility, not the cache layer's.
 type Shipment = {
   id: number;
   publicId?: string;
@@ -140,11 +150,14 @@ function TrackingContent() {
     t("orders.tracking.stepOutForDelivery"),
     t("orders.tracking.stepDelivered"),
   ];
-  const { data: order, isLoading: loading } = useQuery({
-    queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<OrderAPI>(`/orders/by-public-id/${id}`),
-    enabled: !!id,
-  });
+  // Sealed-layer migration (plan §3.2 — orders.detail caller).
+  // The local OrderAPI/OrderItemAPI/Shipment types describe the wider runtime
+  // shape this screen needs (numeric ids, unitPriceCents, shipment.purpose,
+  // carrierService, labelCreatedAt — all preserved by the looseObject schema
+  // but not in the canonical Order type). The cast acknowledges that.
+  const orderQuery = useOrderDetail(id);
+  const order = orderQuery.data as unknown as OrderAPI | undefined;
+  const loading = orderQuery.isLoading;
 
   const shipment = useMemo(() => {
     if (!order?.items) return null;

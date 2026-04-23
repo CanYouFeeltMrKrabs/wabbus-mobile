@@ -37,7 +37,7 @@ import { SkeletonProductDetail } from "@/components/ui/Skeleton";
 import { useTranslation } from "@/hooks/useT";
 import i18n from "@/i18n";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
-import { publicFetch } from "@/lib/api";
+
 import { useCart } from "@/lib/cart";
 import { FALLBACK_IMAGE } from "@/lib/config";
 import { formatDollars } from "@/lib/money";
@@ -45,10 +45,15 @@ import { formatSoldCount } from "@/lib/formatSoldCount";
 import { addToWishlist, removeFromWishlist, isInWishlist, onWishlistUpdate } from "@/lib/wishlist";
 import { addToRecentlyViewed } from "@/lib/recentlyViewed";
 import { ROUTES } from "@/lib/routes";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
+import {
+  useRecommendationsProduct,
+  useProductDetail,
+  useProductsList,
+  useVendorMoreProducts,
+  useReviewSummary,
+} from "@/lib/queries";
 import { trackEvent, trackProductDwell } from "@/lib/tracker";
-import type { PreviewVideoMeta } from "@/lib/types";
+import type { PreviewVideoMeta, PublicProduct } from "@/lib/types";
 
 const MAX_QTY = 99;
 const DISCOUNT_THRESHOLD = 5;
@@ -198,16 +203,26 @@ export default function ProductDetailScreen() {
   const insets = useSafeAreaInsets();
   const { addToCart } = useCart();
 
-  const { data: product = null, isPending: loading } = useQuery({
-    queryKey: queryKeys.products.detail(id!),
-    queryFn: () => publicFetch<ProductDetail>(`/products/public/${id}/view`),
-    enabled: !!id,
-  });
-  const { data: reviewSummary } = useQuery({
-    queryKey: ["reviewSummary", id],
-    queryFn: () => publicFetch<{ ratingAvg: number; reviewCount: number }>(`/reviews/by-product-id/${encodeURIComponent(id!)}/summary`),
-    enabled: !!id,
-  });
+  const { data: productRaw, isPending: loading } = useProductDetail(id);
+  const product = (productRaw as unknown as ProductDetail | undefined) ?? null;
+  const { data: reviewSummary } = useReviewSummary(id);
+
+  // Recommendation rails for this PDP — sealed-layer migration §4b/§E.3.
+  // Each `useRecommendationsProduct(...)` owns one cache key in the
+  // recommendations domain and is gated on `id` being present (the hook
+  // itself also no-ops on undefined productId for safety).
+  const fbtQuery = useRecommendationsProduct(id, "bought_together");
+  const alsoViewedQuery = useRecommendationsProduct(id, "viewed_together");
+  const similarQuery = useRecommendationsProduct(id, "similar");
+
+  const vendorPublicId = product?.vendorPublicId;
+  const vendorMoreQuery = useVendorMoreProducts(
+    vendorPublicId,
+    id,
+    { enabled: !!vendorPublicId && !!id },
+  );
+
+  const pdpRecommendedQuery = useProductsList({ take: 10, sortBy: "newest" });
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [adding, setAdding] = useState(false);
@@ -289,6 +304,50 @@ export default function ProductDetailScreen() {
     return out;
   }, [product?.videos]);
   const hasVideos = videoEntries.length > 0;
+
+  // The PDP endpoint (`findOnePublic`) returns the raw Prisma row, which
+  // has NO flat `image` field — image lives in `images[]` (each entry is
+  // typically a `{ key, url, ... }` object after `enrichImageUrls`).
+  // Reading `product.image` directly silently produces `undefined`,
+  // which used to surface as blank cards in the recently-viewed slider
+  // and as the placeholder image on wishlist/cart entries created from
+  // the PDP. Mirror the existing image-derivation used by the gallery
+  // and sticky bar above so every persisted entry stores a usable R2
+  // key (consumers like `ProductCard` resolve keys to URLs at render
+  // time via `productImageUrl()`, picking the right size derivative).
+  const primaryImageKey = useMemo<string>(() => {
+    if (!product) return "";
+    return (
+      (product.images ?? [])
+        .map((img) => (typeof img === "string" ? img : img?.key) ?? null)
+        .find((k): k is string => typeof k === "string" && k.length > 0)
+      ?? ""
+    );
+  }, [product]);
+
+  // The PDP endpoint also has NO flat `price` — price lives on each
+  // `variants[].price`. The user-visible `displayPrice` above derives
+  // from the *selected* variant, but recently-viewed fires once on
+  // product load before any variant interaction, so it must use the
+  // explicit default-variant price (or the first variant as a fallback,
+  // matching the same precedence used in `selectedVariant`/`variantData`).
+  const defaultVariantPriceCents = useMemo<number>(() => {
+    if (!product) return 0;
+    const def =
+      product.variants?.find((v) => v.publicId === product.defaultVariantPublicId)
+      ?? product.variants?.[0];
+    const p = def?.price != null ? Number(def.price) : NaN;
+    return Number.isFinite(p) ? Math.round(p * 100) : 0;
+  }, [product]);
+
+  const defaultVariantCompareAtCents = useMemo<number | null>(() => {
+    if (!product) return null;
+    const def =
+      product.variants?.find((v) => v.publicId === product.defaultVariantPublicId)
+      ?? product.variants?.[0];
+    const cp = def?.compareAtPrice != null ? Number(def.compareAtPrice) : NaN;
+    return Number.isFinite(cp) ? Math.round(cp * 100) : null;
+  }, [product]);
 
   const VEL_SMOOTH = 0.92;
   const SHOW_VEL = -0.14;
@@ -414,11 +473,11 @@ export default function ProductDetailScreen() {
       productId: product.productId,
       variantPublicId: product.defaultVariantPublicId ?? "",
       title: product.title,
-      price: Math.round(product.price * 100),
-      image: product.image || "",
+      price: defaultVariantPriceCents,
+      image: primaryImageKey,
       slug: product.slug,
       categoryId: product.categoryId,
-      compareAtPrice: product.compareAtPrice ? Math.round(Number(product.compareAtPrice) * 100) : null,
+      compareAtPrice: defaultVariantCompareAtCents,
       vendorName: product.vendorName,
       ratingAvg: product.ratingAvg,
       reviewCount: product.reviewCount,
@@ -432,7 +491,7 @@ export default function ProductDetailScreen() {
       previewVideo: derivePreviewVideo(product.videos),
     });
     isInWishlist(product.productId).then(setInWishlist);
-  }, [product]);
+  }, [product, primaryImageKey, defaultVariantPriceCents, defaultVariantCompareAtCents]);
 
   useEffect(() => {
     if (!product) return;
@@ -447,17 +506,23 @@ export default function ProductDetailScreen() {
     if (inWishlist) {
       await removeFromWishlist(product.productId);
     } else {
+      // Snapshot the *currently visible* price (selected variant), and
+      // store the R2 image key so consumers can size-derive at render
+      // time. Falling back to FALLBACK_IMAGE here would persist a
+      // placeholder URL into AsyncStorage, which would then leak to
+      // the wishlist forever; storing an empty key lets the consumer
+      // resolve to FALLBACK_IMAGE on its own per render.
       await addToWishlist({
         productId: product.productId,
-        variantPublicId: product.defaultVariantPublicId ?? "",
+        variantPublicId: activeVariantPublicId ?? product.defaultVariantPublicId ?? "",
         title: product.title,
-        price: Math.round(product.price * 100),
-        image: product.image || FALLBACK_IMAGE,
+        price: Math.round(displayPrice * 100),
+        image: primaryImageKey,
         slug: product.slug,
         categoryId: product.categoryId,
       });
     }
-  }, [inWishlist, product]);
+  }, [inWishlist, product, displayPrice, primaryImageKey, activeVariantPublicId]);
 
   const handleAddToCart = useCallback(async () => {
     if (!activeVariantPublicId) return;
@@ -467,7 +532,7 @@ export default function ProductDetailScreen() {
         variantPublicId: activeVariantPublicId,
         price: displayPrice,
         title: product?.title ?? "",
-        image: product?.image || "",
+        image: primaryImageKey,
         quantity: qty,
         productId: product?.productId ?? "",
         slug: product?.slug ?? "",
@@ -477,7 +542,7 @@ export default function ProductDetailScreen() {
     } finally {
       setAdding(false);
     }
-  }, [activeVariantPublicId, displayPrice, product, qty, addToCart]);
+  }, [activeVariantPublicId, displayPrice, product, primaryImageKey, qty, addToCart, t]);
 
   if (loading) {
     return (
@@ -768,37 +833,38 @@ export default function ProductDetailScreen() {
           {product.vendorPublicId && product.vendorName && (
             <ProductRecommendationSlider
               title={t("product.moreFrom", { name: product.vendorName })}
-              apiUrl={`/products/public?vendorPublicId=${encodeURIComponent(product.vendorPublicId)}&take=11&sortBy=newest`}
+              products={vendorMoreQuery.data}
+              loading={vendorMoreQuery.isPending}
               accentColor={colors.brandBlue}
               onAddToCart={handleAddToCart}
-              postProcess={(data) => {
-                const items = Array.isArray(data) ? data : data?.products ?? [];
-                return items.filter((p: any) => p.productId !== product.productId).slice(0, 10);
-              }}
             />
           )}
 
           <ProductRecommendationSlider
             title={t("product.frequentlyBoughtTogether")}
-            apiUrl={`/recommendations?context=product&productId=${encodeURIComponent(product.productId)}&type=bought_together&take=10`}
+            products={fbtQuery.data as PublicProduct[] | undefined}
+            loading={fbtQuery.isPending}
             accentColor={colors.brandBlue}
             onAddToCart={handleAddToCart}
           />
           <ProductRecommendationSlider
             title={t("product.customersAlsoViewed")}
-            apiUrl={`/recommendations?context=product&productId=${encodeURIComponent(product.productId)}&type=viewed_together&take=10`}
+            products={alsoViewedQuery.data as PublicProduct[] | undefined}
+            loading={alsoViewedQuery.isPending}
             accentColor={colors.brandBlue}
             onAddToCart={handleAddToCart}
           />
           <ProductRecommendationSlider
             title={t("product.similarProducts")}
-            apiUrl={`/recommendations?context=product&productId=${encodeURIComponent(product.productId)}&type=similar&take=10`}
+            products={similarQuery.data as PublicProduct[] | undefined}
+            loading={similarQuery.isPending}
             accentColor={colors.brandBlue}
             onAddToCart={handleAddToCart}
           />
           <ProductRecommendationSlider
             title={t("product.recommendedForYou")}
-            apiUrl="/products/public?take=10&sortBy=newest"
+            products={pdpRecommendedQuery.data}
+            loading={pdpRecommendedQuery.isPending}
             accentColor={colors.brandBlue}
             onAddToCart={handleAddToCart}
           />

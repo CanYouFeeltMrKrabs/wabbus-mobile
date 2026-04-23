@@ -10,7 +10,9 @@ import CartItemCard from "@/components/ui/CartItemCard";
 import CartSummary from "@/components/ui/CartSummary";
 import CartRecommendations from "@/components/ui/CartRecommendations";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
+import { useRecommendationsStrategy } from "@/lib/queries";
 import { useCart } from "@/lib/cart";
+import type { PublicProduct } from "@/lib/types";
 import { addToWishlist } from "@/lib/wishlist";
 import { FALLBACK_IMAGE } from "@/lib/config";
 import { ROUTES } from "@/lib/routes";
@@ -22,6 +24,11 @@ export default function CartScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { items, subtotalCents, updateQuantity, removeItem } = useCart();
+
+  // Empty-cart trending carousel — sealed-layer migration §4b/§E.3.
+  // Hook is always-mounted so the cache primes ahead of the empty state;
+  // matches the legacy slider's eager-fetch behaviour.
+  const trendingNow = useRecommendationsStrategy("trending");
 
   const handleRemove = useCallback(
     (publicId: string) => {
@@ -73,7 +80,8 @@ export default function CartScreen() {
         </View>
         <ProductRecommendationSlider
           title={t("cart.trendingNow")}
-          apiUrl="/recommendations?context=home&strategy=trending&take=10"
+          products={trendingNow.data as PublicProduct[] | undefined}
+          loading={trendingNow.isPending}
           accentColor={colors.rose500}
         />
       </ScrollView>

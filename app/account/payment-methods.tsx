@@ -12,13 +12,11 @@ import AppText from "@/components/ui/AppText";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
-import { queryKeys } from "@/lib/queryKeys";
+import { usePaymentMethods, useStoreCreditBalance } from "@/lib/queries";
 import { formatMoney } from "@/lib/money";
 import { showToast } from "@/lib/toast";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
-import type { PaymentMethod } from "@/lib/types";
 
 function prettifyBrand(type?: string | null, brand?: string | null) {
   const b = (brand || "").trim();
@@ -59,26 +57,9 @@ function PaymentMethodsContent() {
     isLoading: loading,
     refetch: refetchMethods,
     error: fetchError,
-  } = useQuery({
-    queryKey: queryKeys.paymentMethods(),
-    queryFn: async () => {
-      const methodsData = await customerFetch<any>("/payments/methods");
-      const list = Array.isArray(methodsData)
-        ? methodsData
-        : Array.isArray(methodsData?.methods)
-          ? methodsData.methods
-          : [];
-      return list as PaymentMethod[];
-    },
-  });
+  } = usePaymentMethods();
 
-  const { data: creditBalanceCents = 0 } = useQuery({
-    queryKey: queryKeys.storeCredit(),
-    queryFn: async () => {
-      const data = await customerFetch<{ balanceCents?: number }>("/payments/credit-balance").catch(() => null);
-      return data?.balanceCents ?? 0;
-    },
-  });
+  const { data: creditBalanceCents = 0 } = useStoreCreditBalance();
 
   const methods = paymentData ?? [];
   const displayError = error || (fetchError ? t("account.paymentMethods.errorLoad") : null);

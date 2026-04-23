@@ -7,9 +7,8 @@ import AppText from "@/components/ui/AppText";
 import BackButton from "@/components/ui/BackButton";
 import StarRating from "@/components/ui/StarRating";
 import Icon from "@/components/ui/Icon";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
 import { publicFetch } from "@/lib/api";
+import { useVendorReviews, useVendorReviewsSummary } from "@/lib/queries";
 import { formatDate } from "@/lib/orderHelpers";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
@@ -37,22 +36,11 @@ export default function VendorReviewsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data: reviewsRes, isLoading: reviewsLoading } = useQuery({
-    queryKey: queryKeys.vendors.reviews(id!),
-    queryFn: () => publicFetch<any>(`/public/vendors/by-public-id/${id}/reviews?limit=${PAGE_LIMIT}`),
-    enabled: !!id,
-  });
+  const { data: reviewsData, isLoading: reviewsLoading } = useVendorReviews(id);
+  const { data: summary } = useVendorReviewsSummary(id);
 
-  const { data: summary } = useQuery({
-    queryKey: [...queryKeys.vendors.reviews(id!), "summary"] as const,
-    queryFn: () => publicFetch<ReviewSummary>(`/public/vendors/by-public-id/${id}/reviews/summary`).catch(() => null),
-    enabled: !!id,
-  });
-
-  const initialReviews = useMemo<Review[]>(() => {
-    return reviewsRes?.data ?? (Array.isArray(reviewsRes) ? reviewsRes : []);
-  }, [reviewsRes]);
-  const initialCursor: string | null = reviewsRes?.nextCursor ?? null;
+  const initialReviews = reviewsData?.reviews ?? [];
+  const initialCursor = reviewsData?.nextCursor ?? null;
 
   const [extraReviews, setExtraReviews] = useState<Review[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);

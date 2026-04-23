@@ -1,10 +1,7 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { View, Pressable, TextInput, StyleSheet } from "react-native";
 import Icon from "@/components/ui/Icon";
-import AppText from "@/components/ui/AppText";
-import { colors, spacing, borderRadius, shadows, fontFamily } from "@/lib/theme";
-
-const QUICK_OPTIONS = [1, 2, 3, 4, 5];
+import { colors, borderRadius, shadows, fontFamily } from "@/lib/theme";
 
 interface QuantitySelectorProps {
   quantity: number;
@@ -13,15 +10,23 @@ interface QuantitySelectorProps {
 }
 
 export default function QuantitySelector({ quantity, onChange, max = 99 }: QuantitySelectorProps) {
-  const [open, setOpen] = useState(false);
   const [inputVal, setInputVal] = useState(String(quantity));
+  const isTypingRef = useRef(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Only sync external quantity changes when we are NOT open (meaning we aren't actively typing)
+  // Clean up debounce on unmount
   useEffect(() => {
-    if (!open) {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  // Only sync external quantity changes when we are NOT actively typing
+  useEffect(() => {
+    if (!isTypingRef.current) {
       setInputVal(String(quantity));
     }
-  }, [quantity, open]);
+  }, [quantity]);
 
   const handleInputChange = useCallback((text: string) => {
     // Just maintain local string state during typing so the cursor doesn't jump
@@ -30,62 +35,87 @@ export default function QuantitySelector({ quantity, onChange, max = 99 }: Quant
   }, []);
 
   const commitInput = useCallback(() => {
+    isTypingRef.current = false;
     let num = parseInt(inputVal, 10);
     if (isNaN(num) || num < 1) num = 1;
     if (num > max) num = max;
     
     setInputVal(String(num));
-    onChange(num);
-  }, [inputVal, onChange, max]);
+    if (num !== quantity) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      onChange(num);
+    }
+  }, [inputVal, onChange, max, quantity]);
 
-  const handleSelect = useCallback((num: number) => {
-    setInputVal(String(num));
-    onChange(num);
-    setOpen(false);
+  const notifyChange = useCallback((newQty: number) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onChange(newQty);
+    }, 400);
   }, [onChange]);
+
+  const handleDecrement = useCallback(() => {
+    setInputVal((prev) => {
+      const current = parseInt(prev, 10);
+      if (!isNaN(current) && current > 1) {
+        const newQty = current - 1;
+        notifyChange(newQty);
+        return String(newQty);
+      }
+      return prev;
+    });
+  }, [notifyChange]);
+
+  const handleIncrement = useCallback(() => {
+    setInputVal((prev) => {
+      const current = parseInt(prev, 10);
+      if (!isNaN(current) && current < max) {
+        const newQty = current + 1;
+        notifyChange(newQty);
+        return String(newQty);
+      }
+      return prev;
+    });
+  }, [max, notifyChange]);
+
+  const renderBtnStyle = ({ pressed }: { pressed: boolean }, disabled: boolean) => [
+    styles.btn,
+    pressed && !disabled && styles.btnPressed,
+    disabled && styles.btnDisabled,
+  ];
 
   return (
     <View style={styles.container}>
-      {/* Selector row */}
       <View style={styles.selector}>
+        <Pressable 
+          style={(state) => renderBtnStyle(state, quantity <= 1)}
+          onPress={handleDecrement}
+          disabled={quantity <= 1}
+        >
+          <Icon name="remove" size={20} color={quantity <= 1 ? colors.slate300 : colors.brandBlue} />
+        </Pressable>
+        
         <TextInput
           style={styles.selectorInput}
           value={inputVal}
           onChangeText={handleInputChange}
           onBlur={commitInput}
           onSubmitEditing={commitInput}
-          onFocus={() => setOpen(false)}
+          onFocus={() => { isTypingRef.current = true; }}
           keyboardType="number-pad"
           returnKeyType="done"
           selectTextOnFocus
           maxLength={2}
         />
-        <Pressable style={styles.chevronBox} onPress={() => setOpen((v) => !v)}>
-          <Icon name={open ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={22} color={colors.white} />
+        
+        <Pressable 
+          style={(state) => renderBtnStyle(state, quantity >= max)}
+          onPress={handleIncrement}
+          disabled={quantity >= max}
+        >
+          <Icon name="add" size={20} color={quantity >= max ? colors.slate300 : colors.brandBlue} />
         </Pressable>
       </View>
-
-      {/* Inline dropdown */}
-      {open && (
-        <View style={styles.dropdown}>
-          {QUICK_OPTIONS.filter((n) => n <= max).map((num) => (
-            <Pressable
-              key={num}
-              style={[styles.dropdownItem, num === quantity && styles.dropdownItemActive]}
-              onPress={() => handleSelect(num)}
-            >
-              <AppText
-                style={[
-                  styles.dropdownItemText,
-                  num === quantity && styles.dropdownItemTextActive,
-                ]}
-              >
-                {num}
-              </AppText>
-            </Pressable>
-          ))}
-        </View>
-      )}
     </View>
   );
 }
@@ -107,43 +137,28 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...shadows.sm,
   },
-  selectorInput: {
-    flex: 1,
-    paddingHorizontal: spacing[4],
-    fontSize: 15,
-    fontWeight: "600",
-    fontFamily: fontFamily.semibold,
-    color: colors.slate700,
-  },
-  chevronBox: {
-    backgroundColor: colors.brandBlueDark,
-    width: 44,
+  btn: {
+    width: 36,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.slate50,
   },
-  dropdown: {
-    marginTop: spacing[1],
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.slate200,
-    overflow: "hidden",
-    ...shadows.lg,
+  btnPressed: {
+    backgroundColor: colors.slate100,
   },
-  dropdownItem: {
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2.5],
+  btnDisabled: {
+    opacity: 0.5,
   },
-  dropdownItemActive: {
-    backgroundColor: colors.brandBlueLight,
-  },
-  dropdownItemText: {
-    fontSize: 15,
+  selectorInput: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 16,
     fontWeight: "600",
-    color: colors.slate700,
-  },
-  dropdownItemTextActive: {
-    color: colors.brandBlue,
-    fontWeight: "700",
+    fontFamily: fontFamily.semibold,
+    color: colors.slate800,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: colors.slate200,
+    padding: 0,
   },
 });

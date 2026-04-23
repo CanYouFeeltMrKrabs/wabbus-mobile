@@ -175,7 +175,11 @@ export type OrderItem = {
     title?: string | null;
     sku?: string | null;
     imageUrl?: string | null;
-    images?: Array<{ key?: string; url?: string }> | null;
+    // Backend may send key/url as null (not just undefined); aligned with the
+    // canonical schema in lib/queries/orders.ts (OrderItemSchema → productVariant
+    // → images). All call sites already use optional chaining, so this is a
+    // type-only correction — runtime behavior is unchanged.
+    images?: Array<{ key?: string | null; url?: string | null }> | null;
     product?: {
       title?: string | null;
       name?: string | null;
@@ -183,7 +187,7 @@ export type OrderItem = {
       slug?: string | null;
       imageUrl?: string | null;
       image?: string | null;
-      images?: Array<{ key?: string; url?: string }> | null;
+      images?: Array<{ key?: string | null; url?: string | null }> | null;
     } | null;
   } | null;
 

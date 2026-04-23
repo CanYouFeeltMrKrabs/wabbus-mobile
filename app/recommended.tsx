@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from "react";
-import { View, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import React, { useCallback } from "react";
+import { View, StyleSheet, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
@@ -7,24 +7,29 @@ import AppText from "@/components/ui/AppText";
 import BackButton from "@/components/ui/BackButton";
 import ProductGrid from "@/components/ui/ProductGrid";
 import { SkeletonGrid } from "@/components/ui/Skeleton";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
-import { customerFetch } from "@/lib/api";
-import { API_BASE } from "@/lib/config";
+import { useRecommendationsHome } from "@/lib/queries";
 import { useCart } from "@/lib/cart";
 import { colors, spacing } from "@/lib/theme";
 import type { PublicProduct } from "@/lib/types";
 
-function normalizeProducts(data: unknown): PublicProduct[] {
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === "object") {
-    const obj = data as Record<string, unknown>;
-    if (Array.isArray(obj.products)) return obj.products as PublicProduct[];
-    if (Array.isArray(obj.data)) return obj.data as PublicProduct[];
-    if (Array.isArray(obj.items)) return obj.items as PublicProduct[];
-  }
-  return [];
-}
+/**
+ * Browse-more recommendations grid.
+ *
+ * Sealed-layer migration (plan §4b / §E.3): this screen previously owned a
+ * raw `useQuery({ queryKey: queryKeys.recommendations.home() })` that wrote
+ * the bare API envelope into the same cache entry the home-screen carousel
+ * normalised to `{ products, personalized }`. That collision is the second
+ * known latent bug (`.cursor/handoff-query-key-shape-collisions.md` §1).
+ *
+ * Closure: both surfaces now go through `useRecommendationsHome(take)`,
+ * which:
+ *   1. enforces the canonical `{ products, personalized }` shape via
+ *      `parseOrThrow` at write time,
+ *   2. parameterises the cache key by `take`, so this screen (take=200)
+ *      and the home carousel (take=PRODUCTS_HOME) occupy DISTINCT cache
+ *      entries with the SAME schema.
+ */
+const RECOMMENDED_TAKE = 200;
 
 export default function RecommendedScreen() {
   const { t } = useTranslation();
@@ -32,22 +37,11 @@ export default function RecommendedScreen() {
   const insets = useSafeAreaInsets();
   const { addToCart } = useCart();
 
-  const { data: recoData, isLoading: loading } = useQuery({
-    queryKey: queryKeys.recommendations.home(),
-    queryFn: async () => {
-      try {
-        return await customerFetch<{ personalized?: boolean } & Record<string, unknown>>(
-          `/recommendations?context=home&take=200`,
-        );
-      } catch {
-        const res = await fetch(`${API_BASE}/products/public?take=200&skip=0`);
-        if (res.ok) return await res.json();
-        return null;
-      }
-    },
-  });
+  const { data: recoData, isLoading: loading } = useRecommendationsHome(
+    RECOMMENDED_TAKE,
+  );
 
-  const products = useMemo(() => normalizeProducts(recoData), [recoData]);
+  const products = recoData?.products ?? [];
   const personalized = recoData?.personalized ?? false;
 
   const handleAddToCart = useCallback(
@@ -87,7 +81,7 @@ export default function RecommendedScreen() {
           contentContainerStyle={{ paddingHorizontal: spacing[4], paddingBottom: spacing[10] }}
           showsVerticalScrollIndicator={false}
         >
-          <ProductGrid products={products} onAddToCart={handleAddToCart} />
+          <ProductGrid products={products as PublicProduct[]} onAddToCart={handleAddToCart} />
         </ScrollView>
       )}
     </View>

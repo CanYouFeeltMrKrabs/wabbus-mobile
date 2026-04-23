@@ -107,25 +107,31 @@ export function pickItemTitle(item: {
   return `Item #${item.publicId ?? "?"}`;
 }
 
+// Image array entry shape — `key` and `url` may be string, null, or absent.
+// Backend tolerance is intentional: see lib/queries/orders.ts (canonical
+// schema) and lib/types.ts (legacy aligned type). The helper falls through
+// nulls and undefineds identically via `||`, so widening here is type-only.
+type ImageEntry = { key?: string | null; url?: string | null };
+
 export function pickItemImage(item: {
   image?: string | null;
   imageUrl?: string | null;
   productVariant?: {
     imageUrl?: string | null;
-    images?: Array<{ key?: string; url?: string }> | null;
+    images?: Array<ImageEntry> | null;
     product?: {
       imageUrl?: string | null;
       image?: string | null;
-      images?: Array<{ key?: string; url?: string }> | null;
+      images?: Array<ImageEntry> | null;
     } | null;
   } | null;
   product?: {
     imageUrl?: string | null;
     image?: string | null;
-    images?: Array<{ key?: string; url?: string }> | null;
+    images?: Array<ImageEntry> | null;
   } | null;
 }): string | null {
-  const firstImgKey = (imgs?: Array<{ key?: string; url?: string }> | null) =>
+  const firstImgKey = (imgs?: Array<ImageEntry> | null) =>
     imgs?.[0]?.url || imgs?.[0]?.key || null;
 
   const candidates = [

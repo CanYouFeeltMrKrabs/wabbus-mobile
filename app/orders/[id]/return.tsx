@@ -17,13 +17,12 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
 import { pickItemTitle, pickItemImage } from "@/lib/orderHelpers";
 import { FALLBACK_IMAGE } from "@/lib/config";
-import { queryKeys } from "@/lib/queryKeys";
+import { invalidate, useOrderDetail, useReturnsList, useReplacementCheck } from "@/lib/queries";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
-import type { Order, ReturnReasonCode, ReturnResolution } from "@/lib/types";
+import type { ReturnReasonCode, ReturnResolution } from "@/lib/types";
 
 type ReturnOrderItem = {
   publicId?: string | null;
@@ -85,26 +84,16 @@ function ReturnContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
-  const { data: orderData, isLoading: orderLoading } = useQuery({
-    queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<any>(`/orders/by-public-id/${id}`),
-    enabled: !!id,
-  });
+  const { data: order, isLoading: orderLoading } = useOrderDetail(id);
 
-  const { data: returnsRaw, isLoading: returnsLoading } = useQuery({
-    queryKey: queryKeys.returns.list(),
-    queryFn: () => customerFetch<any>("/returns"),
+  const { data: returnsRaw, isLoading: returnsLoading } = useReturnsList({
     enabled: !!id,
   });
 
   const loading = orderLoading || returnsLoading;
-  const order = (orderData?.order ?? orderData ?? null) as Order | null;
 
   const pendingReturnItems = useMemo(() => {
-    const returnsList: ExistingReturn[] =
-      Array.isArray(returnsRaw?.data) ? returnsRaw.data :
-      Array.isArray(returnsRaw) ? returnsRaw : [];
+    const returnsList = (returnsRaw ?? []) as unknown as ExistingReturn[];
     const pending = new Map<string, number>();
     for (const ret of returnsList) {
       if (["CLOSED", "CLOSED_EXPIRED", "REFUNDED", "CREDITED"].includes(ret.status)) continue;
@@ -126,14 +115,7 @@ function ReturnContent() {
 
   const firstSelectedId = useMemo(() => [...selected.keys()][0] ?? null, [selected]);
 
-  const { data: replacementCheckData } = useQuery({
-    queryKey: queryKeys.returns.replacementCheck(firstSelectedId!),
-    queryFn: () =>
-      customerFetch<{ blocked?: boolean; code?: string }>(
-        `/returns/replacement-check/${firstSelectedId}`,
-      ),
-    enabled: !!firstSelectedId,
-  });
+  const { data: replacementCheckData } = useReplacementCheck(firstSelectedId);
 
   const replacementBlocked = !!replacementCheckData?.blocked;
   const replacementBlockReason = replacementCheckData?.code ?? null;
@@ -197,9 +179,9 @@ function ReturnContent() {
         }),
       });
 
-      queryClient.invalidateQueries({ queryKey: queryKeys.returns.all() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(id!) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.cases.all() });
+      void invalidate.returns.all();
+      void invalidate.orders.detail(id!);
+      void invalidate.messages.cases.all();
       setDone(true);
     } catch (e: any) {
       Alert.alert(t("common.error"), e.message || t("accountOrders.return.errorSubmit"));

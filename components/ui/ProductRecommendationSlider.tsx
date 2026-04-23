@@ -1,50 +1,48 @@
 import React, { useCallback } from "react";
 import { View, FlatList, StyleSheet } from "react-native";
-import { useQuery } from "@tanstack/react-query";
 import AppText from "@/components/ui/AppText";
 import ProductCard from "@/components/ui/ProductCard";
 import { SkeletonSlider } from "@/components/ui/Skeleton";
 import { colors, spacing, borderRadius } from "@/lib/theme";
-import { publicFetch } from "@/lib/api";
 import type { PublicProduct } from "@/lib/types";
 
+/**
+ * Presentation-only horizontal slider for product recommendations.
+ *
+ * Refactored as part of the sealed-query-layer migration (plan §4b /
+ * `.cursor/handoff-sealed-query-layer.md` §E.3). Previously this component
+ * owned its own `useQuery` against an arbitrary `apiUrl` + `queryKey` +
+ * `postProcess` — that pattern made every caller a writer for an ad-hoc
+ * cache key, which is exactly the bug class the sealed layer eliminates
+ * (one key → one fetcher → one schema).
+ *
+ * The component now takes `products` and `loading` as props. Each caller
+ * owns the data-fetching side via a typed hook from `@/lib/queries`
+ * (e.g. `useRecommendationsStrategy`, `useRecommendationsContext`,
+ * `useRecommendationsPostPurchase`, etc.) and passes the result down.
+ *
+ * Empty/loading semantics preserved verbatim from the legacy queryFn-owning
+ * version:
+ *   - `loading=false && products.length === 0` → render nothing.
+ *   - `loading=true  && products.length === 0` → render skeleton.
+ *   - `products.length > 0`                   → render slider regardless of loading.
+ */
 export type ProductRecommendationSliderProps = {
   title: string;
-  apiUrl: string;
-  queryKey?: readonly unknown[];
+  products: PublicProduct[] | undefined;
+  loading?: boolean;
   accentColor?: string;
   onAddToCart?: (product: PublicProduct) => void;
-  postProcess?: (data: any) => PublicProduct[];
 };
-
-function defaultExtract(data: unknown, postProcess?: (data: any) => PublicProduct[]): PublicProduct[] {
-  if (postProcess) return postProcess(data);
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === "object" && "products" in data) return (data as any).products ?? [];
-  return [];
-}
 
 function ProductRecommendationSliderInner({
   title,
-  apiUrl,
-  queryKey,
+  products,
+  loading = false,
   accentColor = colors.brandBlue,
   onAddToCart,
-  postProcess,
 }: ProductRecommendationSliderProps) {
-  const stablePostProcess = useCallback(
-    (d: unknown) => defaultExtract(d, postProcess),
-    [postProcess],
-  );
-
-  const { data: products = [], isLoading: loading } = useQuery({
-    queryKey: queryKey ?? ["recs", apiUrl],
-    queryFn: async () => {
-      const data = await publicFetch(apiUrl);
-      return stablePostProcess(data);
-    },
-    staleTime: 5 * 60_000,
-  });
+  const items = products ?? [];
 
   const [visibleProductId, setVisibleProductId] = React.useState<string | null>(null);
 
@@ -62,9 +60,9 @@ function ProductRecommendationSliderInner({
     itemVisiblePercentThreshold: 50,
   }).current;
 
-  if (!loading && products.length === 0) return null;
+  if (!loading && items.length === 0) return null;
 
-  if (loading && products.length === 0) {
+  if (loading && items.length === 0) {
     return (
       <View style={styles.container}>
         <SkeletonSlider count={4} />
@@ -80,7 +78,7 @@ function ProductRecommendationSliderInner({
       </View>
 
       <FlatList
-        data={products}
+        data={items}
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(p) => p.productId}
@@ -88,11 +86,10 @@ function ProductRecommendationSliderInner({
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         renderItem={({ item, index }) => {
-          // If haven't scrolled yet, default to first item
-          const isVisible = visibleProductId 
-            ? item.productId === visibleProductId 
+          const isVisible = visibleProductId
+            ? item.productId === visibleProductId
             : index === 0;
-            
+
           return (
             <View style={styles.cardContainer}>
               <ProductCard product={item} onAddToCart={onAddToCart} enablePreview={isVisible} />

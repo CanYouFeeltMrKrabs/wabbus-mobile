@@ -284,6 +284,32 @@ export async function customerFetchBlob(
   return await res.blob();
 }
 
+/**
+ * Normalise a paginated list response into a plain array.
+ *
+ * Wabbus list endpoints sometimes return a bare array and sometimes a
+ * `{ data: [...], pagination: {...} }` envelope. Storing the raw
+ * response in TanStack Query cache means two callers that differ on
+ * unwrap policy can corrupt each other's cache for the same query key
+ * (the second caller sees the first caller's shape, then crashes when
+ * it tries to iterate it as an array).
+ *
+ * Centralising the unwrap here guarantees:
+ *   - All callers cache the SAME shape for a given query key.
+ *   - Stale cache from an old build that stored the envelope is
+ *     transparently re-normalised on read.
+ *   - Future endpoints that switch envelope policy don't break the UI.
+ *
+ * Always returns an array — never throws, never returns `undefined`.
+ */
+export function unwrapList<T = unknown>(raw: unknown): T[] {
+  if (Array.isArray(raw)) return raw as T[];
+  if (raw && typeof raw === "object" && Array.isArray((raw as { data?: unknown }).data)) {
+    return (raw as { data: T[] }).data;
+  }
+  return [];
+}
+
 /** Unauthenticated fetch for public endpoints */
 export async function publicFetch<T = unknown>(path: string): Promise<T> {
   const url = `${API_BASE}${path}`;

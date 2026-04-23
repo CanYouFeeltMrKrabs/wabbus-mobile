@@ -17,14 +17,13 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { pickItemTitle, pickItemImage, pickUnitPriceCents } from "@/lib/orderHelpers";
 import { FALLBACK_IMAGE } from "@/lib/config";
-import { queryKeys } from "@/lib/queryKeys";
+import { invalidate, useOrderDetail } from "@/lib/queries";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
-import type { Order, OrderItem, CancelReasonCode } from "@/lib/types";
+import type { CancelReasonCode } from "@/lib/types";
 
 export default function CancelOrderScreen() {
   return (
@@ -39,8 +38,6 @@ function CancelContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
-
   const REASONS: { code: CancelReasonCode; label: string }[] = [
     { code: "CHANGED_MIND", label: t("accountOrders.cancel.reasonChangedMind") },
     { code: "FOUND_CHEAPER", label: t("accountOrders.cancel.reasonFoundCheaper") },
@@ -48,12 +45,10 @@ function CancelContent() {
     { code: "NO_LONGER_NEEDED", label: t("accountOrders.cancel.reasonNoLongerNeeded") },
     { code: "OTHER", label: t("accountOrders.cancel.reasonOther") },
   ];
-  const { data: orderData, isLoading: loading } = useQuery({
-    queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<any>(`/orders/by-public-id/${id}`),
-    enabled: !!id,
-  });
-  const order = (orderData?.order ?? orderData ?? null) as Order | null;
+
+  // Sealed-layer migration (plan §3.2 — orders.detail caller). Hand-rolled
+  // useQuery + envelope unwrap replaced with the canonical hook.
+  const { data: order, isLoading: loading } = useOrderDetail(id);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState<CancelReasonCode | null>(null);
   const [note, setNote] = useState("");
@@ -90,8 +85,11 @@ function CancelContent() {
           }).catch(() => {}),
         );
       await Promise.all(promises);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(id!) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all() });
+      // Cancellation effect spans both this order's detail and the orders
+      // list (status changes ripple through). invalidate.orders.all() covers
+      // both via prefix match. Routed through the sealed namespace so no
+      // caller can construct an orders queryKey by hand (plan §3.2 Step E).
+      void invalidate.orders.all();
       setDone(true);
     } catch {
       Alert.alert(t("common.error"), t("accountOrders.cancel.errorSubmit"));

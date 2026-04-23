@@ -17,8 +17,13 @@ import { CATEGORY_SHORT_NAMES } from "@/lib/categories";
 import { ROUTES } from "@/lib/routes";
 import { trackEvent } from "@/lib/tracker";
 import type { PublicProduct } from "@/lib/types";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
+import {
+  useRecommendationsContext,
+  useRecommendationsStrategy,
+  useProductsList,
+  useCategoryProducts,
+  useCategoryNewArrivals,
+} from "@/lib/queries";
 
 import { PAGE_SIZE as PAGE_SIZES } from "@/lib/constants";
 
@@ -53,18 +58,11 @@ export default function CategoryScreen() {
   const skipRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  const { data: initialProducts, isPending: loading, isError: fetchError, dataUpdatedAt } = useQuery({
-    queryKey: queryKeys.categories.products(slug!, { sortBy: sort }),
-    queryFn: async ({ signal }) => {
-      const res = await fetch(
-        `${API_BASE}/products/public?take=${PAGE_SIZE}&skip=0&categorySlug=${slug}&sortBy=${sort}`,
-        { signal },
-      );
-      const data = await res.json();
-      return (Array.isArray(data) ? data : data.products || []) as PublicProduct[];
-    },
-    enabled: !!slug,
-  });
+  const { data: initialProducts, isPending: loading, isError: fetchError, dataUpdatedAt } = useCategoryProducts(
+    slug,
+    { sortBy: sort },
+    { enabled: !!slug },
+  );
 
   useEffect(() => {
     if (!initialProducts) return;
@@ -143,41 +141,67 @@ export default function CategoryScreen() {
    * inside ProductRecommendationSlider) so a single failing surface
    * never blocks the rest.
    */
+  // Discovery rail data sources — sealed-layer migration §4b/§E.3.
+  // All four carousels now go through their respective typed hooks from
+  // `@/lib/queries` (products, categories, recommendations).
+  const newInQuery = useCategoryNewArrivals(slug, { enabled: !!slug });
+  const trendingNow = useRecommendationsStrategy("trending", { enabled: !!slug });
+  const suggestionsForYou = useProductsList(
+    { take: CAROUSEL_LIMIT, sortBy: "newest" },
+    { enabled: !!slug },
+  );
+  const categoryRecos = useRecommendationsContext("category", slug, {
+    enabled: !!slug,
+  });
+
   const renderCarouselRail = useCallback(() => {
     if (!slug) return null;
     return (
       <View style={styles.footerRecos}>
         <ProductRecommendationSlider
           title={t("category.newIn", { name: title })}
-          apiUrl={`/products/public?categorySlug=${encodeURIComponent(slug)}&sortBy=newest&take=${CAROUSEL_LIMIT}`}
-          queryKey={queryKeys.categories.newArrivals(slug)}
+          products={newInQuery.data}
+          loading={newInQuery.isPending}
           accentColor={colors.violet500}
           onAddToCart={handleAddToCart}
         />
         <ProductRecommendationSlider
           title={t("home.trendingNow")}
-          apiUrl={`/recommendations?context=home&strategy=trending&take=${CAROUSEL_LIMIT}`}
-          queryKey={queryKeys.recommendations.strategy("trending")}
+          products={trendingNow.data as PublicProduct[] | undefined}
+          loading={trendingNow.isPending}
           accentColor={colors.rose500}
           onAddToCart={handleAddToCart}
         />
         <ProductRecommendationSlider
           title={t("home.suggestionsForYou")}
-          apiUrl={`/products/public?take=${CAROUSEL_LIMIT}&sortBy=newest`}
-          queryKey={queryKeys.products.list({ take: CAROUSEL_LIMIT, sortBy: "newest" })}
+          products={suggestionsForYou.data}
+          loading={suggestionsForYou.isPending}
           accentColor={colors.brandBlue}
           onAddToCart={handleAddToCart}
         />
         <ProductRecommendationSlider
           title={t("home.recommendedForYou")}
-          apiUrl={`/recommendations?context=category&take=${CAROUSEL_LIMIT}`}
-          queryKey={queryKeys.recommendations.context("category", slug)}
+          products={categoryRecos.data as PublicProduct[] | undefined}
+          loading={categoryRecos.isPending}
           accentColor={colors.brandBlue}
           onAddToCart={handleAddToCart}
         />
       </View>
     );
-  }, [slug, title, t, handleAddToCart]);
+  }, [
+    slug,
+    title,
+    t,
+    handleAddToCart,
+    newInQuery.data,
+    newInQuery.isPending,
+    trendingNow.data,
+    trendingNow.isPending,
+    suggestionsForYou.data,
+    suggestionsForYou.isPending,
+    categoryRecos.data,
+    categoryRecos.isPending,
+  ]);
 
   const renderFooter = useCallback(() => {
     return (

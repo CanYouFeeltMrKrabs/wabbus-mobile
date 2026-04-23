@@ -7,14 +7,26 @@ import AppText from "@/components/ui/AppText";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
-import { customerFetch } from "@/lib/api";
+import { useConversationsList } from "@/lib/queries";
+import { unwrapList } from "@/lib/api";
 import { formatDate } from "@/lib/orderHelpers";
 import { vendorLogoUrl } from "@/lib/image";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
 
+/**
+ * Local read-shape this file consumes. Intersects with the canonical
+ * `Conversation` from `@/lib/queries` (preserved at runtime by `v.looseObject`)
+ * and:
+ *   - asserts `publicId: string` (every entry in this list has one — the
+ *     `keyExtractor` and `router.push` callbacks rely on it being a stable
+ *     string),
+ *   - declares the legacy non-canonical `lastMessageBody` field. The
+ *     canonical schema models the modern `lastMessage.body` envelope only;
+ *     `lastMessageBody` was the older flat-field form. Either may appear in
+ *     the response — this preserves read access to both via the §D.4
+ *     local-cast escape hatch documented in the migration handoff.
+ */
 type Conversation = {
   publicId: string;
   vendor?: { name?: string; publicId?: string; logoUrl?: string | null } | null;
@@ -38,18 +50,22 @@ function AllConversationsContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data: rawConversations, isLoading: loading } = useQuery({
-    queryKey: queryKeys.messages.conversations.list(),
-    queryFn: () => customerFetch<any>("/messages/conversations?limit=50"),
-  });
+  // Sealed query layer: the canonical hook owns the cache write. The cast
+  // bridges the canonical type (publicId is nullable in the schema's lower
+  // bound) into the local read-shape declared above. The defensive
+  // `unwrapList` in the read-side `useMemo` below is preserved verbatim for
+  // behavior parity with the sister screen `app/account/messages.tsx` —
+  // both read-side `useMemo` belt-and-suspenders are removed together as
+  // the explicit, plan-authorised behavior change at the END of the
+  // messages domain migration (handoff §E.2).
+  const conversationsQuery = useConversationsList();
+  const loading = conversationsQuery.isLoading;
+  const rawConversations: Conversation[] =
+    (conversationsQuery.data as unknown as Conversation[] | undefined) ?? [];
 
   const conversations = useMemo(() => {
-    const list: Conversation[] = Array.isArray(rawConversations?.data)
-      ? rawConversations.data
-      : Array.isArray(rawConversations)
-        ? rawConversations
-        : [];
-    return list.sort((a, b) => (b.lastMessageAt || "").localeCompare(a.lastMessageAt || ""));
+    const list = unwrapList<Conversation>(rawConversations);
+    return [...list].sort((a, b) => (b.lastMessageAt || "").localeCompare(a.lastMessageAt || ""));
   }, [rawConversations]);
 
   const renderItem = ({ item }: { item: Conversation }) => {

@@ -17,8 +17,7 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery } from "@tanstack/react-query";
-import { customerFetch } from "@/lib/api";
+import { useOrderCaseDetail } from "@/lib/queries";
 import { formatDate } from "@/lib/orderHelpers";
 import { formatMoney } from "@/lib/money";
 import { productImageUrl } from "@/lib/image";
@@ -155,11 +154,8 @@ function CaseContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data: caseData, isLoading: loading, isError } = useQuery({
-    queryKey: ["cases", "detail", issueId!],
-    queryFn: () => customerFetch<CaseData>(`/cases/by-id/${issueId}`),
-    enabled: !!issueId,
-  });
+  const { data: caseDataRaw, isLoading: loading, isError } = useOrderCaseDetail(issueId);
+  const caseData = caseDataRaw as unknown as CaseData | undefined;
 
   const error = !issueId
     ? t("accountOrders.case.noCaseId")

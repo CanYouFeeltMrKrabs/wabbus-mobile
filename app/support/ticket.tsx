@@ -17,8 +17,7 @@ import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import { customerFetch } from "@/lib/api";
-import { getQueryClient } from "@/lib/queryClient";
-import { queryKeys } from "@/lib/queryKeys";
+import { invalidate } from "@/lib/queries";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import { showToast } from "@/lib/toast";
@@ -61,9 +60,8 @@ function TicketContent() {
         body: JSON.stringify({ body: body.trim(), category }),
       });
       const ticketNumber = result?.ticketNumber || result?.publicId?.slice(0, 8).toUpperCase() || "";
-      const qc = getQueryClient();
-      qc.invalidateQueries({ queryKey: queryKeys.messages.tickets.list() });
-      qc.invalidateQueries({ queryKey: queryKeys.messages.unread() });
+      void invalidate.messages.tickets.list();
+      void invalidate.messages.unread();
       showToast(
         ticketNumber
           ? t("support.ticket.submitSuccessWithNumber", { ticketNumber })

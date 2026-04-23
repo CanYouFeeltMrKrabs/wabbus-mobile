@@ -9,9 +9,7 @@ import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import TicketThread from "@/components/TicketThread";
-import { useQuery } from "@tanstack/react-query";
-import { customerFetch } from "@/lib/api";
-import { queryKeys } from "@/lib/queryKeys";
+import { useFamilyCases } from "@/lib/queries";
 import { formatDate } from "@/lib/orderHelpers";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
@@ -92,22 +90,19 @@ function FamilyDetailContent() {
   const { familyNumber } = useLocalSearchParams<{ familyNumber: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const {
-    data: cases = [],
-    isLoading: loading,
-    error: queryError,
-    refetch: fetchCases,
-  } = useQuery({
-    queryKey: queryKeys.messages.cases.familyMessages(familyNumber!),
-    queryFn: async () => {
-      const data = await customerFetch<any>("/cases/mine?limit=200");
-      const all: CustomerCase[] = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-      return all.filter((c) => c.caseFamily?.familyNumber === familyNumber);
-    },
-    enabled: !!familyNumber,
-  });
-
-  const error = queryError ? ((queryError as Error).message ?? t("messages.familyDetail.failedToLoad")) : null;
+  // Sealed query layer: the canonical hook owns the fetch + post-filter for
+  // this family. Cast to the legacy `CustomerCase` (from messages-types) so
+  // the local helpers (`aggregateStatus`, `itemTitles`) keep their existing
+  // type signatures — both shapes are structurally compatible at runtime
+  // (every field they read is preserved by `v.looseObject`).
+  const familyCasesQuery = useFamilyCases(familyNumber);
+  const cases: CustomerCase[] =
+    (familyCasesQuery.data as unknown as CustomerCase[] | undefined) ?? [];
+  const loading = familyCasesQuery.isLoading;
+  const fetchCases = familyCasesQuery.refetch;
+  const error = familyCasesQuery.error
+    ? ((familyCasesQuery.error as Error).message ?? t("messages.familyDetail.failedToLoad"))
+    : null;
 
   if (loading) {
     return (

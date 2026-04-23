@@ -18,12 +18,11 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
 import { FALLBACK_IMAGE } from "@/lib/config";
-import { queryKeys } from "@/lib/queryKeys";
+import { invalidate, useOrderDetail, useMyProductReviews } from "@/lib/queries";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
-import type { Order, OrderItem, ReviewImageUpload } from "@/lib/types";
+import type { OrderItem, ReviewImageUpload } from "@/lib/types";
 
 const MAX_IMAGES = 5;
 const MAX_COMMENT = 400;
@@ -43,14 +42,10 @@ function ReviewContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
-  const { data: orderData, isLoading: loading } = useQuery({
-    queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<any>(`/orders/by-public-id/${id}`),
-    enabled: !!id,
-  });
-
-  const order = (orderData?.order ?? orderData ?? null) as Order | null;
+  // Sealed-layer migration (plan §3.2 — orders.detail caller).
+  // Hand-rolled useQuery + envelope unwrap replaced with the canonical hook.
+  // The reviews-mine query below stays on legacy until that domain migrates.
+  const { data: order, isLoading: loading } = useOrderDetail(id);
 
   const productIds = useMemo(
     () =>
@@ -61,11 +56,7 @@ function ReviewContent() {
     [order],
   );
 
-  const { data: reviewsFromServer } = useQuery({
-    queryKey: ["reviews", "mine", productIds],
-    queryFn: () => customerFetch<any[]>(`/reviews/mine?productIds=${productIds}`),
-    enabled: !!productIds,
-  });
+  const { data: reviewsFromServer } = useMyProductReviews(productIds);
 
   const [localReviewed, setLocalReviewed] = useState<Set<string>>(new Set());
 
@@ -173,8 +164,8 @@ function ReviewContent() {
         }),
       });
 
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(id!) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(productId) });
+      void invalidate.orders.detail(id!);
+      void invalidate.products.detail(productId);
       setDone(true);
       setLocalReviewed((prev) => new Set([...prev, productId]));
     } catch (e: any) {

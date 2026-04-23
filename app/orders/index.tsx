@@ -36,8 +36,7 @@ import { buildCarrierTrackingUrl } from "@/lib/carrierTrackingUrl";
 import { ROUTES } from "@/lib/routes";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import { SkeletonOrderCard } from "@/components/ui/Skeleton";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
+import { useOrdersList, useCasesListFlat, useProductsList, useReturnsList } from "@/lib/queries";
 import type { Order, OrderItem, PublicProduct, ReturnRequest } from "@/lib/types";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
 import {
@@ -1076,39 +1075,41 @@ function OrdersContent() {
 
   // ─── Data fetching ──────────────────────────────────────────
 
-  const { data: ordersData, isLoading: loading } = useQuery({
-    queryKey: queryKeys.orders.list(),
-    queryFn: () => customerFetch<any>("/orders?limit=50"),
+  // Sealed query layer: the typed hook owns the cache key, fetcher, and
+  // schema for the orders list. The envelope (`{ data, nextCursor, hasMore }`)
+  // is the canonical shape — see lib/queries/orders.ts. Pagination metadata
+  // is read directly off `ordersData` below.
+  const { data: ordersData, isLoading: loading } = useOrdersList(undefined, {
     enabled: isLoggedIn,
   });
 
-  const { data: returnsData, isLoading: returnsLoading } = useQuery({
-    queryKey: queryKeys.returns.list(),
-    queryFn: () => customerFetch<any>("/returns"),
+  const { data: returnsData, isLoading: returnsLoading } = useReturnsList({
     enabled: isLoggedIn,
   });
 
-  const { data: cases = [] } = useQuery({
-    queryKey: queryKeys.messages.cases.listFlat(),
-    queryFn: async () => {
-      const raw = await customerFetch<any>("/cases/mine?limit=200");
-      if (raw && typeof raw === "object" && Array.isArray(raw.data))
-        return raw.data as CaseLite[];
-      return Array.isArray(raw) ? (raw as CaseLite[]) : [];
-    },
-    enabled: isLoggedIn,
-    staleTime: 5 * 60_000,
-  });
+  // Sealed query layer — `useCasesListFlat` owns the cache key, fetcher,
+  // schema, AND cache-freshness policy. The 5-minute staleTime is baked
+  // into the hook (not exposed as a knob) so every caller of this key
+  // sees the same freshness semantics — see lib/queries/messages.ts
+  // §QueryOpts comment block. Cast to the local `CaseLite` shape via §D.4:
+  // the canonical `CustomerCase` type carries every field this file reads
+  // and a few more besides; the cast bridges them with no runtime change.
+  const { data: casesData } = useCasesListFlat({ enabled: isLoggedIn });
+  const cases = (casesData as unknown as CaseLite[] | undefined) ?? [];
 
-  const initialOrders = useMemo(() => {
-    const d = ordersData;
-    return Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-  }, [ordersData]);
+  // The canonical envelope guarantees `data` is `Order[]` whenever `ordersData`
+  // is defined (parseOrThrow rejects anything else and self-heals the cache),
+  // so the legacy bare-array / Array.isArray fallback is structurally
+  // unreachable and has been collapsed. The cast bridges the canonical
+  // queries-layer `Order` to the legacy `Order` type used by the rest of this
+  // file — both describe the same backend object and will converge once the
+  // products/returns/messages domains are migrated.
+  const initialOrders = useMemo<Order[]>(
+    () => (ordersData?.data as unknown as Order[] | undefined) ?? [],
+    [ordersData],
+  );
 
-  const returns: ReturnRequest[] = useMemo(() => {
-    const d = returnsData;
-    return Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-  }, [returnsData]);
+  const returns = (returnsData ?? []) as unknown as ReturnRequest[];
 
   const [extraOrders, setExtraOrders] = useState<Order[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -1276,6 +1277,11 @@ function OrdersContent() {
     [addToCart],
   );
 
+  const topRatedQuery = useProductsList({
+    sortBy: "rating",
+    take: TOP_RATED_LIMIT,
+  });
+
   const renderTopRatedFooter = useCallback(
     (showLoadingMore: boolean) => (
       <View>
@@ -1288,17 +1294,14 @@ function OrdersContent() {
         ) : null}
         <ProductRecommendationSlider
           title={t("home.topRated")}
-          apiUrl={`/products/public?sortBy=rating&take=${TOP_RATED_LIMIT}`}
-          queryKey={queryKeys.products.list({
-            sortBy: "rating",
-            take: TOP_RATED_LIMIT,
-          })}
+          products={topRatedQuery.data}
+          loading={topRatedQuery.isPending}
           accentColor={colors.brandOrange}
           onAddToCart={handleAddToCartFromCarousel}
         />
       </View>
     ),
-    [t, handleAddToCartFromCarousel],
+    [t, handleAddToCartFromCarousel, topRatedQuery.data, topRatedQuery.isPending],
   );
 
   const handleBuyAgainAddToCart = useCallback(

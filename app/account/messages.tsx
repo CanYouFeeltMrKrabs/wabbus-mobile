@@ -10,17 +10,19 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
 import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { customerFetch } from "@/lib/api";
 import { getCaseStatusStyle } from "@/lib/orderStatus";
 import { ROUTES } from "@/lib/routes";
-import { queryKeys } from "@/lib/queryKeys";
+import {
+  useConversationsList,
+  useCasesList,
+  useTicketsList,
+} from "@/lib/queries";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import {
   relativeTime,
@@ -89,34 +91,28 @@ function MessagesContent() {
   const [filterTab, setFilterTab] = useState<FilterTab>("active");
   const [searchQuery, setSearchQuery] = useState("");
 
-  /* ── Conversations ──────────────────────────── */
-  const { data: conversationsRaw = [], isLoading: convosLoading } = useQuery({
-    queryKey: queryKeys.messages.conversations.list(),
-    queryFn: async () => {
-      const data = await customerFetch<any>(`/messages/conversations?limit=50`);
-      return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-    },
-  });
-  const conversations: Conversation[] = conversationsRaw;
+  /* ── Sealed query reads ─────────────────────── *
+   * Each typed hook owns its cache key, fetcher, and schema (validated via
+   * `parseOrThrow` inside `lib/queries/messages.ts`). Under the single-
+   * writer + canonical-shape invariant, the cache cannot hold a non-array
+   * value under any of these keys — the legacy `useMemo(unwrapList(...))`
+   * defenders that lived here previously were runtime tolerance for
+   * pre-sealed-layer shape inconsistency and are now dead code. Removed.
+   *
+   * Results are cast back to the local `Conversation` / `CustomerCase` /
+   * `SupportTicket` types via the §D.4 escape hatch because the row
+   * components and helpers in this file are typed against
+   * `lib/messages-types`. Both type families describe the same backend
+   * objects; the cast bridges them with zero runtime change.
+   * ──────────────────────────────────────────── */
+  const { data: conversationsData, isLoading: convosLoading } = useConversationsList();
+  const conversations = (conversationsData ?? []) as unknown as Conversation[];
 
-  /* ── Cases ──────────────────────────────────── */
-  const { data: cases = [], isLoading: casesLoading } = useQuery({
-    queryKey: queryKeys.messages.cases.list(),
-    queryFn: async () => {
-      const data = await customerFetch<any>(`/cases/mine?limit=50`);
-      return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-    },
-  });
+  const { data: casesData, isLoading: casesLoading } = useCasesList();
+  const cases = (casesData ?? []) as unknown as CustomerCase[];
 
-  /* ── Tickets ────────────────────────────────── */
-  const { data: ticketsRaw = [], isLoading: ticketsLoading } = useQuery({
-    queryKey: queryKeys.messages.tickets.list(),
-    queryFn: async () => {
-      const data = await customerFetch<any>(`/support/tickets?limit=50`);
-      return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-    },
-  });
-  const tickets: SupportTicket[] = ticketsRaw;
+  const { data: ticketsData, isLoading: ticketsLoading } = useTicketsList();
+  const tickets = (ticketsData ?? []) as unknown as SupportTicket[];
 
   /* ── Inline family expand state ─────────────── */
   const [expandedFamilyNumber, setExpandedFamilyNumber] = useState<string | null>(null);

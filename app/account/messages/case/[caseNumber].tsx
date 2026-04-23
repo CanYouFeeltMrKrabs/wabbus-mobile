@@ -20,26 +20,13 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
-import { queryKeys } from "@/lib/queryKeys";
+import { invalidate, useCaseDetail, useCaseMessages } from "@/lib/queries";
 import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/orderHelpers";
 import { pickDocument, uploadFileAuth, type PickedFile } from "@/lib/fileUpload";
 import { colors, spacing, borderRadius, fontSize, shadows } from "@/lib/theme";
 import i18n from "@/i18n";
-import type { CustomerCaseDetail } from "@/lib/messages-types";
-
-/* ── Types ───────────────────────────────────────────────────── */
-
-type CaseMessage = {
-  publicId?: string;
-  body: string;
-  senderType: string;
-  createdAt: string;
-  attachmentKey?: string | null;
-  attachmentFileName?: string | null;
-};
 
 /* ── Status / label helpers ──────────────────────────────────── */
 
@@ -97,7 +84,6 @@ function CaseDetailContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList>(null);
-  const queryClient = useQueryClient();
 
   /* ── Info expand state ─────────────────────────── */
   const [infoExpanded, setInfoExpanded] = useState(false);
@@ -112,36 +98,16 @@ function CaseDetailContent() {
   }, []);
 
   /* ── Case detail query ─────────────────────────── */
-  const {
-    data: caseDetail,
-    isLoading: detailLoading,
-    error: detailError,
-  } = useQuery({
-    queryKey: queryKeys.messages.cases.detail(caseNumber!),
-    queryFn: () => customerFetch<CustomerCaseDetail>(`/cases/by-id/${caseNumber}`),
-    enabled: !!caseNumber,
-  });
+  const caseDetailQuery = useCaseDetail(caseNumber);
+  const caseDetail = caseDetailQuery.data;
+  const detailLoading = caseDetailQuery.isLoading;
+  const detailError = caseDetailQuery.error;
 
   /* ── Case messages query ───────────────────────── */
-  const {
-    data: caseMessages = [],
-    isLoading: messagesLoading,
-    refetch: refetchMessages,
-  } = useQuery({
-    queryKey: queryKeys.messages.cases.messages(caseNumber!),
-    queryFn: async () => {
-      const data = await customerFetch<{ messages?: CaseMessage[] }>(
-        `/cases/by-id/${caseNumber}/messages`,
-      );
-      return Array.isArray(data?.messages)
-        ? data.messages
-        : Array.isArray(data)
-          ? (data as CaseMessage[])
-          : [];
-    },
-    enabled: !!caseNumber,
-    refetchInterval: 30_000,
-  });
+  const caseMessagesQuery = useCaseMessages(caseNumber, { refetchInterval: 30_000 });
+  const caseMessages = caseMessagesQuery.data ?? [];
+  const messagesLoading = caseMessagesQuery.isLoading;
+  const refetchMessages = caseMessagesQuery.refetch;
 
   /* ── Reply state ───────────────────────────────── */
   const [reply, setReply] = useState("");
@@ -191,14 +157,14 @@ function CaseDetailContent() {
       setReply("");
       setPendingAttachment(null);
       await refetchMessages();
-      queryClient.invalidateQueries({ queryKey: queryKeys.messages.cases.list() });
+      void invalidate.messages.cases.list();
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 200);
     } catch (e: any) {
       Alert.alert(t("common.error"), e.message || t("messages.caseDetail.errorSend"));
     } finally {
       setSending(false);
     }
-  }, [reply, pendingAttachment, caseNumber, queryClient, refetchMessages, t]);
+  }, [reply, pendingAttachment, caseNumber, refetchMessages, t]);
 
   /* ── Loading state ─────────────────────────────── */
 

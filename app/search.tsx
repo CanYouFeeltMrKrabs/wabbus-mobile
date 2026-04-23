@@ -33,12 +33,10 @@ import { colors, spacing, borderRadius } from "@/lib/theme";
 import { searchTypesense } from "@/lib/search";
 import { API_BASE } from "@/lib/config";
 import { useCart } from "@/lib/cart";
-import { fetchCategoriesClient, type CategoryLink } from "@/lib/categories";
 import type { PublicProduct, TypesenseHit } from "@/lib/types";
 import { computeBadges } from "@/lib/badges";
 import { PAGE_SIZE as PAGE_SIZES } from "@/lib/constants";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
+import { useProductsList, useCategoriesAll } from "@/lib/queries";
 import { trackEvent } from "@/lib/tracker";
 
 const PAGE_SIZE = PAGE_SIZES.PRODUCTS_SEARCH;
@@ -92,10 +90,9 @@ export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("");
   const [category, setCategory] = useState("");
-  const { data: categories = [] } = useQuery({
-    queryKey: queryKeys.categories.all(),
-    queryFn: fetchCategoriesClient,
-  });
+  const { data: categories = [] } = useCategoriesAll();
+
+  const noResultsRecommended = useProductsList({ take: 10, sortBy: "newest" });
   const [results, setResults] = useState<PublicProduct[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -286,7 +283,8 @@ export default function SearchScreen() {
           </View>
           <ProductRecommendationSlider
             title={t("search.recommendedForYou")}
-            apiUrl="/products/public?take=10&sortBy=newest"
+            products={noResultsRecommended.data}
+            loading={noResultsRecommended.isPending}
             accentColor={colors.brandBlue}
           />
           <RecentlyViewedSlider />

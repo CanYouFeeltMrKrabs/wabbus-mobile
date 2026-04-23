@@ -12,7 +12,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
@@ -20,12 +19,10 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { customerFetch, FetchError, AuthError } from "@/lib/api";
-import { queryKeys } from "@/lib/queryKeys";
+import { customerFetch } from "@/lib/api";
+import { invalidate, useAddressesList, type Address } from "@/lib/queries";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
 import { showToast } from "@/lib/toast";
-import type { Address } from "@/lib/types";
 
 type FormState = {
   label: string;
@@ -62,17 +59,6 @@ function splitFullName(fullName?: string): { firstName: string; lastName: string
   return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") };
 }
 
-/**
- * The backend may return addresses as a bare array, or wrapped in
- * { addresses: [] } or { data: [] }. Mirrors the web's normalizer.
- */
-function normalizeAddressList(payload: any): Address[] {
-  if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.addresses)) return payload.addresses;
-  if (payload && Array.isArray(payload.data)) return payload.data;
-  return [];
-}
-
 export default function AddressesScreen() {
   return (
     <RequireAuth>
@@ -86,36 +72,7 @@ export default function AddressesScreen() {
 function AddressesContent() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const { data: addresses = [], isLoading: loading, refetch: refetchAddresses } = useQuery({
-    queryKey: queryKeys.addresses.list(),
-    queryFn: async () => {
-      // Try primary endpoint first
-      try {
-        const data0 = await customerFetch<any>("/customer-addresses");
-        const list = normalizeAddressList(data0);
-        if (list.length > 0) return list;
-      } catch (e: any) {
-        if (e instanceof AuthError) throw e;
-        if (e instanceof FetchError && e.status !== 404) throw e;
-      }
-
-      // Fallback endpoint
-      try {
-        const dataA = await customerFetch<any>("/addresses");
-        const list = normalizeAddressList(dataA);
-        if (list.length > 0) return list;
-      } catch (e: any) {
-        if (e instanceof AuthError) throw e;
-        if (e instanceof FetchError && e.status !== 404) throw e;
-      }
-
-      // Last resort: pull from /customer-auth/me
-      const me = await customerFetch<any>("/customer-auth/me");
-      return normalizeAddressList(me?.addresses ?? []);
-    },
-  });
+  const { data: addresses = [], isLoading: loading } = useAddressesList();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -187,7 +144,7 @@ function AddressesContent() {
       setShowForm(false);
       setEditingId(null);
       setForm(EMPTY_FORM);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.addresses.all() });
+      await invalidate.addresses.all();
     } catch (e: any) {
       Alert.alert(t("common.error"), e.message || t("account.addresses.errorSave"));
     } finally {
@@ -220,7 +177,7 @@ function AddressesContent() {
           setBusyId(id);
           try {
             await customerFetch(`/customer-addresses/by-public-id/${id}`, { method: "DELETE" });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.addresses.all() });
+            await invalidate.addresses.all();
           } catch (e: any) {
             Alert.alert(t("common.error"), e.message || t("account.addresses.errorRemove"));
           } finally {

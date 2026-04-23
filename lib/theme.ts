@@ -54,6 +54,11 @@ export const colors = {
   rose500: "#f43f5e",
   violet500: "#8b5cf6",
   yellow600: "#ca8a04",
+  // Recently-viewed accent — Tailwind teal-500. Sits in the cyan/teal
+  // hole between `brandBlue` and `success`, distinct from every other
+  // section accent (rose / amber / violet / orange / green / blue) so
+  // the section reads as its own visual category at a glance.
+  teal500: "#14b8a6",
 
   // Primitives
   white: "#ffffff",

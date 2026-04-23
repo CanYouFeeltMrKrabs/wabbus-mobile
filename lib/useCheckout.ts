@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useQueryClient } from "@tanstack/react-query";
 import { initPaymentSheet, presentPaymentSheet, confirmPaymentSheetPayment } from "@stripe/stripe-react-native";
 import type { PaymentSheet } from "@stripe/stripe-react-native";
 import { customerFetch, publicFetch, AuthError } from "./api";
@@ -10,7 +9,7 @@ import { useAuth } from "./auth";
 import { useCart } from "./cart";
 import { mergeGuestCart } from "./mergeGuestCart";
 import { trackCustomerEvent } from "./customerTracker";
-import { queryKeys } from "@/lib/queryKeys";
+import { invalidate } from "@/lib/queries";
 import { ROUTES } from "@/lib/routes";
 import type {
   CheckoutAddress,
@@ -106,7 +105,6 @@ const IDEMPOTENCY_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
 export function useCheckout() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { user, authStatus, isLoggedIn, refresh: refreshAuth } = useAuth();
   const { items: cartItems, subtotalCents, clearCart, refreshCart } = useCart();
   const isGuest = authStatus === "unauthenticated";
@@ -721,10 +719,10 @@ export function useCheckout() {
     await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
     await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
     await clearCart();
-    queryClient.invalidateQueries({ queryKey: queryKeys.cart() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.orders.all() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.addresses.all() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.storeCredit() });
+    void invalidate.cart.all();
+    void invalidate.orders.all();
+    void invalidate.addresses.all();
+    void invalidate.storeCredit.all();
   }
 
   return {

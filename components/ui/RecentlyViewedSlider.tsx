@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 20,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.slate400,
+    backgroundColor: colors.teal500,
   },
   scrollContent: {
     paddingHorizontal: spacing[4],

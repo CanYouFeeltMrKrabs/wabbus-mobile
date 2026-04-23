@@ -17,13 +17,12 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery } from "@tanstack/react-query";
 import { customerFetch } from "@/lib/api";
 import { pickItemTitle, pickItemImage } from "@/lib/orderHelpers";
 import { FALLBACK_IMAGE } from "@/lib/config";
-import { queryKeys } from "@/lib/queryKeys";
+import { useOrderDetail, useMyCases } from "@/lib/queries";
 import { colors, spacing, borderRadius, shadows, fontSize } from "@/lib/theme";
-import type { Order, MissingIssueReason, ReturnResolution } from "@/lib/types";
+import type { MissingIssueReason, ReturnResolution } from "@/lib/types";
 
 type MissingOrderItem = {
   publicId?: string | null;
@@ -82,27 +81,14 @@ function MissingContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { data: orderData, isLoading: orderLoading } = useQuery({
-    queryKey: queryKeys.orders.detail(id!),
-    queryFn: () => customerFetch<any>(`/orders/by-public-id/${id}`),
-    enabled: !!id,
-  });
+  const { data: order, isLoading: orderLoading } = useOrderDetail(id);
 
-  const { data: casesRaw, isLoading: casesLoading } = useQuery({
-    queryKey: ["cases", "mine", id],
-    queryFn: () => customerFetch<any>("/cases/mine"),
-    enabled: !!id,
-  });
+  const { data: casesRaw, isLoading: casesLoading } = useMyCases(id);
 
-  const order = (orderData?.order ?? orderData ?? null) as Order | null;
   const loading = orderLoading || casesLoading;
 
   const pendingCaseItems = useMemo(() => {
-    const cases: any[] = Array.isArray(casesRaw?.data)
-      ? casesRaw.data
-      : Array.isArray(casesRaw)
-        ? casesRaw
-        : [];
+    const cases = (casesRaw ?? []) as any[];
     const pending = new Set<string>();
     for (const c of cases) {
       if (c.order?.publicId !== id) continue;

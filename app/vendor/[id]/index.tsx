@@ -9,9 +9,8 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import ProductCard from "@/components/ui/ProductCard";
 import Icon from "@/components/ui/Icon";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
 import { publicFetch } from "@/lib/api";
+import { useVendorDetail, useVendorProducts, type VendorProfile } from "@/lib/queries";
 import { vendorLogoUrl } from "@/lib/image";
 import { formatDate } from "@/lib/orderHelpers";
 import { useCart } from "@/lib/cart";
@@ -22,18 +21,6 @@ import type { PublicProduct } from "@/lib/types";
 import { PAGE_SIZE as PAGE_SIZES } from "@/lib/constants";
 
 const PAGE_SIZE = PAGE_SIZES.PRODUCTS;
-
-type VendorProfile = {
-  publicId: string;
-  name: string;
-  slug?: string;
-  shortBio?: string | null;
-  logoUrl?: string | null;
-  locationCity?: string | null;
-  locationState?: string | null;
-  locationCountry?: string | null;
-  createdAt?: string;
-};
 
 function buildLocation(v: VendorProfile): string | null {
   const parts = [v.locationCity, v.locationState, v.locationCountry].filter(Boolean);
@@ -67,27 +54,15 @@ export default function VendorScreen() {
 
   const [sort, setSort] = useState("newest");
 
-  const { data: vendor, isLoading: vendorLoading } = useQuery({
-    queryKey: queryKeys.vendors.detail(id!),
-    queryFn: () => publicFetch<VendorProfile>(`/public/vendors/by-public-id/${id}`),
-    enabled: !!id,
-  });
+  const { data: vendor, isLoading: vendorLoading } = useVendorDetail(id);
 
-  const { data: productsRaw, isLoading: productsLoading } = useQuery({
-    queryKey: queryKeys.vendors.products(id!, { sort }),
-    queryFn: () =>
-      publicFetch<any>(`/products/public?vendorPublicId=${id}&take=${PAGE_SIZE}&skip=0&sortBy=${sort}`),
-    enabled: !!id,
-    placeholderData: keepPreviousData,
-  });
+  const { data: productsData, isLoading: productsLoading } = useVendorProducts(
+    id,
+    { sort },
+  );
 
-  const baseProducts = useMemo(() => normalizeProducts(productsRaw), [productsRaw]);
-  const totalCount =
-    typeof productsRaw?.total === "number"
-      ? productsRaw.total
-      : typeof productsRaw?.totalCount === "number"
-        ? productsRaw.totalCount
-        : null;
+  const baseProducts = productsData?.products ?? [];
+  const totalCount = productsData?.totalCount ?? null;
 
   const [extraProducts, setExtraProducts] = useState<PublicProduct[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);

@@ -37,8 +37,6 @@ import { SkeletonGrid, SkeletonSlider } from "@/components/ui/Skeleton";
 import RecentlyViewedSlider from "@/components/ui/RecentlyViewedSlider";
 import { useTranslation } from "@/hooks/useT";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
-import { API_BASE } from "@/lib/config";
-import { customerFetch, NetworkError } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { getCategoryIcon, CATEGORY_SHORT_NAMES } from "@/lib/categories";
 import { ROUTES } from "@/lib/routes";
@@ -47,47 +45,15 @@ import { getLocalizedCategoryName } from "@/lib/types";
 import { searchTypesense } from "@/lib/search";
 import { productImageUrl } from "@/lib/image";
 import { PAGE_SIZE } from "@/lib/constants";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
+import {
+  useRecommendationsHome,
+  useRecommendationsStrategy,
+  useTrendingCategories,
+  useProductsList,
+} from "@/lib/queries";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PRODUCTS_HOME = PAGE_SIZE.PRODUCTS_HOME;
-
-function normalizeProducts(data: unknown): PublicProduct[] {
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === "object" && "products" in data) {
-    return (data as any).products ?? [];
-  }
-  return [];
-}
-
-/**
- * Public-endpoint JSON fetch.
- *
- * Distinguishes transport failure from server failure:
- *   - Transport failure (DNS, TLS, no network, timeout) → throws
- *     `NetworkError` so the surrounding `useQuery` rejects, retries
- *     per `retry: 1`, and is re-driven by `onlineManager` when the
- *     radio comes back online (see `lib/queryClientBootstrap.ts`).
- *   - Non-2xx HTTP response → returns `null`. The endpoint reached
- *     the server, so no amount of reconnect-retry is going to change
- *     the answer; callers handle null as "no data" and render their
- *     empty state.
- *
- * Replaces an earlier `try { ... } catch { return null; }` shape that
- * silently turned cold-radio launches into permanently-empty UIs by
- * masking transport failures as successful empty results.
- */
-async function fetchJSON(url: string) {
-  let res: Response;
-  try {
-    res = await fetch(url);
-  } catch {
-    throw new NetworkError();
-  }
-  if (!res.ok) return null;
-  return await res.json();
-}
 
 export default function HomeScreen() {
   const { t } = useTranslation();
@@ -95,55 +61,33 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { addToCart } = useCart();
 
-  const { data: bestsellers = [] } = useQuery({
-    queryKey: queryKeys.products.list({ sortBy: "bestselling", take: 12 }),
-    queryFn: async () => {
-      const data = await fetchJSON(`${API_BASE}/products/public?take=12&sortBy=bestselling`);
-      return normalizeProducts(data);
-    },
-  });
+  const { data: bestsellers = [] } = useProductsList({ sortBy: "bestselling", take: 12 });
 
-  const { data: topRated = [] } = useQuery({
-    queryKey: queryKeys.products.list({ sortBy: "rating", take: 12 }),
-    queryFn: async () => {
-      const data = await fetchJSON(`${API_BASE}/products/public?take=12&sortBy=rating`);
-      return normalizeProducts(data);
-    },
-  });
+  const { data: topRated = [] } = useProductsList({ sortBy: "rating", take: 12 });
 
-  const { data: trendingCats = [] } = useQuery<Array<{ name: string; slug: string }>>({
-    queryKey: queryKeys.recommendations.strategy("trending-categories"),
-    queryFn: async () => {
-      const data = await fetchJSON(`${API_BASE}/recommendations/trending-categories?limit=8&days=14`);
-      if (data?.categories && Array.isArray(data.categories)) return data.categories;
-      if (Array.isArray(data)) return data;
-      return [];
-    },
-  });
+  const { data: trendingCats = [] } = useTrendingCategories();
 
-  const { data: recoData, isLoading: loading } = useQuery({
-    queryKey: queryKeys.recommendations.home(),
-    queryFn: async () => {
-      try {
-        const recoResult = await customerFetch<{ products?: PublicProduct[]; personalized?: boolean }>(
-          `/recommendations?context=home&take=${PRODUCTS_HOME}`,
-        );
-        return {
-          products: recoResult?.products ?? ([] as PublicProduct[]),
-          personalized: !!recoResult?.personalized,
-        };
-      } catch {
-        const fallback = await fetchJSON(`${API_BASE}/products/public?take=${PRODUCTS_HOME}&skip=0`);
-        return {
-          products: normalizeProducts(fallback),
-          personalized: false,
-        };
-      }
-    },
-  });
+  // Sealed-layer migration (plan §4b / §E.3): the home recommendations
+  // envelope is now read through the typed hook. `take` is part of the
+  // cache key, so this surface (PRODUCTS_HOME=36) does NOT collide with
+  // the "browse more" page (take=200) — closes the second known latent
+  // shape collision. See lib/queries/recommendations.ts header for the
+  // full rationale.
+  const { data: recoData, isLoading: loading } = useRecommendationsHome(
+    PRODUCTS_HOME,
+  );
 
-  const recommended = recoData?.products ?? [];
+  const recommended = (recoData?.products ?? []) as PublicProduct[];
   const recoLabel = recoData?.personalized ? t("home.pickedForYou") : t("home.recommendedForYou");
+
+  // Slider feeds — each hook owns one cache key in the sealed
+  // recommendations layer. Empty/loading/render semantics preserved
+  // verbatim by ProductRecommendationSlider's presentational contract.
+  const trendingNow = useRecommendationsStrategy("trending");
+  const newArrivals = useRecommendationsStrategy("new_arrivals");
+  const todaysDeals = useRecommendationsStrategy("deals");
+
+  const suggestionsForYou = useProductsList({ take: 10, sortBy: "newest" });
 
   const handleAddToCart = useCallback(
     (product: PublicProduct) => {
@@ -330,8 +274,8 @@ export default function HomeScreen() {
           {/* Trending Now — inside hero to match web HomeHero layout */}
           <ProductRecommendationSlider
             title={t("home.trendingNow")}
-            apiUrl="/recommendations?context=home&strategy=trending&take=10"
-            queryKey={queryKeys.recommendations.strategy("trending")}
+            products={trendingNow.data as PublicProduct[] | undefined}
+            loading={trendingNow.isPending}
             accentColor={colors.rose500}
             onAddToCart={handleAddToCart}
           />
@@ -340,7 +284,8 @@ export default function HomeScreen() {
         {/* Suggestions — newest products (web: inline after hero) */}
         <ProductRecommendationSlider
           title={t("home.suggestionsForYou")}
-          apiUrl="/products/public?take=10&sortBy=newest"
+          products={suggestionsForYou.data}
+          loading={suggestionsForYou.isPending}
           accentColor={colors.brandBlue}
           onAddToCart={handleAddToCart}
         />
@@ -385,8 +330,8 @@ export default function HomeScreen() {
         {/* New Arrivals — 14-day window */}
         <ProductRecommendationSlider
           title={t("home.newArrivals")}
-          apiUrl="/recommendations?context=home&strategy=new_arrivals&take=10"
-          queryKey={queryKeys.recommendations.strategy("new_arrivals")}
+          products={newArrivals.data as PublicProduct[] | undefined}
+          loading={newArrivals.isPending}
           accentColor={colors.violet500}
           onAddToCart={handleAddToCart}
         />
@@ -436,7 +381,8 @@ export default function HomeScreen() {
         {/* Today's Deals — discount-sorted */}
         <ProductRecommendationSlider
           title={t("home.todaysDeals")}
-          apiUrl="/recommendations?context=home&strategy=deals&take=10"
+          products={todaysDeals.data as PublicProduct[] | undefined}
+          loading={todaysDeals.isPending}
           accentColor={colors.warning}
           onAddToCart={handleAddToCart}
         />

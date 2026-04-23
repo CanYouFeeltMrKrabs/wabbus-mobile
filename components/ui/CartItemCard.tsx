@@ -48,7 +48,13 @@ export default function CartItemCard({ item, onUpdateQty, onRemove, onSaveForLat
                 {item.title}
               </AppText>
             </Pressable>
-            <AppText variant="label" weight="semibold" style={styles.price}>
+            <AppText 
+              variant="label" 
+              weight="semibold" 
+              style={styles.price}
+              adjustsFontSizeToFit={true}
+              numberOfLines={1}
+            >
               {formatMoney(lineTotal)}
             </AppText>
           </View>
@@ -81,8 +87,8 @@ export default function CartItemCard({ item, onUpdateQty, onRemove, onSaveForLat
               onPress={() => { setSaved(true); onSaveForLater(item); }}
               disabled={saved}
             >
-              <Icon name={saved ? "favorite" : "favorite-border"} size={14} color={saved ? colors.brandBlueDark : colors.muted} />
-              <AppText variant="caption" color={saved ? colors.brandBlueDark : colors.muted}>
+              <Icon name={saved ? "favorite" : "favorite-border"} size={14} color={saved ? colors.brandBlueDark : colors.brandBlue} />
+              <AppText variant="caption" color={saved ? colors.brandBlueDark : colors.brandBlue} weight="medium">
                 {saved ? t("common.saved") : t("common.saveForLater")}
               </AppText>
             </Pressable>
@@ -139,6 +145,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     fontWeight: "bold",
+    width: 110,
+    textAlign: "right",
   },
   qtyRow: {
     flexDirection: "row",
@@ -188,8 +196,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[1],
     paddingHorizontal: spacing[3],
     borderWidth: 1,
-    borderColor: colors.slate200,
+    borderColor: colors.brandBlueBorder,
     borderRadius: borderRadius.full,
+    backgroundColor: "rgba(239, 246, 255, 0.5)",
   },
   saveBtnActive: {
     borderColor: colors.brandBlueBorder,

@@ -8,26 +8,14 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import RequireAuth from "@/components/ui/RequireAuth";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
-import { customerFetch } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { productImageUrl } from "@/lib/image";
 import { formatDate, pickItemTitle, pickItemImage, pickUnitPriceCents, orderTotalCents } from "@/lib/orderHelpers";
+import { useOrderDetail, useRecommendationsPostPurchase } from "@/lib/queries";
 import { ROUTES } from "@/lib/routes";
 import { trackEvent } from "@/lib/tracker";
 import { colors, spacing, borderRadius, shadows } from "@/lib/theme";
-import type { OrderItem } from "@/lib/types";
-
-type OrderResponse = {
-  publicId?: string;
-  orderNumber?: string | null;
-  status: string;
-  totalAmount?: string | number | null;
-  currency?: string | null;
-  createdAt: string;
-  items?: OrderItem[] | null;
-};
+import type { OrderItem, PublicProduct } from "@/lib/types";
 
 export default function OrderCompleteScreen() {
   return (
@@ -47,11 +35,16 @@ function OrderCompleteContent() {
     if (orderId) void trackEvent("purchase", { metadata: { orderId } });
   }, [orderId]);
 
-  const { data: order, isLoading: loading, isError } = useQuery({
-    queryKey: queryKeys.orders.detail(orderId!),
-    queryFn: () => customerFetch<OrderResponse>(`/orders/by-public-id/${encodeURIComponent(orderId!)}`),
-    enabled: !!orderId,
-  });
+  // Sealed-layer migration (plan §3.2 — orders.detail caller, §4b —
+  // recommendations.postPurchase caller). Both reads now go through
+  // typed hooks; no direct queryKeys/useQuery imports remain.
+  const { data: order, isLoading: loading, isError } = useOrderDetail(orderId);
+
+  // Post-purchase recommendations rail. The hook gates on truthy orderId
+  // internally, so passing the canonical publicId-or-fallback identity
+  // here is safe — undefined just disables the query.
+  const postPurchaseId = order?.publicId ?? orderId;
+  const postPurchase = useRecommendationsPostPurchase(postPurchaseId);
 
   const error = !orderId
     ? t("orderComplete.noOrderRef")
@@ -203,8 +196,8 @@ function OrderCompleteContent() {
             <View style={s.recsSection}>
               <ProductRecommendationSlider
                 title={t("orderComplete.basedOnYourPurchase")}
-                apiUrl={`/recommendations?context=post_purchase&orderId=${encodeURIComponent(order.publicId ?? orderId ?? "")}&take=10`}
-                queryKey={queryKeys.recommendations.postPurchase(order.publicId ?? orderId ?? "")}
+                products={postPurchase.data as PublicProduct[] | undefined}
+                loading={postPurchase.isPending}
                 accentColor={colors.success}
               />
             </View>

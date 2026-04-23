@@ -18,8 +18,7 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import BackButton from "@/components/ui/BackButton";
 import RequireAuth from "@/components/ui/RequireAuth";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
+import { useOrderDetail, useOrdersList } from "@/lib/queries";
 import { customerFetch } from "@/lib/api";
 import { productImageUrl } from "@/lib/image";
 import { ROUTES } from "@/lib/routes";
@@ -141,34 +140,51 @@ function MessageSellerWizard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data: orderData, isLoading: loading } = useQuery({
-    queryKey: queryKeys.orders.detail(orderId ?? "__none__"),
-    queryFn: async () => {
-      if (!orderId) return [];
-      const data = await customerFetch<any>(`/orders/by-public-id/${orderId}`);
-      const order = data?.order ?? data;
-      let parsed = parseOrderItems(order);
+  // Sealed-layer migration (plan §3.2 Rule B — outlier-first).
+  //
+  // Legacy behavior was: a single useQuery that fetched the order, parsed it
+  // into SelectableItem[], and — if that yielded zero items — fell back to
+  // fetching the entire orders list and parsing every order. The result was
+  // then cached under `orders.detail(id)`, which silently corrupted the cache
+  // for every other consumer of that key (see handoff: query-key shape
+  // collisions).
+  //
+  // The new shape:
+  //   • useOrderDetail(orderId) reads the canonical Order under the orders
+  //     detail key (no longer SelectableItem[]).
+  //   • useOrdersList runs ONLY when the primary order yields zero parseable
+  //     items, gated by `enabled`. It is the same hook every other list-caller
+  //     uses, so the fallback shares the cache entry instead of duplicating it.
+  //   • SelectableItem[] is derived locally via useMemo. It is a UI projection,
+  //     not server state, so it never enters the query cache.
+  //
+  // Loading semantics are preserved: the spinner stays up while either the
+  // primary or the fallback (when needed) is in-flight, matching the legacy
+  // single-queryFn waterfall.
+  const orderQuery = useOrderDetail(orderId);
 
-      if (parsed.length === 0) {
-        const allData = await customerFetch<any>("/orders?limit=50");
-        const orders: any[] = Array.isArray(allData?.data)
-          ? allData.data
-          : Array.isArray(allData?.orders)
-            ? allData.orders
-            : Array.isArray(allData)
-              ? allData
-              : [];
-        for (const o of orders) {
-          parsed.push(...parseOrderItems(o));
-        }
-      }
+  const primaryItems = useMemo<SelectableItem[]>(
+    () => (orderQuery.data ? parseOrderItems(orderQuery.data) : []),
+    [orderQuery.data],
+  );
 
-      return parsed;
-    },
-    enabled: !!orderId,
-  });
+  const fallbackEnabled =
+    !!orderId && orderQuery.isSuccess && primaryItems.length === 0;
 
-  const items: SelectableItem[] = Array.isArray(orderData) ? orderData : [];
+  const ordersListQuery = useOrdersList(undefined, { enabled: fallbackEnabled });
+
+  const items = useMemo<SelectableItem[]>(() => {
+    if (primaryItems.length > 0) return primaryItems;
+    if (!fallbackEnabled || !ordersListQuery.data) return [];
+    const all: SelectableItem[] = [];
+    for (const o of ordersListQuery.data.data) {
+      all.push(...parseOrderItems(o));
+    }
+    return all;
+  }, [primaryItems, fallbackEnabled, ordersListQuery.data]);
+
+  const loading =
+    orderQuery.isLoading || (fallbackEnabled && ordersListQuery.isLoading);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("select");
