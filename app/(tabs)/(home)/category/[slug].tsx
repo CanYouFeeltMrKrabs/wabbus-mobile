@@ -146,6 +146,10 @@ export default function CategoryScreen() {
   // `@/lib/queries` (products, categories, recommendations).
   const newInQuery = useCategoryNewArrivals(slug, { enabled: !!slug });
   const trendingNow = useRecommendationsStrategy("trending", { enabled: !!slug });
+  const bestsellersFallback = useProductsList(
+    { take: CAROUSEL_LIMIT, sortBy: "bestselling" },
+    { enabled: !!slug },
+  );
   const suggestionsForYou = useProductsList(
     { take: CAROUSEL_LIMIT, sortBy: "newest" },
     { enabled: !!slug },
@@ -156,6 +160,7 @@ export default function CategoryScreen() {
 
   const renderCarouselRail = useCallback(() => {
     if (!slug) return null;
+    const hasTrending = !!trendingNow.data?.length;
     return (
       <View style={styles.footerRecos}>
         <ProductRecommendationSlider
@@ -166,10 +171,10 @@ export default function CategoryScreen() {
           onAddToCart={handleAddToCart}
         />
         <ProductRecommendationSlider
-          title={t("home.trendingNow")}
-          products={trendingNow.data as PublicProduct[] | undefined}
-          loading={trendingNow.isPending}
-          accentColor={colors.rose500}
+          title={hasTrending ? t("home.trendingNow") : t("home.bestsellers")}
+          products={hasTrending ? (trendingNow.data as PublicProduct[]) : bestsellersFallback.data}
+          loading={trendingNow.isPending && !bestsellersFallback.data?.length}
+          accentColor={hasTrending ? colors.rose500 : colors.warning}
           onAddToCart={handleAddToCart}
         />
         <ProductRecommendationSlider
@@ -197,6 +202,7 @@ export default function CategoryScreen() {
     newInQuery.isPending,
     trendingNow.data,
     trendingNow.isPending,
+    bestsellersFallback.data,
     suggestionsForYou.data,
     suggestionsForYou.isPending,
     categoryRecos.data,

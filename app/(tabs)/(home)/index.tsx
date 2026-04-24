@@ -271,12 +271,11 @@ export default function HomeScreen() {
         style={styles.scrollView}
       >
         <HeroCarousel>
-          {/* Trending Now — inside hero to match web HomeHero layout */}
           <ProductRecommendationSlider
-            title={t("home.trendingNow")}
-            products={trendingNow.data as PublicProduct[] | undefined}
-            loading={trendingNow.isPending}
-            accentColor={colors.rose500}
+            title={trendingNow.data?.length ? t("home.trendingNow") : t("home.bestsellers")}
+            products={trendingNow.data?.length ? (trendingNow.data as PublicProduct[]) : bestsellers.length ? bestsellers : undefined}
+            loading={trendingNow.isPending && !bestsellers.length}
+            accentColor={trendingNow.data?.length ? colors.rose500 : colors.warning}
             onAddToCart={handleAddToCart}
           />
         </HeroCarousel>

@@ -120,17 +120,19 @@ export default function ShopScreen() {
   );
 
   const trendingNow = useRecommendationsStrategy("trending");
+  const bestsellersFallback = useProductsList({ take: CAROUSEL_LIMIT, sortBy: "bestselling" });
   const suggestionsForYou = useProductsList({ take: CAROUSEL_LIMIT, sortBy: "newest" });
   const recoData = useRecommendationsHome(CAROUSEL_LIMIT);
 
   const renderCarouselRail = useCallback(() => {
+    const hasTrending = !!trendingNow.data?.length;
     return (
       <View style={styles.footerRecos}>
         <ProductRecommendationSlider
-          title={t("home.trendingNow")}
-          products={trendingNow.data as PublicProduct[] | undefined}
-          loading={trendingNow.isPending}
-          accentColor={colors.rose500}
+          title={hasTrending ? t("home.trendingNow") : t("home.bestsellers")}
+          products={hasTrending ? (trendingNow.data as PublicProduct[]) : bestsellersFallback.data}
+          loading={trendingNow.isPending && !bestsellersFallback.data?.length}
+          accentColor={hasTrending ? colors.rose500 : colors.warning}
           onAddToCart={handleAddToCart}
         />
         <ProductRecommendationSlider
@@ -155,6 +157,7 @@ export default function ShopScreen() {
     handleAddToCart,
     trendingNow.data,
     trendingNow.isPending,
+    bestsellersFallback.data,
     suggestionsForYou.data,
     suggestionsForYou.isPending,
     recoData.data?.products,
