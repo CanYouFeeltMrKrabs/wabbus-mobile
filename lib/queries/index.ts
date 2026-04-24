@@ -66,6 +66,7 @@ export {
   useRecommendationsContext,
   useRecommendationsProduct,
   useRecommendationsPostPurchase,
+  useRecommendationsCart,
 } from "./recommendations";
 export type {
   HomeRecommendations,

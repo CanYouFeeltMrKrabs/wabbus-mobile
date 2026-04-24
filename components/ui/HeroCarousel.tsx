@@ -46,7 +46,7 @@ export default function HeroCarousel({ children }: { children?: React.ReactNode 
 
         <Pressable
           style={styles.ctaButton}
-          onPress={() => router.push(ROUTES.searchWithSort("bestselling") as any)}
+          onPress={() => router.push(ROUTES.shop as any)}
         >
           <AppText weight="black" color={colors.black} style={{ fontSize: 16, letterSpacing: 0.5 }}>
             SHOP NOW
@@ -167,7 +167,8 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: colors.white,
     borderRadius: 20,
-    paddingVertical: spacing[4],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[0],
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,

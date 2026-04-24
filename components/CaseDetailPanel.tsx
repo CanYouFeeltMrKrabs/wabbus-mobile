@@ -184,9 +184,9 @@ export default function CaseDetailPanel({ caseNumber, onClose, onBack }: Props) 
   }
 
   const status = STATUS_CONFIG[detail.status] ?? STATUS_CONFIG.OPEN;
-  const intentLabel =
-    INTENT_LABELS[detail.resolutionIntent] ??
-    detail.resolutionIntent.replace(/_/g, " ");
+  const intentLabel = detail.resolutionIntent
+    ? (INTENT_LABELS[detail.resolutionIntent] ?? detail.resolutionIntent.replace(/_/g, " "))
+    : null;
 
   return (
     <View style={styles.container}>

@@ -106,13 +106,13 @@ export default ProductRecommendationSlider;
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: spacing[4],
+    marginVertical: spacing[2],
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
-    marginBottom: spacing[4],
+    marginBottom: spacing[3],
     paddingHorizontal: spacing[4],
   },
   accent: {

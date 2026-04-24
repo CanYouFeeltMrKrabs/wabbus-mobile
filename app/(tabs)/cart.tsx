@@ -8,9 +8,8 @@ import AppButton from "@/components/ui/AppButton";
 import Icon from "@/components/ui/Icon";
 import CartItemCard from "@/components/ui/CartItemCard";
 import CartSummary from "@/components/ui/CartSummary";
-import CartRecommendations from "@/components/ui/CartRecommendations";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
-import { useRecommendationsStrategy } from "@/lib/queries";
+import { useRecommendationsStrategy, useRecommendationsCart } from "@/lib/queries";
 import { useCart } from "@/lib/cart";
 import type { PublicProduct } from "@/lib/types";
 import { addToWishlist } from "@/lib/wishlist";
@@ -23,12 +22,26 @@ export default function CartScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { items, subtotalCents, updateQuantity, removeItem } = useCart();
+  const { items, subtotalCents, updateQuantity, removeItem, addToCart } = useCart();
 
-  // Empty-cart trending carousel — sealed-layer migration §4b/§E.3.
-  // Hook is always-mounted so the cache primes ahead of the empty state;
-  // matches the legacy slider's eager-fetch behaviour.
   const trendingNow = useRecommendationsStrategy("trending");
+  const cartProductIds = items.map((i) => i.productId).filter(Boolean) as string[];
+  const cartRecos = useRecommendationsCart(cartProductIds);
+
+  const handleAddToCart = useCallback(
+    (product: PublicProduct) => {
+      if (!product.defaultVariantPublicId) return;
+      addToCart({
+        variantPublicId: product.defaultVariantPublicId,
+        price: product.price,
+        title: product.title,
+        image: product.image || "",
+        productId: product.productId,
+        slug: product.slug,
+      });
+    },
+    [addToCart],
+  );
 
   const handleRemove = useCallback(
     (publicId: string) => {
@@ -109,7 +122,13 @@ export default function CartScreen() {
         showsVerticalScrollIndicator={false}
         ListFooterComponent={
           <View style={styles.footerInner}>
-            <CartRecommendations cart={items} />
+            <ProductRecommendationSlider
+              title={t("common.youMightAlsoLike")}
+              products={cartRecos.data as PublicProduct[] | undefined}
+              loading={cartRecos.isPending}
+              accentColor={colors.brandBlue}
+              onAddToCart={handleAddToCart}
+            />
           </View>
         }
       />

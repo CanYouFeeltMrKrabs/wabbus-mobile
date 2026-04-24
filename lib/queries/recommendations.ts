@@ -157,6 +157,8 @@ const keys = {
     ["recommendations", "product", productId, type] as const,
   postPurchase: (orderId: string) =>
     ["recommendations", "post_purchase", String(orderId)] as const,
+  cart: (sortedIds: string) =>
+    ["recommendations", "cart", sortedIds] as const,
 };
 
 // ─── Per-hook options ─────────────────────────────────────────────────────
@@ -392,6 +394,32 @@ async function fetchRecommendationsPostPurchase(
   );
 }
 
+/**
+ * Fetch cart-context recommendations. POST endpoint that accepts the
+ * product IDs currently in the cart and returns related products.
+ * The sorted+joined ID string is the cache key discriminator so adding/
+ * removing a cart item busts the cache automatically.
+ */
+async function fetchRecommendationsCart(
+  productIds: string[],
+): Promise<PublicProductReco[]> {
+  const sortedKey = [...productIds].sort().join(",");
+  try {
+    const res = await fetch(`${API_BASE}/recommendations/cart`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ productIds }),
+    });
+    if (!res.ok) return [];
+    const raw = await res.json();
+    const list = extractProducts(raw);
+    return filterValidItems(PublicProductSchema, list, keys.cart(sortedKey));
+  } catch {
+    return [];
+  }
+}
+
 // ─── Public read hooks (the only legal read path for recommendations) ───
 
 /**
@@ -519,6 +547,24 @@ export function useRecommendationsPostPurchase(
     queryFn: () => fetchRecommendationsPostPurchase(orderId!),
     staleTime: RECS_SLIDER_STALE_TIME_MS,
     enabled: (options?.enabled ?? true) && !!orderId,
+  });
+}
+
+/**
+ * Read cart-context recommendations. The cache key includes a sorted,
+ * comma-joined string of all product IDs in the cart so it auto-busts
+ * when the cart changes. Disabled when the cart is empty.
+ */
+export function useRecommendationsCart(
+  productIds: string[],
+  options?: QueryOpts,
+): UseQueryResult<PublicProductReco[], Error> {
+  const sortedKey = [...productIds].sort().join(",");
+  return useQuery({
+    queryKey: keys.cart(sortedKey),
+    queryFn: () => fetchRecommendationsCart(productIds),
+    staleTime: RECS_SLIDER_STALE_TIME_MS,
+    enabled: (options?.enabled ?? true) && productIds.length > 0,
   });
 }
 

@@ -196,7 +196,7 @@ function CaseDetailContent() {
   }
 
   const status = STATUS_CONFIG[caseDetail.status] ?? STATUS_CONFIG.OPEN;
-  const intentLabel = INTENT_LABELS[caseDetail.resolutionIntent] ?? caseDetail.resolutionIntent?.replace(/_/g, " ");
+  const intentLabel = caseDetail.resolutionIntent ? (INTENT_LABELS[caseDetail.resolutionIntent] ?? caseDetail.resolutionIntent.replace(/_/g, " ")) : null;
   const isClosed = ["CLOSED", "RESOLVED", "RESOLVED_GRACE"].includes(
     (caseDetail.status ?? "").toUpperCase(),
   );

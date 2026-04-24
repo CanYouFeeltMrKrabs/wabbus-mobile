@@ -1007,6 +1007,12 @@
     "recommended": "Rekomendasi",
     "noRecommendations": "Belum ada rekomendasi"
   },
+  "shop": {
+    "title": "Belanja Semua Produk",
+    "noProducts": "Tidak ada produk yang tersedia saat ini.",
+    "browseAll": "Kembali ke beranda",
+    "couldNotLoad": "Gagal memuat produk. Silakan coba lagi."
+  },
   "legal": {
     "terms": {
       "title": "Ketentuan Layanan",

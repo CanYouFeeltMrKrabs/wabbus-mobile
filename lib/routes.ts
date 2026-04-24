@@ -75,6 +75,8 @@ export const ROUTES = {
   // Impersonation
   impersonate: "/impersonate" as const,
 
+  shop: "/shop" as const,
+  shopWithSort: (sort: string) => `/shop?sort=${sort}` as const,
   recommended: "/recommended" as const,
 
   // Legal

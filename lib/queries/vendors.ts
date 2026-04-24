@@ -42,7 +42,7 @@ import {
   keepPreviousData,
   type UseQueryResult,
 } from "./_internal/react-query";
-import { parseOrThrow } from "./_validate";
+import { parseOrThrow, filterValidItems } from "./_validate";
 import { PublicProductSchema, type PublicProduct } from "./products";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────
@@ -187,11 +187,7 @@ async function fetchVendorProducts(
     `/products/public?vendorPublicId=${encodeURIComponent(publicId)}&take=${VENDOR_PRODUCTS_PAGE_SIZE}&skip=0&sortBy=${encodeURIComponent(sortBy)}`,
   );
   const list = extractProducts(raw);
-  const products = parseOrThrow(
-    v.array(PublicProductSchema),
-    list,
-    keys.products(publicId, params),
-  );
+  const products = filterValidItems(PublicProductSchema, list, keys.products(publicId, params));
   return { products, totalCount: extractTotalCount(raw) };
 }
 
@@ -209,8 +205,8 @@ async function fetchVendorMoreProducts(
     `/products/public?vendorPublicId=${encodeURIComponent(publicId)}&take=${VENDOR_MORE_FETCH_LIMIT}&sortBy=newest`,
   );
   const list = extractProducts(raw);
-  const products = parseOrThrow(
-    v.array(PublicProductSchema),
+  const products = filterValidItems(
+    PublicProductSchema,
     list,
     keys.products(publicId, normalizeListParams({ take: VENDOR_MORE_FETCH_LIMIT, sortBy: "newest" })),
   );

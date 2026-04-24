@@ -215,8 +215,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: colors.gray100,
     ...shadows.sm,
   },
   pressed: { opacity: 0.95, transform: [{ scale: 0.98 }] },

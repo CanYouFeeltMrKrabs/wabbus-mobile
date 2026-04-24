@@ -139,7 +139,7 @@ const ProductDetailSchema = v.looseObject({
   slug: v.string(),
   title: v.string(),
   description: v.nullable(v.string()),
-  image: v.nullable(v.string()),
+  image: v.optional(v.nullable(v.string())),
   images: v.optional(
     v.nullable(
       v.array(
@@ -153,13 +153,13 @@ const ProductDetailSchema = v.looseObject({
       ),
     ),
   ),
-  price: v.number(),
+  price: v.optional(v.nullable(v.number())),
   compareAtPrice: NullishNumber,
   defaultVariantPublicId: NullishString,
-  ratingAvg: v.number(),
-  reviewCount: v.number(),
+  ratingAvg: v.optional(v.number()),
+  reviewCount: v.optional(v.number()),
   soldCount: v.optional(v.number()),
-  vendorName: v.nullable(v.string()),
+  vendorName: v.optional(v.nullable(v.string())),
   vendorPublicId: NullishString,
   categoryId: NullishNumber,
   badges: v.optional(v.array(PublicProductBadgeSchema)),

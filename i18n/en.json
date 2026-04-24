@@ -1144,6 +1144,12 @@
     "recommended": "Recommended",
     "noRecommendations": "No recommendations yet"
   },
+  "shop": {
+    "title": "Shop All Products",
+    "noProducts": "No products available right now.",
+    "browseAll": "Back to home",
+    "couldNotLoad": "Couldn't load products. Please try again."
+  },
   "legal": {
     "terms": {
       "title": "Terms of Service",

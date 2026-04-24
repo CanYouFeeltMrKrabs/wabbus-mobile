@@ -8,21 +8,18 @@ import AppText from "@/components/ui/AppText";
 import BackButton from "@/components/ui/BackButton";
 import ProductCard from "@/components/ui/ProductCard";
 import ProductRecommendationSlider from "@/components/ui/ProductRecommendationSlider";
+import RecentlyViewedSlider from "@/components/ui/RecentlyViewedSlider";
 import OutageBanner from "@/components/ui/OutageBanner";
 import Icon from "@/components/ui/Icon";
 import { colors, spacing, borderRadius } from "@/lib/theme";
 import { API_BASE } from "@/lib/config";
 import { useCart } from "@/lib/cart";
-import { CATEGORY_SHORT_NAMES } from "@/lib/categories";
 import { ROUTES } from "@/lib/routes";
-import { trackEvent } from "@/lib/tracker";
 import type { PublicProduct } from "@/lib/types";
 import {
-  useRecommendationsContext,
   useRecommendationsStrategy,
+  useRecommendationsHome,
   useProductsList,
-  useCategoryProducts,
-  useCategoryNewArrivals,
 } from "@/lib/queries";
 
 import { PAGE_SIZE as PAGE_SIZES } from "@/lib/constants";
@@ -44,24 +41,24 @@ const SORT_OPTIONS: SortOption[] = [
   { key: "reviews", label: "category.sort.mostReviews" },
 ];
 
-export default function CategoryScreen() {
+export default function ShopScreen() {
   const { t } = useTranslation();
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { sort: urlSort } = useLocalSearchParams<{ sort?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { addToCart } = useCart();
 
+  const initialSort = SORT_OPTIONS.some((o) => o.key === urlSort) ? urlSort! : "bestselling";
+
   const [extraProducts, setExtraProducts] = useState<PublicProduct[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [sort, setSort] = useState("bestselling");
+  const [sort, setSort] = useState(initialSort);
   const [hasMore, setHasMore] = useState(true);
   const skipRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  const { data: initialProducts, isPending: loading, isError: fetchError, dataUpdatedAt } = useCategoryProducts(
-    slug,
-    { sortBy: sort },
-    { enabled: !!slug },
+  const { data: initialProducts, isPending: loading, isError: fetchError, dataUpdatedAt } = useProductsList(
+    { sortBy: sort, take: PAGE_SIZE },
   );
 
   useEffect(() => {
@@ -69,24 +66,20 @@ export default function CategoryScreen() {
     setExtraProducts([]);
     skipRef.current = initialProducts.length;
     setHasMore(initialProducts.length >= PAGE_SIZE);
-    if (slug) {
-      void trackEvent("category_view", { metadata: { slug } });
-    }
-  }, [dataUpdatedAt, slug]);
+  }, [dataUpdatedAt]);
 
   const products = initialProducts
     ? extraProducts.length > 0 ? [...initialProducts, ...extraProducts] : initialProducts
     : [];
 
   const fetchMore = useCallback(async () => {
-    if (!slug) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setLoadingMore(true);
     try {
       const res = await fetch(
-        `${API_BASE}/products/public?take=${PAGE_SIZE}&skip=${skipRef.current}&categorySlug=${slug}&sortBy=${sort}`,
+        `${API_BASE}/products/public?take=${PAGE_SIZE}&skip=${skipRef.current}&sortBy=${sort}`,
         { signal: controller.signal },
       );
       const data = await res.json();
@@ -99,7 +92,7 @@ export default function CategoryScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [slug, sort]);
+  }, [sort]);
 
   const handleLoadMore = useCallback(() => {
     if (loadingMore || !hasMore || loading) return;
@@ -110,8 +103,6 @@ export default function CategoryScreen() {
     if (newSort === sort) return;
     setSort(newSort);
   }, [sort]);
-
-  const title = CATEGORY_SHORT_NAMES[slug || ""] || slug?.replace(/-/g, " ") || t("category.fallback");
 
   const handleAddToCart = useCallback(
     (product: PublicProduct) => {
@@ -128,43 +119,13 @@ export default function CategoryScreen() {
     [addToCart],
   );
 
-  /**
-   * Discovery rail rendered below the product grid (and inside the empty
-   * state). Mirrors the web `CategoryClient` layout exactly so analytics
-   * surface order stays consistent across platforms:
-   *   1. New In {Category}        — category-scoped freshness signal
-   *   2. Trending Now             — global velocity, broadens discovery
-   *   3. Suggestions for you      — newest products fallback
-   *   4. Recommended for You      — personalized, category-context
-   *
-   * Each carousel is independent: an empty result hides itself (handled
-   * inside ProductRecommendationSlider) so a single failing surface
-   * never blocks the rest.
-   */
-  // Discovery rail data sources — sealed-layer migration §4b/§E.3.
-  // All four carousels now go through their respective typed hooks from
-  // `@/lib/queries` (products, categories, recommendations).
-  const newInQuery = useCategoryNewArrivals(slug, { enabled: !!slug });
-  const trendingNow = useRecommendationsStrategy("trending", { enabled: !!slug });
-  const suggestionsForYou = useProductsList(
-    { take: CAROUSEL_LIMIT, sortBy: "newest" },
-    { enabled: !!slug },
-  );
-  const categoryRecos = useRecommendationsContext("category", slug, {
-    enabled: !!slug,
-  });
+  const trendingNow = useRecommendationsStrategy("trending");
+  const suggestionsForYou = useProductsList({ take: CAROUSEL_LIMIT, sortBy: "newest" });
+  const recoData = useRecommendationsHome(CAROUSEL_LIMIT);
 
   const renderCarouselRail = useCallback(() => {
-    if (!slug) return null;
     return (
       <View style={styles.footerRecos}>
-        <ProductRecommendationSlider
-          title={t("category.newIn", { name: title })}
-          products={newInQuery.data}
-          loading={newInQuery.isPending}
-          accentColor={colors.violet500}
-          onAddToCart={handleAddToCart}
-        />
         <ProductRecommendationSlider
           title={t("home.trendingNow")}
           products={trendingNow.data as PublicProduct[] | undefined}
@@ -181,26 +142,23 @@ export default function CategoryScreen() {
         />
         <ProductRecommendationSlider
           title={t("home.recommendedForYou")}
-          products={categoryRecos.data as PublicProduct[] | undefined}
-          loading={categoryRecos.isPending}
+          products={recoData.data?.products as PublicProduct[] | undefined}
+          loading={recoData.isLoading}
           accentColor={colors.brandBlue}
           onAddToCart={handleAddToCart}
         />
+        <RecentlyViewedSlider onAddToCart={handleAddToCart} />
       </View>
     );
   }, [
-    slug,
-    title,
     t,
     handleAddToCart,
-    newInQuery.data,
-    newInQuery.isPending,
     trendingNow.data,
     trendingNow.isPending,
     suggestionsForYou.data,
     suggestionsForYou.isPending,
-    categoryRecos.data,
-    categoryRecos.isPending,
+    recoData.data?.products,
+    recoData.isLoading,
   ]);
 
   const renderFooter = useCallback(() => {
@@ -220,11 +178,10 @@ export default function CategoryScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <BackButton />
-        <AppText variant="title" style={styles.headerTitle} numberOfLines={1}>{title}</AppText>
+        <AppText variant="title" style={styles.headerTitle} numberOfLines={1}>{t("shop.title")}</AppText>
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Sort pills */}
       <View style={styles.sortContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortScroll}>
           {SORT_OPTIONS.map((opt) => {
@@ -261,10 +218,10 @@ export default function CategoryScreen() {
           <View style={styles.emptyHero}>
             <Icon name="inventory-2" size={48} color={colors.gray300} />
             <AppText variant="subtitle" color={colors.muted}>
-              {fetchError ? t("category.couldNotLoad") : t("category.noProducts")}
+              {fetchError ? t("shop.couldNotLoad") : t("shop.noProducts")}
             </AppText>
             <Pressable onPress={() => router.push(ROUTES.homeFeed)}>
-              <AppText variant="label" color={colors.brandBlue}>{t("category.browseAll")}</AppText>
+              <AppText variant="label" color={colors.brandBlue}>{t("shop.browseAll")}</AppText>
             </Pressable>
           </View>
           {renderCarouselRail()}
@@ -297,8 +254,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: spacing[2], paddingVertical: spacing[2],
   },
-  headerTitle: { flex: 1, textAlign: "center", textTransform: "capitalize" },
-
+  headerTitle: { flex: 1, textAlign: "center" },
   sortContainer: { paddingBottom: spacing[2], borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   sortScroll: { paddingHorizontal: spacing[4], gap: spacing[2] },
   sortPill: {

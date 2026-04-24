@@ -116,12 +116,13 @@ const SupportTicketSchema = v.looseObject({
   lastMessage: v.optional(v.nullable(TicketLastMessageSchema)),
 });
 
-// `tickets.detail` returns the same SupportTicket shape but with `messages`
-// reliably populated. Modeled separately so `useTicketDetail` callers see
-// `messages` as a non-optional array (closer to the runtime guarantee).
+// The customer-facing `GET /support/tickets/:publicId` endpoint strips
+// `messages` from the response — they are fetched separately via the
+// `/messages` sub-route. Keep the field optional so `parseOrThrow` doesn't
+// reject the payload. The screen already falls back: `ticket.messages || []`.
 const SupportTicketDetailSchema = v.looseObject({
   ...SupportTicketSchema.entries,
-  messages: v.array(SupportTicketMessageSchema),
+  messages: v.optional(v.nullable(v.array(SupportTicketMessageSchema))),
 });
 
 // ─── Conversations ────────────────────────────────────────────────────────
@@ -228,7 +229,7 @@ const CustomerCaseItemSchema = v.looseObject({
 const CustomerCaseSchema = v.looseObject({
   caseNumber: v.string(),
   status: v.string(),
-  resolutionIntent: v.string(),
+  resolutionIntent: v.optional(v.nullable(v.string())),
   resolutionFinal: NullishString,
   resolvedAt: NullishString,
   closedAt: NullishString,
@@ -255,7 +256,7 @@ const CustomerCaseSchema = v.looseObject({
 const CustomerCaseDetailSchema = v.looseObject({
   id: v.string(),
   status: v.string(),
-  resolutionIntent: v.string(),
+  resolutionIntent: v.optional(v.nullable(v.string())),
   resolutionFinal: NullishString,
   linkedTicketPublicId: NullishString,
   linkedTicketNumber: NullishString,
@@ -527,8 +528,7 @@ async function fetchTicketsList(): Promise<SupportTicket[]> {
 async function fetchTicketDetail(id: string): Promise<SupportTicketDetail> {
   // Backend may return the bare ticket, `{ data: ticket }`, or `{ ticket }`.
   // Centralising the unwrap here means every consumer of the ticket-detail
-  // key sees the same canonical shape. Mirrors the legacy queryFn in
-  // `app/support/ticket-detail/[ticketId].tsx`.
+  // key sees the same canonical shape.
   const raw = await customerFetch<unknown>(`/support/tickets/${id}`);
   const candidate =
     raw && typeof raw === "object"
@@ -539,9 +539,40 @@ async function fetchTicketDetail(id: string): Promise<SupportTicketDetail> {
           : raw
       : raw;
 
+  const ticket =
+    candidate && typeof candidate === "object"
+      ? (candidate as Record<string, unknown>)
+      : {};
+
+  // The customer-facing detail endpoint strips `messages` — they live on a
+  // separate paginated sub-route. Fetch and splice them in, mirroring the
+  // two-step approach used by `fetchConversationDetail`.
+  let messages: unknown[] = [];
+  if (Array.isArray(ticket.messages)) {
+    messages = ticket.messages;
+  } else {
+    const msgsRaw = await customerFetch<unknown>(
+      `/support/tickets/${id}/messages?limit=200`,
+    );
+    if (Array.isArray(msgsRaw)) {
+      messages = msgsRaw;
+    } else if (msgsRaw && typeof msgsRaw === "object") {
+      const obj = msgsRaw as { data?: unknown; messages?: unknown };
+      if (Array.isArray(obj.data)) {
+        messages = obj.data;
+      } else if (Array.isArray(obj.messages)) {
+        messages = obj.messages;
+      }
+    }
+  }
+
+  // Backend returns messages newest-first; the screen renders chronologically
+  // (oldest at top, scrolls to newest). Reverse once at write time.
+  messages.reverse();
+
   return parseOrThrow(
     SupportTicketDetailSchema,
-    candidate,
+    { ...ticket, messages },
     keys.tickets.detail(id),
   );
 }

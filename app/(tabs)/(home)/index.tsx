@@ -297,7 +297,7 @@ export default function HomeScreen() {
               title={t("home.bestsellers")}
               accentColor={colors.warning}
               actionLabel={t("home.viewAll")}
-              onActionPress={() => router.push(ROUTES.searchWithSort("bestselling"))}
+              onActionPress={() => router.push(ROUTES.shopWithSort("bestselling") as any)}
             />
             <View style={styles.gridPad}>
               <ProductGrid products={bestsellers} onAddToCart={handleAddToCart} />
@@ -397,7 +397,7 @@ export default function HomeScreen() {
               title={t("home.topRated")}
               accentColor={colors.success}
               actionLabel={t("home.viewAll")}
-              onActionPress={() => router.push(ROUTES.searchWithSort("rating"))}
+              onActionPress={() => router.push(ROUTES.shopWithSort("rating") as any)}
             />
             <View style={styles.gridPad}>
               <ProductGrid products={topRated} onAddToCart={handleAddToCart} />

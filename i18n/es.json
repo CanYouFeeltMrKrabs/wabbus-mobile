@@ -1007,6 +1007,12 @@
     "recommended": "Recomendados",
     "noRecommendations": "Aún no hay recomendaciones"
   },
+  "shop": {
+    "title": "Todos los productos",
+    "noProducts": "No hay productos disponibles en este momento.",
+    "browseAll": "Volver al inicio",
+    "couldNotLoad": "No se pudieron cargar los productos. Inténtalo de nuevo."
+  },
   "legal": {
     "terms": {
       "title": "Términos de servicio",

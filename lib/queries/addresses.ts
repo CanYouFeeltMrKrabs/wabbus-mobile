@@ -68,8 +68,7 @@ const AddressSchema = v.looseObject({
   line2: OptionalString,
   city: v.string(),
   state: v.string(),
-  /** Backend may return either zip or postalCode — both preserved via looseObject. */
-  zip: v.string(),
+  zip: v.optional(v.string()),
   postalCode: OptionalString,
   country: v.string(),
   phone: OptionalString,
