@@ -16,11 +16,8 @@
       }
     },
     "preview": {
-      "distribution": "internal",
+      "distribution": "store",
       "channel": "preview",
-      "ios": {
-        "simulator": false
-      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://staging-api.wabbus.com",
         "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://pub-c2607890712c4b98874f735fb03de34b.r2.dev",
