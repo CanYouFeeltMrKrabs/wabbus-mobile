@@ -52,7 +52,7 @@ const EMPTY_FORM: FormState = {
   isDefault: false,
 };
 
-function splitFullName(fullName?: string): { firstName: string; lastName: string } {
+function splitFullName(fullName?: string | null): { firstName: string; lastName: string } {
   const raw = (fullName || "").trim();
   if (!raw) return { firstName: "", lastName: "" };
   const parts = raw.split(/\s+/);
@@ -306,13 +306,13 @@ function AddressesContent() {
                       {t("account.addresses.default")}
                     </AppText>
                   </View>
-                  <AppText variant="label">{item.fullName}</AppText>
+                  <AppText variant="label">{item.fullName || ""}</AppText>
                   <AppText variant="body" color={colors.muted}>
                     {item.line1}
                     {item.line2 ? `, ${item.line2}` : ""}
                   </AppText>
                   <AppText variant="body" color={colors.muted}>
-                    {item.city}, {item.state} {item.zip || item.postalCode}
+                    {item.city}{item.state ? `, ${item.state}` : ""} {item.zip || item.postalCode}
                   </AppText>
                   {item.phone && (
                     <AppText variant="caption" color={colors.mutedLight} style={{ marginTop: spacing[1] }}>

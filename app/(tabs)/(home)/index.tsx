@@ -190,11 +190,11 @@ export default function HomeScreen() {
               {searchLoading ? (
                 <View style={styles.dropdownLoading}>
                   <ActivityIndicator size="small" color={colors.brandBlue} />
-                  <AppText variant="caption" color={colors.muted}>{t("common.searching") ?? "Searching..."}</AppText>
+                  <AppText variant="caption" color={colors.muted}>{t("common.searching")}</AppText>
                 </View>
               ) : suggestions.length === 0 ? (
                 <View style={styles.dropdownLoading}>
-                  <AppText variant="caption" color={colors.muted}>{t("common.noResults") ?? "No results found"}</AppText>
+                  <AppText variant="caption" color={colors.muted}>{t("common.noResults")}</AppText>
                 </View>
               ) : (
                 <>
@@ -241,7 +241,7 @@ export default function HomeScreen() {
                       }}
                     >
                       <AppText style={styles.dropdownViewAllText}>
-                        View all {totalResults} results
+                        {t("common.viewAllResults", { count: totalResults })}
                       </AppText>
                     </Pressable>
                   )}
@@ -305,24 +305,34 @@ export default function HomeScreen() {
         )}
 
         {/* Recommended for You / Picked for You (personalization swap) */}
-        <SectionHeader
-          title={recoLabel}
-          accentColor={colors.brandBlue}
-          actionLabel={t("home.browseMore")}
-          onActionPress={() => router.push(ROUTES.recommended as any)}
-        />
         {loading ? (
-          <View>
-            <SkeletonSlider count={4} />
-            <View style={styles.gridPad}>
-              <SkeletonGrid count={6} />
+          <>
+            <SectionHeader
+              title={recoLabel}
+              accentColor={colors.brandBlue}
+              actionLabel={t("home.browseMore")}
+              onActionPress={() => router.push(ROUTES.recommended as any)}
+            />
+            <View>
+              <SkeletonSlider count={4} />
+              <View style={styles.gridPad}>
+                <SkeletonGrid count={6} />
+              </View>
             </View>
-          </View>
-        ) : (
-          <View style={styles.gridPad}>
-            <ProductGrid products={recommended} onAddToCart={handleAddToCart} />
-          </View>
-        )}
+          </>
+        ) : recommended.length > 0 ? (
+          <>
+            <SectionHeader
+              title={recoLabel}
+              accentColor={colors.brandBlue}
+              actionLabel={t("home.browseMore")}
+              onActionPress={() => router.push(ROUTES.recommended as any)}
+            />
+            <View style={styles.gridPad}>
+              <ProductGrid products={recommended} onAddToCart={handleAddToCart} />
+            </View>
+          </>
+        ) : null}
 
 
 

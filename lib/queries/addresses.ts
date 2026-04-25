@@ -35,7 +35,7 @@ import { customerFetch, FetchError, AuthError } from "@/lib/api";
 
 import { getQueryClient } from "./_client";
 import { useQuery, type UseQueryResult } from "./_internal/react-query";
-import { parseOrThrow } from "./_validate";
+import { filterValidItems } from "./_validate";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────
 //
@@ -51,7 +51,6 @@ import { parseOrThrow } from "./_validate";
 // extra the backend sends passes through harmlessly.
 
 const NullishString = v.optional(v.nullable(v.string()));
-const OptionalString = v.optional(v.string());
 
 // Mirror of `lib/types.ts:Address`. Kept loose because the
 // `/customer-addresses` endpoint is generous with the shape — `zip` and
@@ -59,19 +58,22 @@ const OptionalString = v.optional(v.string());
 // `label` are optional, and the backend sometimes ships `id` as a number
 // alongside `publicId`. When the long-tail domains finish migrating we'll
 // converge `lib/types.ts:Address` onto this inferred shape.
+//
+// Nullability matches the Prisma Address model: fullName, state, line2,
+// and phone are String? in the DB and can arrive as null from the API.
 const AddressSchema = v.looseObject({
   id: v.optional(v.number()),
   publicId: v.string(),
   label: NullishString,
-  fullName: v.string(),
+  fullName: NullishString,
   line1: v.string(),
-  line2: OptionalString,
+  line2: NullishString,
   city: v.string(),
-  state: v.string(),
-  zip: v.optional(v.string()),
-  postalCode: OptionalString,
+  state: NullishString,
+  zip: v.optional(v.nullable(v.string())),
+  postalCode: NullishString,
   country: v.string(),
-  phone: OptionalString,
+  phone: NullishString,
   isDefault: v.boolean(),
 });
 
@@ -144,7 +146,7 @@ async function fetchAddressesList(): Promise<Address[]> {
     const data0 = await customerFetch<unknown>("/customer-addresses");
     const list = extractAddresses(data0);
     if (list.length > 0) {
-      return parseOrThrow(v.array(AddressSchema), list, keys.list());
+      return filterValidItems(AddressSchema, list, keys.list());
     }
   } catch (e) {
     if (e instanceof AuthError) throw e;
@@ -157,7 +159,7 @@ async function fetchAddressesList(): Promise<Address[]> {
     const dataA = await customerFetch<unknown>("/addresses");
     const list = extractAddresses(dataA);
     if (list.length > 0) {
-      return parseOrThrow(v.array(AddressSchema), list, keys.list());
+      return filterValidItems(AddressSchema, list, keys.list());
     }
   } catch (e) {
     if (e instanceof AuthError) throw e;
@@ -172,7 +174,7 @@ async function fetchAddressesList(): Promise<Address[]> {
     "/customer-auth/me",
   );
   const list = extractAddresses(me?.addresses ?? []);
-  return parseOrThrow(v.array(AddressSchema), list, keys.list());
+  return filterValidItems(AddressSchema, list, keys.list());
 }
 
 // ─── Public read hooks (the only legal read path for addresses) ─────────

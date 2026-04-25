@@ -362,7 +362,11 @@ export function useLiveChat(
      * polyfill and would be misleading. See `lib/chat/README.md`.
      */
     const s: Socket = io(`${API_BASE}/support-chat-mobile`, {
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
+      reconnectionDelay: 1_000,
+      reconnectionDelayMax: 30_000,
+      reconnectionAttempts: 10,
+      randomizationFactor: 0.5,
       auth: (cb: (data: { token: string }) => void) => {
         const ticketAbort = new AbortController();
         const ticketPromise = isGuest
@@ -465,7 +469,7 @@ export function useLiveChat(
         level: "warning",
         message: `chat:error ${code}: ${message}`,
       });
-      if (code === "RATE_LIMITED") return;
+      if (code === "RATE_LIMITED" || code === "CONNECTION_RATE_LIMITED") return;
       if (code === "NOT_OPEN" || code === "NO_CONVERSATION") {
         setConversationState("CLOSED");
         setMsgs((prev) => [...prev, {
