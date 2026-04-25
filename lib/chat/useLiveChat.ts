@@ -362,7 +362,7 @@ export function useLiveChat(
      * polyfill and would be misleading. See `lib/chat/README.md`.
      */
     const s: Socket = io(`${API_BASE}/support-chat-mobile`, {
-      transports: ["websocket", "polling"],
+      transports: ["websocket"],
       reconnectionDelay: 1_000,
       reconnectionDelayMax: 30_000,
       reconnectionAttempts: 10,
