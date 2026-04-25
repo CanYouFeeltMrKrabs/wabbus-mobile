@@ -24,15 +24,37 @@ try {
   if (__DEV__) console.warn("expo-notifications native module unavailable — push disabled");
 }
 
+let chatScreenActive = false;
+
+export function setChatScreenActive(active: boolean): void {
+  chatScreenActive = active;
+}
+
 if (Notifications) {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
+    handleNotification: async (notification) => {
+      const data = notification.request.content.data as
+        | Record<string, unknown>
+        | undefined;
+
+      if (data?.type === "CHAT_MESSAGE" && chatScreenActive) {
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    },
   });
 }
 

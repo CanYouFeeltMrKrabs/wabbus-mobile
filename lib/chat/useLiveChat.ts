@@ -358,11 +358,12 @@ export function useLiveChat(
      * `fetch`). On failure we surface "error" status so the UI shows the
      * correct retry affordance and the user is not stuck on "connecting".
      *
-     * `withCredentials` is intentionally NOT set — it is a no-op on RN's
-     * polyfill and would be misleading. See `lib/chat/README.md`.
+     * `withCredentials: true` ensures cookies are sent with XHR polling
+     * requests, required for session affinity behind load-balanced backends.
      */
     const s: Socket = io(`${API_BASE}/support-chat-mobile`, {
-      transports: ["websocket"],
+      transports: ["polling", "websocket"],
+      withCredentials: true,
       reconnectionDelay: 1_000,
       reconnectionDelayMax: 30_000,
       reconnectionAttempts: 10,

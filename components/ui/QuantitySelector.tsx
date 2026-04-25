@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { View, Pressable, TextInput, StyleSheet, Modal, FlatList } from "react-native";
+import { View, Pressable, TextInput, StyleSheet, Modal, FlatList, Platform } from "react-native";
 import AppText from "@/components/ui/AppText";
 import Icon from "@/components/ui/Icon";
+import KeyboardDoneBar, { KEYBOARD_DONE_ID } from "@/components/ui/KeyboardDoneBar";
 import { colors, borderRadius, shadows, fontFamily, spacing } from "@/lib/theme";
 
 const DROPDOWN_OPTIONS: (number | string)[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, "10+"];
@@ -118,6 +119,7 @@ export default function QuantitySelector({
   if (variant === "dropdown") {
     return (
       <View style={styles.container}>
+        <KeyboardDoneBar onDone={commitInput} />
         <View style={styles.dropdownRow}>
           <TextInput
             ref={inputRef}
@@ -128,7 +130,7 @@ export default function QuantitySelector({
             onSubmitEditing={commitInput}
             onFocus={() => { isTypingRef.current = true; }}
             keyboardType="number-pad"
-            returnKeyType="done"
+            inputAccessoryViewID={Platform.OS === "ios" ? KEYBOARD_DONE_ID : undefined}
             selectTextOnFocus
             maxLength={2}
           />
@@ -193,6 +195,7 @@ export default function QuantitySelector({
 
   return (
     <View style={styles.container}>
+      <KeyboardDoneBar onDone={commitInput} />
       <View style={styles.selector}>
         <Pressable
           style={(state) => renderBtnStyle(state, quantity <= 1)}
@@ -210,7 +213,7 @@ export default function QuantitySelector({
           onSubmitEditing={commitInput}
           onFocus={() => { isTypingRef.current = true; }}
           keyboardType="number-pad"
-          returnKeyType="done"
+          inputAccessoryViewID={Platform.OS === "ios" ? KEYBOARD_DONE_ID : undefined}
           selectTextOnFocus
           maxLength={2}
         />

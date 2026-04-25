@@ -4,6 +4,7 @@ import {
   StyleSheet, ActivityIndicator, KeyboardAvoidingView,
   Platform, Image,
 } from "react-native";
+import KeyboardDoneBar, { KEYBOARD_DONE_ID } from "@/components/ui/KeyboardDoneBar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
@@ -101,6 +102,11 @@ function Field({ label, value, onChangeText, placeholder, autoCapitalize, keyboa
         autoCapitalize={autoCapitalize ?? "words"}
         keyboardType={keyboardType ?? "default"}
         autoComplete={autoComplete as any}
+        inputAccessoryViewID={
+          Platform.OS === "ios" && (keyboardType === "phone-pad" || keyboardType === "numeric")
+            ? KEYBOARD_DONE_ID
+            : undefined
+        }
       />
     </View>
   );
@@ -433,6 +439,7 @@ export default function CheckoutScreen() {
     <View
       style={[s.screen, { paddingTop: insets.top }]}
     >
+      <KeyboardDoneBar />
       {/* Header */}
       <View style={s.header}>
         <BackButton icon="close" onPress={handleBack} />

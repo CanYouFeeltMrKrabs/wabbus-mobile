@@ -25,6 +25,7 @@ import type { PendingAttachment } from "@/lib/chat/useLiveChat";
 import { customerFetchBlob } from "@/lib/api";
 import { CHAT } from "@/lib/constants";
 import { colors, spacing, borderRadius, fontSize, shadows } from "@/lib/theme";
+import { setChatScreenActive } from "@/lib/notifications";
 
 const RETRY_DELAYS = [2_000, 5_000, 10_000];
 
@@ -236,6 +237,11 @@ export default function ChatTabScreen() {
   const composerRef = useRef<TextInput>(null);
   const chat = useLiveChat(t, composerRef);
   const isFocused = useIsFocused();
+
+  useEffect(() => {
+    setChatScreenActive(isFocused);
+    return () => setChatScreenActive(false);
+  }, [isFocused]);
 
   const CHAT_REASONS = useMemo(() => getChatReasons(t), [t]);
   const [selectedReason, setSelectedReason] = useState<ChatReasonValue | null>(null);

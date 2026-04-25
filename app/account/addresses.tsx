@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import KeyboardDoneBar, { KEYBOARD_DONE_ID } from "@/components/ui/KeyboardDoneBar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "@/hooks/useT";
 import AppText from "@/components/ui/AppText";
@@ -194,6 +195,7 @@ function AddressesContent() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={[styles.screen, { paddingTop: insets.top }]}
       >
+        <KeyboardDoneBar />
         <View style={styles.header}>
           <BackButton
             onPress={() => {
@@ -404,6 +406,11 @@ function FormField({
         keyboardType={keyboardType || "default"}
         editable={editable}
         autoCapitalize="words"
+        inputAccessoryViewID={
+          Platform.OS === "ios" && (keyboardType === "number-pad" || keyboardType === "phone-pad")
+            ? KEYBOARD_DONE_ID
+            : undefined
+        }
       />
     </View>
   );

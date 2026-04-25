@@ -81,7 +81,7 @@ const CUSTOMER_SAFE_PATTERNS: [RegExp, string][] = [
   [/insufficient.*(funds|balance)/i, "Insufficient funds. Please try a different payment method."],
   [/invalid.*(card|number|expir|cvc|cvv)/i, "Invalid card details. Please check and try again."],
   [/store credit.*changed/i, "Your store credit balance has changed. Please review your payment and try again."],
-  [/cancel/i, "Payment was cancelled. You can try again when ready."],
+  [/\buser\s+cancell?ed\b|payment\s+sheet\s+cancell?ed|you\s+cancell?ed/i, "Payment was cancelled. You can try again when ready."],
 ];
 
 function sanitizeCheckoutError(raw: string): string {
@@ -670,6 +670,12 @@ export function useCheckout() {
         );
 
         if (initError) {
+          pendingOrderRef.current = null;
+          clientSecretRef.current = null;
+          await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+          const freshKey = makeIdempotencyKey();
+          idempotencyKeyRef.current = freshKey;
+          await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
           throw new Error("Could not initialize payment. Please try again.");
         }
       }
