@@ -16,6 +16,7 @@
       }
     },
     "preview": {
+      "autoIncrement": true,
       "distribution": "store",
       "channel": "preview",
       "env": {
@@ -25,7 +26,7 @@
         "EXPO_PUBLIC_TYPESENSE_HOST": "staging-api.wabbus.com",
         "EXPO_PUBLIC_TYPESENSE_PORT": "443",
         "EXPO_PUBLIC_TYPESENSE_PROTOCOL": "https",
-        "EXPO_PUBLIC_TYPESENSE_SEARCH_KEY": "ee17731a076800218b73c267efe51c3cb7473e6f42879768cacc3b0c53710279",
+        "EXPO_PUBLIC_TYPESENSE_SEARCH_KEY": "fda7b5af7dfaae80b5eabe33c4e00d9f2795cc686cee38f9d04d07bf4328296f",
         "EXPO_PUBLIC_SENTRY_DSN": "https://620c72e61342fdf8c521cf403b4d348e@o4511197522886656.ingest.us.sentry.io/4511197608804352",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }

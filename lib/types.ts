@@ -21,7 +21,7 @@ export type PublicProduct = {
   title: string;
   description: string | null;
   image: string | null;
-  price: number;
+  price: number | null;
   compareAtPrice?: number | null;
   defaultVariantPublicId?: string | null;
   ratingAvg: number;

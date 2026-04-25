@@ -807,7 +807,11 @@
       "catTechnical": "技术问题",
       "catBilling": "账单问题",
       "catAccount": "账户问题",
-      "catOther": "其他"
+      "catOther": "其他",
+      "attachImages": "添加图片",
+      "attachHint": "最多 {{count}} 张图片（JPEG、PNG、WebP）",
+      "attachLimitTitle": "已达上限",
+      "attachLimitBody": "最多可添加 {{max}} 张图片。"
     },
     "ticketDetail": {
       "notFound": "未找到工单",
@@ -873,6 +877,8 @@
   "chat": {
     "heading": "在线客服",
     "statusError": "连接错误",
+    "couldNotConnect": "无法连接到客服聊天。请检查您的网络连接后重试。",
+    "retryConnection": "重试",
     "statusReconnecting": "正在重连…",
     "statusConnecting": "连接中…",
     "statusWaiting": "等待客服…",

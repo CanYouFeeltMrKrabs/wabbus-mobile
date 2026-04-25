@@ -807,7 +807,11 @@
       "catTechnical": "Problema técnico",
       "catBilling": "Facturación",
       "catAccount": "Cuenta",
-      "catOther": "Otro"
+      "catOther": "Otro",
+      "attachImages": "Adjuntar imágenes",
+      "attachHint": "Hasta {{count}} imágenes (JPEG, PNG, WebP)",
+      "attachLimitTitle": "Límite alcanzado",
+      "attachLimitBody": "Puedes adjuntar hasta {{max}} imágenes."
     },
     "ticketDetail": {
       "notFound": "Ticket no encontrado",
@@ -873,6 +877,8 @@
   "chat": {
     "heading": "Chat de Soporte",
     "statusError": "Error de conexión",
+    "couldNotConnect": "No pudimos conectarnos al chat de soporte. Verifica tu conexión e intenta de nuevo.",
+    "retryConnection": "Reintentar",
     "statusReconnecting": "Reconectando…",
     "statusConnecting": "Conectando…",
     "statusWaiting": "Esperando agente…",

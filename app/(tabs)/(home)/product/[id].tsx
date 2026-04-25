@@ -524,7 +524,33 @@ export default function ProductDetailScreen() {
     }
   }, [inWishlist, product, displayPrice, primaryImageKey, activeVariantPublicId]);
 
-  const handleAddToCart = useCallback(async () => {
+  const handleAddToCart = useCallback(async (carouselProduct?: PublicProduct) => {
+    console.log("[AddToCart] tapped", { activeVariantPublicId, adding, carouselProduct: !!carouselProduct, productId: product?.productId, defaultVariantPublicId: product?.defaultVariantPublicId });
+    // If called from a recommendation carousel with a different product,
+    // add that product (qty 1) instead of the PDP's selected variant/qty.
+    if (carouselProduct && carouselProduct.productId !== product?.productId) {
+      const variantId = carouselProduct.defaultVariantPublicId;
+      if (!variantId) return;
+      setAdding(true);
+      try {
+        await addToCart({
+          variantPublicId: variantId,
+          price: carouselProduct.price ?? 0,
+          title: carouselProduct.title,
+          image: carouselProduct.image ?? "",
+          quantity: 1,
+          productId: carouselProduct.productId,
+          slug: carouselProduct.slug,
+        });
+      } catch {
+        Alert.alert(t("common.error"), t("product.errorAddToCart"));
+      } finally {
+        setAdding(false);
+      }
+      return;
+    }
+
+    // Normal PDP add-to-cart — uses the selected variant and quantity.
     if (!activeVariantPublicId) return;
     setAdding(true);
     try {
@@ -694,6 +720,7 @@ export default function ProductDetailScreen() {
               quantity={qty}
               onChange={(q) => setQty(q)}
               max={MAX_QTY}
+              variant="dropdown"
             />
           </View>
 
@@ -702,7 +729,7 @@ export default function ProductDetailScreen() {
               title={inStock ? t("product.addToCart") : t("product.outOfStock")}
               variant="accent"
               size="lg"
-              onPress={handleAddToCart}
+              onPress={() => handleAddToCart()}
               loading={adding}
               disabled={!inStock}
               style={styles.addToCartBtn}

@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo, type RefObject } from "react";
 import { AppState, type AppStateStatus, type TextInput } from "react-native";
 import { io, type Socket } from "socket.io-client";
+import * as Sentry from "@sentry/react-native";
 import { useAuth } from "@/lib/auth";
 import { customerFetch, FetchError } from "@/lib/api";
 import { API_BASE } from "@/lib/config";
@@ -88,6 +89,8 @@ export type LiveChatState = {
   msgs: UiMsg[];
   input: string;
   status: "idle" | "connecting" | "connected" | "reconnecting" | "error";
+  /** Diagnostic reason for the most recent connection failure (null when healthy). */
+  errorReason: string | null;
   conversationState: ConversationState;
   isAgentTyping: boolean;
   startingChat: boolean;
@@ -136,6 +139,7 @@ export function useLiveChat(
   const setInput = useCallback((v: string) => { inputRef.current = v; _setInput(v); }, []);
   const [msgs, setMsgs] = useState<UiMsg[]>([]);
   const [status, setStatus] = useState<LiveChatState["status"]>("idle");
+  const [errorReason, setErrorReason] = useState<string | null>(null);
   const [conversationState, setConversationState] = useState<ConversationState>("NONE");
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [startingChat, setStartingChat] = useState(false);
@@ -365,13 +369,25 @@ export function useLiveChat(
           ? fetchGuestSocketTicket(ticketAbort.signal)
           : fetchCustomerSocketTicket(ticketAbort.signal);
         ticketPromise
-          .then((ticket) => cb({ token: ticket.token }))
+          .then((ticket) => {
+            setErrorReason(null);
+            cb({ token: ticket.token });
+          })
           .catch((err: unknown) => {
-            if (err instanceof SocketTicketError) {
-              setStatus(err.status === 401 ? "error" : "error");
-            } else {
-              setStatus("error");
-            }
+            const reason = err instanceof SocketTicketError
+              ? `ticket-${err.status}: ${err.message}`
+              : err instanceof Error
+                ? err.message
+                : "Unknown ticket error";
+            console.error("[LiveChat] Socket ticket fetch failed:", reason);
+            Sentry.addBreadcrumb({
+              category: "chat.ticket",
+              level: "error",
+              message: reason,
+              data: { isGuest, apiBase: API_BASE },
+            });
+            setErrorReason(reason);
+            setStatus("error");
             cb({ token: "" });
           });
       },
@@ -381,6 +397,7 @@ export function useLiveChat(
     // ── connect ──
     s.on("connect", () => {
       setStatus("connected");
+      setErrorReason(null);
       setQueueFull(false);
 
       // Flush offline queue
@@ -426,10 +443,28 @@ export function useLiveChat(
 
     s.on("disconnect", () => setStatus("idle"));
 
-    s.on("connect_error", () => setStatus("error"));
+    s.on("connect_error", (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[LiveChat] connect_error:", msg);
+      Sentry.addBreadcrumb({
+        category: "chat.socket",
+        level: "error",
+        message: `connect_error: ${msg}`,
+        data: { apiBase: API_BASE, namespace: "/support-chat-mobile" },
+      });
+      setErrorReason((prev) => prev || msg);
+      setStatus("error");
+    });
 
     s.on("chat:error", (e: unknown) => {
       const code = (e as { code?: string })?.code;
+      const message = (e as { message?: string })?.message;
+      console.error("[LiveChat] chat:error:", code, message);
+      Sentry.addBreadcrumb({
+        category: "chat.protocol",
+        level: "warning",
+        message: `chat:error ${code}: ${message}`,
+      });
       if (code === "RATE_LIMITED") return;
       if (code === "NOT_OPEN" || code === "NO_CONVERSATION") {
         setConversationState("CLOSED");
@@ -439,6 +474,7 @@ export function useLiveChat(
         }].slice(-MAX_CHAT_MESSAGES));
         return;
       }
+      setErrorReason(message || code || "Server error");
       setStatus("error");
     });
 
@@ -477,7 +513,11 @@ export function useLiveChat(
       if (isGuest) checkGuestConversation();
       else checkExistingConversation();
     });
-    s.io.on("reconnect_failed", () => setStatus("error"));
+    s.io.on("reconnect_failed", () => {
+      console.error("[LiveChat] reconnect_failed — all retries exhausted");
+      setErrorReason("Reconnection failed");
+      setStatus("error");
+    });
 
     // ── Conversation lifecycle ──
     s.on("conversation:queued", (data: { conversationPublicId?: string; conversationId?: number }) => {
@@ -1048,6 +1088,7 @@ export function useLiveChat(
     msgs,
     input,
     status,
+    errorReason,
     conversationState,
     isAgentTyping,
     startingChat,

@@ -74,7 +74,7 @@ export const PublicProductSchema = v.looseObject({
   title: v.string(),
   description: v.nullable(v.string()),
   image: v.nullable(v.string()),
-  price: v.number(),
+  price: v.nullable(v.number()),
   compareAtPrice: NullishNumber,
   defaultVariantPublicId: NullishString,
   ratingAvg: v.number(),

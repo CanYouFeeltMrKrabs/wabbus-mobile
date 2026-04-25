@@ -668,7 +668,7 @@ export default function CheckoutScreen() {
               <AppText variant="bodySmall" color={colors.brandBlue} weight="bold">{t("checkout.change")}</AppText>
             </Pressable>
           ) : (
-            <Pressable style={s.paySelectBtn} onPress={handleSelectPayment} disabled={c.selectingPayment || !c.addressComplete}>
+            <Pressable style={s.paySelectBtn} onPress={handleSelectPayment} disabled={c.selectingPayment}>
               {c.selectingPayment ? (
                 <ActivityIndicator size="small" color={colors.brandBlue} />
               ) : (

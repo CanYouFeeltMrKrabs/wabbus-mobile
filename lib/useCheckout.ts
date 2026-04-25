@@ -16,11 +16,11 @@ import type {
   ServerCartResponse,
   CheckoutResponse,
   GuestCheckoutData,
-  CartItem,
 } from "./types";
 
 const IDEMPOTENCY_KEY = "wabbus_checkout_idempotency";
 const PENDING_ORDER_KEY = "wabbus_checkout_pending";
+const PENDING_PLAN_KEY = "wabbus_checkout_plan";
 
 const TIMEOUT_CHECKOUT_MS = 30_000;
 const TIMEOUT_CONFIRM_MS = 120_000;
@@ -37,27 +37,21 @@ function raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+type PendingPlan = {
+  planId: string;
+  planToken: string;
+};
+
 type PendingOrder = {
   orderId: string | number;
   hasPaymentIntent: boolean;
   stripeAmountCents?: number;
   usedStoreCredit?: boolean;
-  shippingAddressId?: string;
-  billingAddressId?: string | null;
-  cartFingerprint?: string;
+  planId?: string;
 };
 
 function makeIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function buildCartFingerprint(items: CartItem[], totalCents: number): string {
-  if (!items.length) return "";
-  const sorted = [...items]
-    .sort((a, b) => a.variantPublicId.localeCompare(b.variantPublicId))
-    .map((i) => `${i.variantPublicId}:${i.quantity}`)
-    .join(",");
-  return `${sorted}|${totalCents}`;
 }
 
 function normalizeAddresses(payload: unknown): CheckoutAddress[] {
@@ -161,6 +155,7 @@ export function useCheckout() {
   const payingRef = useRef(false);
   const idempotencyKeyRef = useRef<string>("");
   const pendingOrderRef = useRef<PendingOrder | null>(null);
+  const pendingPlanRef = useRef<PendingPlan | null>(null);
   const clientSecretRef = useRef<string | null>(null);
 
   // ── Add address form ──
@@ -184,11 +179,6 @@ export function useCheckout() {
   const creditFullyCovered = useStoreCredit && stripeAmountCents <= 0 && totalCents > 0;
   const requirePaymentMethod = !creditFullyCovered;
 
-  const cartFingerprint = useMemo(
-    () => buildCartFingerprint(cartItems, totalCents),
-    [cartItems, totalCents],
-  );
-
   const guestShippingComplete = !!(
     guestFirstName.trim() && guestLastName.trim() && guestLine1.trim() &&
     guestCity.trim() && guestState.trim() && guestPostcode.trim()
@@ -207,14 +197,19 @@ export function useCheckout() {
   const canPlaceOrder = cartItems.length > 0 && addressComplete && !placingOrder
     && (!isGuest || (!!guestEmail.trim()));
 
-  // ── Load idempotency key from storage (with TTL guard) ──
+  // ── Load idempotency key + pending plan/order from storage ──
   useEffect(() => {
     (async () => {
       let key = await AsyncStorage.getItem(IDEMPOTENCY_KEY).catch(() => null);
       const pendingRaw = await AsyncStorage.getItem(PENDING_ORDER_KEY).catch(() => null);
+      const planRaw = await AsyncStorage.getItem(PENDING_PLAN_KEY).catch(() => null);
       let pending: PendingOrder | null = null;
+      let plan: PendingPlan | null = null;
       if (pendingRaw) {
         try { pending = JSON.parse(pendingRaw); } catch { /* ignore */ }
+      }
+      if (planRaw) {
+        try { plan = JSON.parse(planRaw); } catch { /* ignore */ }
       }
 
       // Expire stale keys: the timestamp is embedded in the key (prefix before '-')
@@ -223,11 +218,14 @@ export function useCheckout() {
         key = makeIdempotencyKey();
         await AsyncStorage.setItem(IDEMPOTENCY_KEY, key).catch(() => {});
         await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+        await AsyncStorage.removeItem(PENDING_PLAN_KEY).catch(() => {});
         pending = null;
+        plan = null;
       }
 
       idempotencyKeyRef.current = key;
       pendingOrderRef.current = pending;
+      pendingPlanRef.current = plan;
     })();
   }, []);
 
@@ -354,23 +352,109 @@ export function useCheckout() {
       gBillCity, gBillState, gBillPostcode, gBillPhone,
       cartItems]);
 
-  // ── Helper: create order + get clientSecret ──
+  // ── Helper: build the geographic-only shipping address for prepare ──
+  const resolveShippingAddress = useCallback((): {
+    line1: string; line2?: string; city: string;
+    state: string; postalCode: string; country: string;
+  } | null => {
+    if (isGuest && guestData) {
+      return {
+        line1: guestData.shippingAddress.line1,
+        line2: guestData.shippingAddress.line2 || undefined,
+        city: guestData.shippingAddress.city,
+        state: guestData.shippingAddress.state,
+        postalCode: guestData.shippingAddress.postalCode,
+        country: guestData.shippingAddress.country || "US",
+      };
+    }
+    const addr = addresses.find((a) => a.publicId === shippingAddressId);
+    if (!addr) return null;
+    return {
+      line1: addr.line1,
+      line2: addr.line2 || undefined,
+      city: addr.city,
+      state: addr.state,
+      postalCode: addr.postalCode,
+      country: addr.country || "US",
+    };
+  }, [isGuest, guestData, addresses, shippingAddressId]);
+
+  // ── Helper: ensure a prepare plan exists, then create order + get clientSecret ──
   const ensureOrderAndSecret = useCallback(async (): Promise<{
     orderIdentifier: string | number;
     clientSecret: string | null;
     alreadyPaid: boolean;
   }> => {
-    const billingPublicId = billingSameAsShipping ? shippingAddressId : billingAddressId;
+    // ── Step 1: Prepare (get planId + planToken) ──────────────────────
+    if (!pendingOrderRef.current && !pendingPlanRef.current) {
+      const shippingAddr = resolveShippingAddress();
+      if (!shippingAddr) throw new Error("Please complete your shipping address first.");
 
-    // Invalidate stale pending orders
+      const prepareItems = cartItems.map((ci) => ({
+        variantPublicId: ci.variantPublicId,
+        qty: ci.quantity,
+      }));
+
+      type PrepareResponse = {
+        planId: string;
+        planToken?: string;
+        totalShippingCents?: number;
+        groups?: unknown[];
+        validation?: string;
+      };
+
+      let prepareData: PrepareResponse;
+
+      if (isGuest) {
+        const res = await raceTimeout(
+          fetch(`${API_BASE}/checkout/prepare/guest`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              items: prepareItems,
+              shippingAddress: shippingAddr,
+            }),
+          }),
+          TIMEOUT_CHECKOUT_MS,
+          "Order preparation",
+        );
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          if (res.status === 410) throw new Error("Your checkout session expired. Please try again.");
+          throw new Error(body?.message || "Could not prepare your order. Please try again.");
+        }
+        prepareData = await res.json();
+      } else {
+        prepareData = await raceTimeout(
+          customerFetch<PrepareResponse>("/checkout/prepare", {
+            method: "POST",
+            body: JSON.stringify({
+              items: prepareItems,
+              shippingAddress: shippingAddr,
+            }),
+          }),
+          TIMEOUT_CHECKOUT_MS,
+          "Order preparation",
+        );
+      }
+
+      const plan: PendingPlan = {
+        planId: prepareData.planId,
+        planToken: prepareData.planToken ?? "",
+      };
+      pendingPlanRef.current = plan;
+      await AsyncStorage.setItem(PENDING_PLAN_KEY, JSON.stringify(plan)).catch(() => {});
+    }
+
+    // ── Step 2: Staleness check on pending order ─────────────────────
     if (pendingOrderRef.current) {
       const po = pendingOrderRef.current;
       const stale =
         (po.hasPaymentIntent && !requirePaymentMethod) ||
         (po.usedStoreCredit !== undefined && po.usedStoreCredit !== useStoreCredit) ||
-        (po.shippingAddressId !== undefined && po.shippingAddressId !== shippingAddressId) ||
-        (po.billingAddressId !== undefined && po.billingAddressId !== billingPublicId) ||
-        (po.cartFingerprint !== undefined && po.cartFingerprint !== cartFingerprint);
+        (po.planId !== undefined && pendingPlanRef.current && po.planId !== pendingPlanRef.current.planId);
 
       if (stale) {
         pendingOrderRef.current = null;
@@ -384,12 +468,14 @@ export function useCheckout() {
       }
     }
 
+    // ── Step 3: Checkout (create the order using planId + planToken) ──
     let orderIdentifier: string | number | undefined;
     let clientSecret: string | null = clientSecretRef.current;
 
     if (pendingOrderRef.current) {
       orderIdentifier = pendingOrderRef.current.orderId;
     } else {
+      const plan = pendingPlanRef.current!;
       let data: CheckoutResponse;
 
       if (isGuest && guestData) {
@@ -402,19 +488,25 @@ export function useCheckout() {
             },
             credentials: "include",
             body: JSON.stringify({
+              planId: plan.planId,
+              planToken: plan.planToken,
               email: guestData.email,
-              shippingAddress: guestData.shippingAddress,
               billingAddress: guestData.billingAddress,
-              items: guestData.items,
               useStoreCredit: useStoreCredit || undefined,
             }),
           });
 
           if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            if (res.status === 410) {
+              pendingPlanRef.current = null;
+              await AsyncStorage.removeItem(PENDING_PLAN_KEY).catch(() => {});
+              throw new Error("Your checkout session expired. Please try again.");
+            }
             if (res.status === 409) {
               throw new Error("An account with that email already exists. Please sign in instead.");
             }
-            throw new Error("Checkout failed. Please try again.");
+            throw new Error(body?.message || "Checkout failed. Please try again.");
           }
 
           return res.json() as Promise<CheckoutResponse>;
@@ -425,19 +517,29 @@ export function useCheckout() {
         // Backend may establish a session for the guest — pick it up
         await refreshAuth().catch(() => {});
       } else {
-        data = await raceTimeout(
-          customerFetch<CheckoutResponse>("/checkout", {
-            method: "POST",
-            headers: { "Idempotency-Key": idempotencyKeyRef.current },
-            body: JSON.stringify({
-              shippingAddressPublicId: shippingAddressId,
-              billingAddressPublicId: billingPublicId || undefined,
-              useStoreCredit: useStoreCredit || undefined,
+        try {
+          data = await raceTimeout(
+            customerFetch<CheckoutResponse>("/checkout", {
+              method: "POST",
+              headers: { "Idempotency-Key": idempotencyKeyRef.current },
+              body: JSON.stringify({
+                planId: plan.planId,
+                planToken: plan.planToken,
+                useStoreCredit: useStoreCredit || undefined,
+              }),
             }),
-          }),
-          TIMEOUT_CHECKOUT_MS,
-          "Checkout",
-        );
+            TIMEOUT_CHECKOUT_MS,
+            "Checkout",
+          );
+        } catch (e) {
+          // 410 = plan expired
+          if (e instanceof Error && e.message.includes("410")) {
+            pendingPlanRef.current = null;
+            await AsyncStorage.removeItem(PENDING_PLAN_KEY).catch(() => {});
+            throw new Error("Your checkout session expired. Please try again.");
+          }
+          throw e;
+        }
       }
 
       orderIdentifier = data?.orderPublicId ?? data?.orderId;
@@ -455,12 +557,14 @@ export function useCheckout() {
           hasPaymentIntent: !!clientSecret,
           stripeAmountCents: data?.stripeAmountCents ?? undefined,
           usedStoreCredit: useStoreCredit,
-          shippingAddressId: shippingAddressId ?? undefined,
-          billingAddressId: billingPublicId,
-          cartFingerprint,
+          planId: plan.planId,
         };
         await AsyncStorage.setItem(PENDING_ORDER_KEY, JSON.stringify(pendingOrderRef.current)).catch(() => {});
       }
+
+      // Plan is consumed — clear it
+      pendingPlanRef.current = null;
+      await AsyncStorage.removeItem(PENDING_PLAN_KEY).catch(() => {});
 
       // Store credit fully covered — skip Stripe
       if (data?.payment?.status === "PAID") {
@@ -497,8 +601,9 @@ export function useCheckout() {
     return { orderIdentifier, clientSecret, alreadyPaid: false };
   }, [
     shippingAddressId, billingAddressId, billingSameAsShipping,
-    requirePaymentMethod, useStoreCredit, cartFingerprint,
+    requirePaymentMethod, useStoreCredit, cartItems,
     isGuest, guestData, refreshAuth, sheetReady,
+    addresses, resolveShippingAddress,
   ]);
 
   // ── Select payment method (custom flow: init + present for selection only) ──
@@ -600,13 +705,14 @@ export function useCheckout() {
         return;
       }
       const raw = e instanceof Error ? e.message : "";
+      console.error("[Checkout] selectPaymentMethod failed:", raw, e);
       if (mountedRef.current) setError(sanitizeCheckoutError(raw));
     } finally {
       if (mountedRef.current) setSelectingPayment(false);
     }
   }, [
-    selectingPayment, shippingAddressId, billingAddressId, billingSameAsShipping,
-    requirePaymentMethod, useStoreCredit, cartFingerprint,
+    selectingPayment, shippingAddressId,
+    requirePaymentMethod, useStoreCredit,
     isGuest, guestData, sheetReady, ensureOrderAndSecret, router,
   ]);
 
@@ -688,6 +794,7 @@ export function useCheckout() {
 
       if (raw.includes("timed out") && pendingOrderRef.current) {
         pendingOrderRef.current = null;
+        pendingPlanRef.current = null;
         clientSecretRef.current = null;
         setSheetReady(false);
         setPaymentOption(null);
@@ -695,6 +802,7 @@ export function useCheckout() {
         idempotencyKeyRef.current = freshKey;
         await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
         await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+        await AsyncStorage.removeItem(PENDING_PLAN_KEY).catch(() => {});
       }
 
       if (mountedRef.current) {
@@ -706,18 +814,20 @@ export function useCheckout() {
       if (mountedRef.current) setPlacingOrder(false);
     }
   }, [
-    shippingAddressId, billingAddressId, billingSameAsShipping,
-    requirePaymentMethod, useStoreCredit, cartFingerprint,
+    shippingAddressId,
+    requirePaymentMethod, useStoreCredit,
     isGuest, guestData, router, clearCart, refreshAuth,
     paymentOption, sheetReady, creditFullyCovered, ensureOrderAndSecret,
   ]);
 
   async function cleanupAfterOrder() {
     pendingOrderRef.current = null;
+    pendingPlanRef.current = null;
     const freshKey = makeIdempotencyKey();
     idempotencyKeyRef.current = freshKey;
     await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
     await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+    await AsyncStorage.removeItem(PENDING_PLAN_KEY).catch(() => {});
     await clearCart();
     void invalidate.cart.all();
     void invalidate.orders.all();

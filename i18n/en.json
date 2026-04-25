@@ -941,7 +941,11 @@
       "catTechnical": "Technical Issue",
       "catBilling": "Billing",
       "catAccount": "Account",
-      "catOther": "Other"
+      "catOther": "Other",
+      "attachImages": "Attach Images",
+      "attachHint": "Up to {{count}} images (JPEG, PNG, WebP)",
+      "attachLimitTitle": "Limit reached",
+      "attachLimitBody": "You can attach up to {{max}} images."
     },
     "ticketDetail": {
       "notFound": "Ticket not found",
@@ -1010,6 +1014,8 @@
   "chat": {
     "heading": "Support Chat",
     "statusError": "Connection error",
+    "couldNotConnect": "We couldn't connect to support chat. Please check your connection and try again.",
+    "retryConnection": "Retry",
     "statusReconnecting": "Reconnecting…",
     "statusConnecting": "Connecting…",
     "statusWaiting": "Waiting for agent…",

@@ -202,8 +202,12 @@ function statusLabel(
   status: "idle" | "connecting" | "connected" | "reconnecting" | "error",
   convState: string,
   t: (key: string) => string,
+  errorReason?: string | null,
 ): string {
-  if (status === "error") return t("chat.statusError");
+    if (status === "error") {
+    if (__DEV__ && errorReason) return `${t("chat.statusError")}: ${errorReason}`;
+    return t("chat.statusError");
+  }
   if (status === "reconnecting") return t("chat.statusReconnecting");
   if (status === "connecting") return t("chat.statusConnecting");
   if (convState === "WAITING") return t("chat.statusWaiting");
@@ -417,7 +421,7 @@ export default function ChatTabScreen() {
           <View style={styles.headerStatusRow}>
             <View style={[styles.statusDot, { backgroundColor: statusColor(chat.status) }]} />
             <AppText variant="bodySmall" color="rgba(255,255,255,0.75)" weight="medium">
-              {statusLabel(chat.status, chat.conversationState, t)}
+              {statusLabel(chat.status, chat.conversationState, t, chat.errorReason)}
             </AppText>
           </View>
         </View>
@@ -437,7 +441,28 @@ export default function ChatTabScreen() {
       </View>
 
       {/* Body */}
-      {chat.status === "connecting" && sortedMsgs.length === 0 ? (
+      {chat.status === "error" && sortedMsgs.length === 0 ? (
+        <View style={styles.center}>
+          <View style={[styles.reasonIconWrap, { backgroundColor: colors.errorLight }]}>
+            <Icon name="wifi-off" size={32} color={colors.error} />
+          </View>
+          <AppText variant="title" align="center" style={{ marginTop: spacing[4] }}>
+            {t("chat.statusError")}
+          </AppText>
+          <AppText variant="body" color={colors.muted} align="center" style={{ marginTop: spacing[2], paddingHorizontal: spacing[6] }}>
+            {t("chat.couldNotConnect")}
+          </AppText>
+          <AppButton
+            title={t("chat.retryConnection")}
+            variant="accent"
+            size="lg"
+            onPress={() => {
+              chat.onResetChat();
+            }}
+            style={{ borderRadius: borderRadius.full, marginTop: spacing[5], paddingHorizontal: spacing[8] }}
+          />
+        </View>
+      ) : chat.status === "connecting" && sortedMsgs.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.brandBlue} />
           <AppText variant="body" color={colors.muted} style={{ marginTop: spacing[3] }}>

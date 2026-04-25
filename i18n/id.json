@@ -807,7 +807,11 @@
       "catTechnical": "Masalah Teknis",
       "catBilling": "Penagihan",
       "catAccount": "Akun",
-      "catOther": "Lainnya"
+      "catOther": "Lainnya",
+      "attachImages": "Lampirkan Gambar",
+      "attachHint": "Maks {{count}} gambar (JPEG, PNG, WebP)",
+      "attachLimitTitle": "Batas tercapai",
+      "attachLimitBody": "Anda dapat melampirkan hingga {{max}} gambar."
     },
     "ticketDetail": {
       "notFound": "Tiket tidak ditemukan",
@@ -873,6 +877,8 @@
   "chat": {
     "heading": "Chat Dukungan",
     "statusError": "Kesalahan koneksi",
+    "couldNotConnect": "Kami tidak dapat terhubung ke chat dukungan. Periksa koneksi Anda dan coba lagi.",
+    "retryConnection": "Coba Lagi",
     "statusReconnecting": "Menyambung ulang…",
     "statusConnecting": "Menyambung…",
     "statusWaiting": "Menunggu agen…",
