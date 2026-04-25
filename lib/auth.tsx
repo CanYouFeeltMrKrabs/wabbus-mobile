@@ -51,8 +51,13 @@ export function useAuth() {
 }
 
 const GUEST_CART_KEY = "guest_cart";
-const CHECKOUT_IDEMPOTENCY_KEY = "wabbus_checkout_idempotency";
-const CHECKOUT_PENDING_KEY = "wabbus_checkout_pending";
+const CHECKOUT_KEYS_TO_SCRUB = [
+  "wabbus_checkout_idempotency",
+  "wabbus_checkout_pending",
+  "wabbus_checkout_plan",
+  "wabbus_affiliate_code",
+  "wabbus_affiliate_code_set_at",
+];
 
 /**
  * Scrub account-sensitive AsyncStorage data on logout.
@@ -63,10 +68,7 @@ async function scrubUserData(): Promise<void> {
     await AsyncStorage.removeItem(GUEST_CART_KEY);
   } catch { /* best effort */ }
   try {
-    await AsyncStorage.removeItem(CHECKOUT_IDEMPOTENCY_KEY);
-  } catch { /* best effort */ }
-  try {
-    await AsyncStorage.removeItem(CHECKOUT_PENDING_KEY);
+    await AsyncStorage.multiRemove(CHECKOUT_KEYS_TO_SCRUB);
   } catch { /* best effort */ }
 }
 

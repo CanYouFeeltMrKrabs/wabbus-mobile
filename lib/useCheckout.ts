@@ -21,10 +21,12 @@ import type {
 const IDEMPOTENCY_KEY = "wabbus_checkout_idempotency";
 const PENDING_ORDER_KEY = "wabbus_checkout_pending";
 const PENDING_PLAN_KEY = "wabbus_checkout_plan";
+const AFFILIATE_CODE_KEY = "wabbus_affiliate_code";
 
 const TIMEOUT_CHECKOUT_MS = 30_000;
 const TIMEOUT_CONFIRM_MS = 120_000;
 const TIMEOUT_INIT_SHEET_MS = 15_000;
+const PENDING_ORDER_MAX_AGE_MS = 15 * 60 * 1000;
 
 function raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -48,6 +50,7 @@ type PendingOrder = {
   stripeAmountCents?: number;
   usedStoreCredit?: boolean;
   planId?: string;
+  createdAt: number;
 };
 
 function makeIdempotencyKey(): string {
@@ -82,6 +85,11 @@ const CUSTOMER_SAFE_PATTERNS: [RegExp, string][] = [
   [/invalid.*(card|number|expir|cvc|cvv)/i, "Invalid card details. Please check and try again."],
   [/store credit.*changed/i, "Your store credit balance has changed. Please review your payment and try again."],
   [/\buser\s+cancell?ed\b|payment\s+sheet\s+cancell?ed|you\s+cancell?ed/i, "Payment was cancelled. You can try again when ready."],
+  [/cannot be paid|status\s+(CANCELLED|COMPLETED|EXPIRED)/i, "This order is no longer valid. Please try again with a new order."],
+  [/order\s+not\s+found/i, "Order not found. Please try again."],
+  [/checkout\s+session\s+expired|plan\s+expired/i, "Your checkout session expired. Please try again."],
+  [/stock|out of stock|unavailable/i, "One or more items are no longer available. Please review your cart."],
+  [/shipping.*rate.*unavailable/i, "We couldn't calculate shipping for your address. Please check and try again."],
 ];
 
 function sanitizeCheckoutError(raw: string): string {
@@ -89,10 +97,33 @@ function sanitizeCheckoutError(raw: string): string {
   for (const [pattern, friendly] of CUSTOMER_SAFE_PATTERNS) {
     if (pattern.test(raw)) return friendly;
   }
-  if (/^[\w\s,.'!?-]{5,120}$/.test(raw) && !/[_{}()\[\]<>]/.test(raw)) {
-    return raw;
-  }
   return GENERIC_ERROR;
+}
+
+const TERMINAL_ORDER_PATTERNS = [
+  /cannot be paid/i,
+  /status\s+(CANCELLED|COMPLETED|EXPIRED|REFUNDED)/i,
+  /order\s+not\s+found/i,
+  /order\s+has\s+been/i,
+  /no longer (valid|payable)/i,
+];
+
+function isTerminalOrderError(msg: string): boolean {
+  return TERMINAL_ORDER_PATTERNS.some((p) => p.test(msg));
+}
+
+async function getAffiliateCode(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(AFFILIATE_CODE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+async function clearAffiliateCode(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(AFFILIATE_CODE_KEY);
+  } catch { /* silent */ }
 }
 
 const IDEMPOTENCY_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
@@ -212,13 +243,29 @@ export function useCheckout() {
         try { plan = JSON.parse(planRaw); } catch { /* ignore */ }
       }
 
+      // Discard pending orders older than PENDING_ORDER_MAX_AGE_MS.
+      // Backend cancels unpaid orders after 30 min; 15 min gives a safe margin
+      // so we never reuse an order the backend is about to (or already did) cancel.
+      if (pending?.createdAt && (Date.now() - pending.createdAt > PENDING_ORDER_MAX_AGE_MS)) {
+        pending = null;
+        plan = null;
+        await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
+      }
+
+      // Backfill: if a pending order was stored without createdAt (pre-fix),
+      // discard it — we can't trust its age.
+      if (pending && !pending.createdAt) {
+        pending = null;
+        plan = null;
+        await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
+      }
+
       // Expire stale keys: the timestamp is embedded in the key (prefix before '-')
       const keyAge = key ? Date.now() - parseInt(key.split("-")[0], 10) : Infinity;
       if (!key || (keyAge > IDEMPOTENCY_MAX_AGE_MS && !pending)) {
         key = makeIdempotencyKey();
         await AsyncStorage.setItem(IDEMPOTENCY_KEY, key).catch(() => {});
-        await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
-        await AsyncStorage.removeItem(PENDING_PLAN_KEY).catch(() => {});
+        await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
         pending = null;
         plan = null;
       }
@@ -404,12 +451,16 @@ export function useCheckout() {
       };
 
       let prepareData: PrepareResponse;
+      const affiliateCode = await getAffiliateCode();
 
       if (isGuest) {
         const res = await raceTimeout(
           fetch(`${API_BASE}/checkout/prepare/guest`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(affiliateCode ? { "X-Affiliate-Code": affiliateCode } : {}),
+            },
             credentials: "include",
             body: JSON.stringify({
               items: prepareItems,
@@ -430,6 +481,9 @@ export function useCheckout() {
         prepareData = await raceTimeout(
           customerFetch<PrepareResponse>("/checkout/prepare", {
             method: "POST",
+            headers: {
+              ...(affiliateCode ? { "X-Affiliate-Code": affiliateCode } : {}),
+            },
             body: JSON.stringify({
               items: prepareItems,
               shippingAddress: shippingAddr,
@@ -438,6 +492,13 @@ export function useCheckout() {
           TIMEOUT_CHECKOUT_MS,
           "Order preparation",
         );
+      }
+
+      if (
+        prepareData.validation === "CODE_INVALID" ||
+        prepareData.validation === "AFFILIATE_BANNED"
+      ) {
+        await clearAffiliateCode();
       }
 
       const plan: PendingPlan = {
@@ -451,20 +512,23 @@ export function useCheckout() {
     // ── Step 2: Staleness check on pending order ─────────────────────
     if (pendingOrderRef.current) {
       const po = pendingOrderRef.current;
+      const expired = po.createdAt ? (Date.now() - po.createdAt > PENDING_ORDER_MAX_AGE_MS) : true;
       const stale =
+        expired ||
         (po.hasPaymentIntent && !requirePaymentMethod) ||
         (po.usedStoreCredit !== undefined && po.usedStoreCredit !== useStoreCredit) ||
         (po.planId !== undefined && pendingPlanRef.current && po.planId !== pendingPlanRef.current.planId);
 
       if (stale) {
         pendingOrderRef.current = null;
-        sheetReady && setSheetReady(false);
-        setPaymentOption(null);
+        pendingPlanRef.current = null;
         clientSecretRef.current = null;
+        setSheetReady(false);
+        setPaymentOption(null);
         const freshKey = makeIdempotencyKey();
         idempotencyKeyRef.current = freshKey;
         await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
-        await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+        await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
       }
     }
 
@@ -558,6 +622,7 @@ export function useCheckout() {
           stripeAmountCents: data?.stripeAmountCents ?? undefined,
           usedStoreCredit: useStoreCredit,
           planId: plan.planId,
+          createdAt: Date.now(),
         };
         await AsyncStorage.setItem(PENDING_ORDER_KEY, JSON.stringify(pendingOrderRef.current)).catch(() => {});
       }
@@ -581,20 +646,40 @@ export function useCheckout() {
 
     // Get client secret if we don't have one yet
     if (requirePaymentMethod && !clientSecret) {
-      const intentData = await raceTimeout(
-        customerFetch<{ clientSecret?: string; alreadyPaid?: boolean }>("/payments/create-intent", {
-          method: "POST",
-          body: JSON.stringify({ orderPublicId: orderIdentifier }),
-        }),
-        TIMEOUT_CHECKOUT_MS,
-        "Payment setup",
-      );
+      try {
+        const intentData = await raceTimeout(
+          customerFetch<{ clientSecret?: string; alreadyPaid?: boolean }>("/payments/create-intent", {
+            method: "POST",
+            body: JSON.stringify({ orderPublicId: orderIdentifier }),
+          }),
+          TIMEOUT_CHECKOUT_MS,
+          "Payment setup",
+        );
 
-      if (intentData?.alreadyPaid) {
-        return { orderIdentifier, clientSecret: null, alreadyPaid: true };
+        if (intentData?.alreadyPaid) {
+          return { orderIdentifier, clientSecret: null, alreadyPaid: true };
+        }
+
+        clientSecret = intentData?.clientSecret ?? null;
+      } catch (intentErr) {
+        const intentMsg = intentErr instanceof Error ? intentErr.message : "";
+        if (isTerminalOrderError(intentMsg)) {
+          pendingOrderRef.current = null;
+          pendingPlanRef.current = null;
+          clientSecretRef.current = null;
+          setSheetReady(false);
+          setPaymentOption(null);
+          const freshKey = makeIdempotencyKey();
+          idempotencyKeyRef.current = freshKey;
+          await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
+          await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
+          trackCustomerEvent("customer.checkout.stale_order_cleared", {
+            orderId: orderIdentifier,
+            error: intentMsg,
+          });
+        }
+        throw intentErr;
       }
-
-      clientSecret = intentData?.clientSecret ?? null;
     }
 
     clientSecretRef.current = clientSecret;
@@ -628,11 +713,14 @@ export function useCheckout() {
 
       if (!clientSecret) {
         pendingOrderRef.current = null;
+        pendingPlanRef.current = null;
         clientSecretRef.current = null;
-        await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+        setSheetReady(false);
+        setPaymentOption(null);
         const freshKey = makeIdempotencyKey();
         idempotencyKeyRef.current = freshKey;
         await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
+        await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
         throw new Error("Could not set up payment. Please try again.");
       }
 
@@ -671,11 +759,14 @@ export function useCheckout() {
 
         if (initError) {
           pendingOrderRef.current = null;
+          pendingPlanRef.current = null;
           clientSecretRef.current = null;
-          await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
+          setSheetReady(false);
+          setPaymentOption(null);
           const freshKey = makeIdempotencyKey();
           idempotencyKeyRef.current = freshKey;
           await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
+          await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
           throw new Error("Could not initialize payment. Please try again.");
         }
       }
@@ -712,6 +803,24 @@ export function useCheckout() {
       }
       const raw = e instanceof Error ? e.message : "";
       console.error("[Checkout] selectPaymentMethod failed:", raw, e);
+
+      if (isTerminalOrderError(raw) && pendingOrderRef.current) {
+        const staleOrderId = pendingOrderRef.current.orderId;
+        pendingOrderRef.current = null;
+        pendingPlanRef.current = null;
+        clientSecretRef.current = null;
+        setSheetReady(false);
+        setPaymentOption(null);
+        const freshKey = makeIdempotencyKey();
+        idempotencyKeyRef.current = freshKey;
+        await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
+        await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
+        trackCustomerEvent("customer.checkout.stale_order_cleared", {
+          orderId: staleOrderId,
+          error: raw,
+        });
+      }
+
       if (mountedRef.current) setError(sanitizeCheckoutError(raw));
     } finally {
       if (mountedRef.current) setSelectingPayment(false);
@@ -798,7 +907,8 @@ export function useCheckout() {
 
       const raw = e instanceof Error ? e.message : "";
 
-      if (raw.includes("timed out") && pendingOrderRef.current) {
+      if ((raw.includes("timed out") || isTerminalOrderError(raw)) && pendingOrderRef.current) {
+        const staleOrderId = pendingOrderRef.current.orderId;
         pendingOrderRef.current = null;
         pendingPlanRef.current = null;
         clientSecretRef.current = null;
@@ -807,8 +917,13 @@ export function useCheckout() {
         const freshKey = makeIdempotencyKey();
         idempotencyKeyRef.current = freshKey;
         await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
-        await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
-        await AsyncStorage.removeItem(PENDING_PLAN_KEY).catch(() => {});
+        await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
+        if (isTerminalOrderError(raw)) {
+          trackCustomerEvent("customer.checkout.stale_order_cleared", {
+            orderId: staleOrderId,
+            error: raw,
+          });
+        }
       }
 
       if (mountedRef.current) {
@@ -829,11 +944,11 @@ export function useCheckout() {
   async function cleanupAfterOrder() {
     pendingOrderRef.current = null;
     pendingPlanRef.current = null;
+    clientSecretRef.current = null;
     const freshKey = makeIdempotencyKey();
     idempotencyKeyRef.current = freshKey;
     await AsyncStorage.setItem(IDEMPOTENCY_KEY, freshKey).catch(() => {});
-    await AsyncStorage.removeItem(PENDING_ORDER_KEY).catch(() => {});
-    await AsyncStorage.removeItem(PENDING_PLAN_KEY).catch(() => {});
+    await AsyncStorage.multiRemove([PENDING_ORDER_KEY, PENDING_PLAN_KEY]).catch(() => {});
     await clearCart();
     void invalidate.cart.all();
     void invalidate.orders.all();
