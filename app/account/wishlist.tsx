@@ -92,12 +92,9 @@ function WishlistContent() {
         </View>
       ) : (
         <>
-          {items.length > 1 && (
-            <View style={styles.topAction}>
-              <AppText variant="caption">{t("account.wishlist.itemsSaved", { count: items.length })}</AppText>
-              <AppButton title={t("account.wishlist.addAllToCart")} variant="primary" size="sm" onPress={handleAddAllToCart} />
-            </View>
-          )}
+          <View style={styles.topBar}>
+            <AppText variant="caption">{t("account.wishlist.itemsSaved", { count: items.length })}</AppText>
+          </View>
           <FlatList
             data={items}
             numColumns={2}
@@ -117,11 +114,18 @@ function WishlistContent() {
                       <AppText variant="price">{formatMoney(item.price)}</AppText>
                     </View>
                   </Pressable>
-                  <AppButton title={t("account.wishlist.addToCart")} variant="primary" size="sm" fullWidth onPress={() => handleAddToCart(item)} style={styles.cartBtn} />
+                  <View style={styles.cartBtnWrapper}>
+                    <AppButton title={t("account.wishlist.addToCart")} variant="primary" size="sm" fullWidth onPress={() => handleAddToCart(item)} />
+                  </View>
                 </View>
               </View>
             )}
           />
+          {items.length > 1 && (
+            <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, spacing[4]) }]}>
+              <AppButton title={t("account.wishlist.addAllToCart")} variant="primary" size="lg" fullWidth onPress={handleAddAllToCart} />
+            </View>
+          )}
         </>
       )}
     </View>
@@ -134,7 +138,7 @@ const styles = StyleSheet.create({
   loader: { marginTop: spacing[16] },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing[3], paddingHorizontal: spacing[8] },
   shopBtn: { marginTop: spacing[4] },
-  topAction: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing[4], paddingBottom: spacing[2] },
+  topBar: { paddingHorizontal: spacing[4], paddingBottom: spacing[2] },
   gridRow: { gap: spacing[3], paddingHorizontal: spacing[4] },
   gridContent: { paddingTop: spacing[2], paddingBottom: spacing[10], gap: spacing[3] },
   gridCell: { flex: 1, maxWidth: "50%" },
@@ -151,5 +155,12 @@ const styles = StyleSheet.create({
   cardImage: { width: "100%", aspectRatio: 1, backgroundColor: colors.gray50 },
   cardInfo: { padding: spacing[2] },
   cardTitle: { minHeight: 32, marginBottom: spacing[1] },
-  cartBtn: { marginHorizontal: spacing[2], marginBottom: spacing[2] },
+  cartBtnWrapper: { paddingHorizontal: spacing[2], paddingBottom: spacing[2] },
+  stickyFooter: {
+    padding: spacing[4],
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderColor: colors.gray100,
+    ...shadows.md,
+  },
 });
